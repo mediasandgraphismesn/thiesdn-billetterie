@@ -1,0 +1,27 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "redirects": [
+    {
+      "source": "/baobab/admin.html",
+      "destination": "/admin",
+      "permanent": true
+    },
+    {
+      "source": "/baobab/:path*",
+      "destination": "/",
+      "permanent": true
+    },
+    {
+      "source": "/baobab",
+      "destination": "/",
+      "permanent": true
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
