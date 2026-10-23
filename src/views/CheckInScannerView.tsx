@@ -1,5 +1,22 @@
-import React, { useState } from 'react';
-import { QrCode, Scan, CheckCircle, XCircle, Search, ShieldCheck, Users, RefreshCw, BadgeAlert, Sparkles, Newspaper, UserCheck, AlertTriangle } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  QrCode,
+  Scan,
+  CheckCircle,
+  XCircle,
+  Search,
+  ShieldCheck,
+  Users,
+  RefreshCw,
+  BadgeAlert,
+  Sparkles,
+  Newspaper,
+  UserCheck,
+  AlertTriangle,
+  Camera,
+  CameraOff,
+} from 'lucide-react';
+import { Html5Qrcode } from 'html5-qrcode';
 import { UserTicket, Accreditation } from '../types';
 import { scanTicketAtomic, scanTicketWithSupabase, scanGuestTicketAtomic, scanAccreditationAtomic, getStoredAccreditations } from '../services/supabase';
 
@@ -23,6 +40,141 @@ export const CheckInScannerView: React.FC<CheckInScannerViewProps> = ({
   }>({ status: null, message: '' });
 
   const [activeTab, setActiveTab] = useState<'scan' | 'list'>('scan');
+  const [isCameraActive, setIsCameraActive] = useState<boolean>(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
+  const lastScannedRef = useRef<{ code: string; timestamp: number }>({ code: '', timestamp: 0 });
+
+  // Sons de feedback simples avec Web Audio API (aucun MP3 externe requis)
+  const playFeedbackSound = (type: 'success' | 'error') => {
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+
+      if (type === 'success') {
+        osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
+        osc.frequency.setValueAtTime(880.0, audioCtx.currentTime + 0.08); // A5
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
+        osc.start(audioCtx.currentTime);
+        osc.stop(audioCtx.currentTime + 0.25);
+      } else {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(220.0, audioCtx.currentTime); // A3
+        osc.frequency.setValueAtTime(164.81, audioCtx.currentTime + 0.12); // E3
+        gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.35);
+        osc.start(audioCtx.currentTime);
+        osc.stop(audioCtx.currentTime + 0.35);
+      }
+    } catch {
+      // Ignorer si audio bloqué
+    }
+  };
+
+  // Initialisation de la caméra arrière (facingMode: "environment") avec html5-qrcode
+  useEffect(() => {
+    if (activeTab !== 'scan') {
+      if (scannerRef.current) {
+        if (scannerRef.current.isScanning) {
+          scannerRef.current.stop().catch(() => {});
+        }
+        scannerRef.current.clear();
+        scannerRef.current = null;
+        setIsCameraActive(false);
+      }
+      return;
+    }
+
+    const scannerElementId = 'thiesdn-qr-camera-viewport';
+    let isMounted = true;
+
+    const startCamera = async () => {
+      // Temporisation de sécurité pour s'assurer de la présence du DOM
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      if (!isMounted) return;
+
+      const element = document.getElementById(scannerElementId);
+      if (!element) return;
+
+      // Nettoyer toute instance préexistante
+      if (scannerRef.current) {
+        try {
+          if (scannerRef.current.isScanning) {
+            await scannerRef.current.stop();
+          }
+          scannerRef.current.clear();
+        } catch {
+          // Ignorer
+        }
+        scannerRef.current = null;
+      }
+
+      try {
+        setCameraError(null);
+        const html5Qr = new Html5Qrcode(scannerElementId);
+        scannerRef.current = html5Qr;
+
+        await html5Qr.start(
+          { facingMode: 'environment' },
+          {
+            fps: 10,
+            qrbox: (viewfinderWidth, viewfinderHeight) => {
+              const edge = Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.75);
+              return { width: edge, height: edge };
+            },
+            aspectRatio: 1.0,
+          },
+          (decodedText) => {
+            if (!isMounted) return;
+            const now = Date.now();
+            // Anti-rebond : éviter de rescanner en boucle le même billet en moins de 3s
+            if (
+              lastScannedRef.current.code === decodedText &&
+              now - lastScannedRef.current.timestamp < 3000
+            ) {
+              return;
+            }
+            lastScannedRef.current = { code: decodedText, timestamp: now };
+            handleVerifyCode(decodedText);
+          },
+          () => {
+            // Frames vides ignorées pendant la recherche
+          }
+        );
+
+        if (isMounted) {
+          setIsCameraActive(true);
+        }
+      } catch (err: any) {
+        console.warn('Erreur activation caméra:', err);
+        if (isMounted) {
+          setIsCameraActive(false);
+          setCameraError(
+            err?.message ||
+              "Impossible d'activer la caméra arrière. Vérifiez les autorisations de caméra de votre navigateur."
+          );
+        }
+      }
+    };
+
+    startCamera();
+
+    return () => {
+      isMounted = false;
+      if (scannerRef.current) {
+        if (scannerRef.current.isScanning) {
+          scannerRef.current.stop().catch(() => {});
+        }
+        scannerRef.current.clear();
+        scannerRef.current = null;
+      }
+      setIsCameraActive(false);
+    };
+  }, [activeTab]);
 
   const handleVerifyCode = async (code: string) => {
     if (!code || isValidating) return;
@@ -90,6 +242,7 @@ export const CheckInScannerView: React.FC<CheckInScannerViewProps> = ({
       // 2. Vérification sécurisée en base Supabase via RPC scan_ticket
       const rpcResult = await scanTicketWithSupabase(trimmedCode);
       if (rpcResult.success) {
+        playFeedbackSound('success');
         setScanResult({
           status: 'success',
           message: rpcResult.message,
@@ -102,6 +255,7 @@ export const CheckInScannerView: React.FC<CheckInScannerViewProps> = ({
         // Fallback local atomique si présent en mémoire
         const localResult = await scanTicketAtomic(trimmedCode, tickets);
         if (localResult.success && localResult.ticket) {
+          playFeedbackSound('success');
           onValidateTicket(localResult.ticket.id);
           setScanResult({
             status: 'success',
@@ -109,6 +263,7 @@ export const CheckInScannerView: React.FC<CheckInScannerViewProps> = ({
             ticket: localResult.ticket,
           });
         } else {
+          playFeedbackSound('error');
           setScanResult({
             status: 'error',
             message: rpcResult.message || localResult.message || 'Billet non reconnu ou invalide.',
@@ -116,6 +271,7 @@ export const CheckInScannerView: React.FC<CheckInScannerViewProps> = ({
         }
       }
     } catch (err: any) {
+      playFeedbackSound('error');
       setScanResult({
         status: 'error',
         message: 'Erreur technique lors de la vérification du billet.',
@@ -159,23 +315,60 @@ export const CheckInScannerView: React.FC<CheckInScannerViewProps> = ({
 
       {activeTab === 'scan' ? (
         <div className="space-y-6">
-          {/* Simulated Camera Viewfinder */}
-          <div className="relative h-72 sm:h-80 rounded-3xl overflow-hidden bg-gradient-to-b from-[#181822] via-[#0e0e13] to-[#0a0a0c] border-2 border-[#8A2BE2]/40 flex flex-col items-center justify-center p-6 shadow-2xl">
-            {/* Corner brackets */}
-            <div className="absolute top-6 left-6 w-8 h-8 border-t-2 border-l-2 border-[#E9C349]" />
-            <div className="absolute top-6 right-6 w-8 h-8 border-t-2 border-r-2 border-[#E9C349]" />
-            <div className="absolute bottom-6 left-6 w-8 h-8 border-b-2 border-l-2 border-[#E9C349]" />
-            <div className="absolute bottom-6 right-6 w-8 h-8 border-b-2 border-r-2 border-[#E9C349]" />
+          {/* Zone Caméra & Viseur Temps Réel */}
+          <div className="relative h-72 sm:h-80 rounded-3xl overflow-hidden bg-black border-2 border-[#8A2BE2]/50 flex flex-col items-center justify-center shadow-2xl">
+            {/* Conteneur DOM où html5-qrcode injecte le stream <video> */}
+            <div
+              id="thiesdn-qr-camera-viewport"
+              className="absolute inset-0 w-full h-full [&>video]:w-full [&>video]:h-full [&>video]:object-cover"
+            />
 
-            {/* Scanning line animation */}
-            <div className="w-52 h-52 border border-[#8A2BE2]/50 rounded-2xl relative flex items-center justify-center">
-              <QrCode className="w-32 h-32 text-[#8A2BE2]/40 animate-pulse" />
-              <div className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-[#E9C349] to-transparent shadow-[0_0_12px_#E9C349] animate-bounce" />
+            {/* Overlay de chargement ou d'erreur de caméra */}
+            {!isCameraActive && (
+              <div className="absolute inset-0 z-0 bg-gradient-to-b from-[#181822] via-[#0e0e13] to-[#0a0a0c] flex flex-col items-center justify-center p-6 text-center">
+                {cameraError ? (
+                  <div className="space-y-2 max-w-xs">
+                    <CameraOff className="w-10 h-10 text-amber-400 mx-auto" />
+                    <p className="text-xs text-amber-200 font-medium">{cameraError}</p>
+                    <p className="text-[11px] text-gray-400">
+                      Vous pouvez utiliser la saisie manuelle ci-dessous.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="w-12 h-12 rounded-2xl bg-[#8A2BE2]/20 border border-[#8A2BE2]/40 flex items-center justify-center mx-auto animate-pulse">
+                      <Camera className="w-6 h-6 text-[#DCB8FF]" />
+                    </div>
+                    <p className="text-xs text-gray-300 font-semibold">
+                      Activation de la caméra arrière...
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Coins Dorés */}
+            <div className="absolute top-6 left-6 w-8 h-8 border-t-2 border-l-2 border-[#E9C349] pointer-events-none z-10" />
+            <div className="absolute top-6 right-6 w-8 h-8 border-t-2 border-r-2 border-[#E9C349] pointer-events-none z-10" />
+            <div className="absolute bottom-6 left-6 w-8 h-8 border-b-2 border-l-2 border-[#E9C349] pointer-events-none z-10" />
+            <div className="absolute bottom-6 right-6 w-8 h-8 border-b-2 border-r-2 border-[#E9C349] pointer-events-none z-10" />
+
+            {/* Viseur & ligne laser animée */}
+            <div className="w-52 h-52 border border-[#8A2BE2]/60 rounded-2xl relative flex items-center justify-center pointer-events-none z-10 shadow-[0_0_15px_rgba(138,43,226,0.3)]">
+              {isCameraActive ? (
+                <div className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-[#E9C349] to-transparent shadow-[0_0_12px_#E9C349] animate-bounce" />
+              ) : (
+                <QrCode className="w-28 h-28 text-[#8A2BE2]/30 animate-pulse" />
+              )}
             </div>
 
-            <p className="text-xs text-[#DCB8FF] mt-4 font-semibold flex items-center gap-1.5">
-              <Scan className="w-4 h-4" /> Pointez le QR code du participant
-            </p>
+            {/* Pastille Statut Caméra */}
+            <div className="absolute bottom-3 inset-x-4 z-10 flex items-center justify-center pointer-events-none">
+              <span className="px-3 py-1 rounded-full bg-black/75 backdrop-blur-md border border-white/10 text-[11px] font-semibold text-[#DCB8FF] flex items-center gap-1.5 shadow-lg">
+                <span className={`w-2 h-2 rounded-full ${isCameraActive ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+                <span>{isCameraActive ? 'Caméra Arrière Active • Visez le QR code' : 'Caméra en attente'}</span>
+              </span>
+            </div>
           </div>
 
           {/* Manual Input or Quick Test */}
@@ -486,6 +679,18 @@ export const CheckInScannerView: React.FC<CheckInScannerViewProps> = ({
                   </div>
                 </div>
               )}
+
+              {/* Bouton de réinitialisation rapide pour scanner le pass suivant */}
+              <div className="mt-4 pt-3 border-t border-white/10 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setScanResult({ status: null, message: '' })}
+                  className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-2"
+                >
+                  <Scan className="w-3.5 h-3.5 text-[#E9C349]" />
+                  <span>Scanner le pass suivant</span>
+                </button>
+              </div>
             </div>
           )}
         </div>
