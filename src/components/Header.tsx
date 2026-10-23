@@ -233,6 +233,32 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </div>
         )}
+
+        {/* User Avatar & Accès Profil */}
+        {isAuthenticated && (
+          <div
+            onClick={() => onNavigate('profile')}
+            className="flex items-center gap-2 pl-1 cursor-pointer group"
+            title="Mon Profil"
+          >
+            <div className="relative">
+              <img
+                src={user.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop'}
+                alt={user.name}
+                className="w-8 h-8 rounded-full object-cover border border-[#8A2BE2]/80 group-hover:border-[#E9C349] transition-colors"
+              />
+              {currentRole === 'admin' ? (
+                <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-[#8A2BE2] rounded-full border border-black flex items-center justify-center">
+                  <Shield className="w-2 h-2 text-white" />
+                </span>
+              ) : currentRole === 'promoter' ? (
+                <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-[#E9C349] rounded-full border border-black flex items-center justify-center">
+                  <Crown className="w-2 h-2 text-black" />
+                </span>
+              ) : null}
+            </div>
+          </div>
+        )}
       </div>
     </header>
   );

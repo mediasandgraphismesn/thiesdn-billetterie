@@ -7,10 +7,7 @@ import {
   Wallet,
   QrCode,
   Settings,
-  Eye,
-  EyeOff,
   CheckCircle2,
-  ExternalLink,
   Smartphone,
   PlusCircle,
 } from 'lucide-react';
@@ -180,47 +177,6 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
           );
         })}
       </nav>
-
-      {/* Bouton Mode Visiteur (Ouvrir Interface Publique) */}
-      <div className="pt-3 pb-2 border-t border-white/10 space-y-2">
-        <button
-          onClick={() => {
-            if (onToggleAdminPreview) onToggleAdminPreview();
-            if (typeof window !== 'undefined' && !isAdminPreview) {
-              window.open('/?preview=client', '_blank');
-            }
-          }}
-          className={`w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all border ${
-            isAdminPreview
-              ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30'
-              : 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'
-          }`}
-        >
-          {isAdminPreview ? (
-            <>
-              <EyeOff className="w-3.5 h-3.5 text-amber-400" />
-              <span>Quitter Mode Visiteur</span>
-            </>
-          ) : (
-            <>
-              <Eye className="w-3.5 h-3.5 text-[#DCB8FF]" />
-              <span>Mode Visiteur (Tester Public)</span>
-              <ExternalLink className="w-3 h-3 opacity-60" />
-            </>
-          )}
-        </button>
-      </div>
-
-      {/* Statut Connecteur Supabase */}
-      <div className="pt-3 border-t border-white/10">
-        <div className="p-3 rounded-xl bg-black/50 border border-white/5 flex items-center justify-between text-xs">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-gray-300 font-medium">Supabase PostgreSQL</span>
-          </div>
-          <span className="text-[10px] text-emerald-400 font-bold">Connecté</span>
-        </div>
-      </div>
     </aside>
   );
 };
