@@ -145,10 +145,11 @@ export const ModerationView: React.FC<ModerationViewProps> = ({
 
   // Rejet administratif d'un paiement
   const handleRejectPayment = async (order: OrderRecord) => {
-    setProcessingOrderId(order.id);
+    const targetId = order.id || order.reference;
+    setProcessingOrderId(targetId);
     try {
-      const res = await rejectManualOrderAtomic(order.id, 'Transfert non reçu ou montant erroné');
-      refreshOrders();
+      const res = await rejectManualOrderAtomic(targetId, 'Transfert non reçu ou montant erroné');
+      await refreshOrders();
       setToastMessage(res.message);
     } catch (err: any) {
       setToastMessage(`Erreur: ${err.message}`);

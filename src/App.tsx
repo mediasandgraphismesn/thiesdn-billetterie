@@ -658,10 +658,10 @@ export default function App() {
                 />
               )}
 
-              {activeTab === 'create' && effectiveRole === 'promoter' && (
+              {activeTab === 'create' && (effectiveRole === 'promoter' || effectiveRole === 'admin') && (
                 <CreateEventView
                   onEventCreated={handleCreateEvent}
-                  onBack={() => handleTabChange('home')}
+                  onBack={() => handleTabChange(effectiveRole === 'admin' ? 'dashboard' : 'home')}
                   promoterName={user.name}
                   promoterAvatar={user.avatar}
                   isEmailConfirmed={Boolean(user.isEmailConfirmed)}

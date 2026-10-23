@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   ExternalLink,
   Smartphone,
+  PlusCircle,
 } from 'lucide-react';
 import { UserProfile } from '../../types';
 
@@ -130,6 +131,21 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
           </span>
         </div>
       </div>
+
+      {/* Bouton d'action directe : Créer un Événement (visible uniquement pour admin et promoter) */}
+      {(user.role === 'admin' || user.role === 'promoter') && (
+        <button
+          onClick={() => onTabChange('create')}
+          className={`w-full mb-4 py-3 px-4 rounded-xl flex items-center justify-center gap-2 font-heading font-bold text-xs tracking-wider uppercase transition-all shadow-md ${
+            activeTab === 'create'
+              ? 'bg-[#8A2BE2] text-white shadow-[#8A2BE2]/50 border border-white/20 ring-2 ring-[#DCB8FF]/40'
+              : 'bg-gradient-to-r from-[#8A2BE2] to-[#6A0DAD] hover:from-[#9B42F5] hover:to-[#7B1FA2] text-white shadow-[#8A2BE2]/30 hover:scale-[1.01]'
+          }`}
+        >
+          <PlusCircle className="w-4 h-4 text-[#E9C349]" />
+          <span>Créer un Événement</span>
+        </button>
+      )}
 
       {/* Menu d'Administration Strict */}
       <nav className="flex-1 space-y-1.5 overflow-y-auto">

@@ -3174,7 +3174,44 @@ export const signalOrderPayment = async (
 ): Promise<{ success: boolean; message: string; order?: OrderRecord }> => {
   const client = getSupabaseClient();
   const orders = getStoredOrders();
-  const order = orders.find((o) => o.id === orderId || o.reference === orderId);
+  let order = orders.find((o) => o.id === orderId || o.reference === orderId);
+
+  // Si la commande n'est pas trouvée dans le cache local, interroger directement Supabase
+  if (!order && client) {
+    try {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orderId);
+      const query = client.from('orders').select('*');
+      const { data, error } = isUuid
+        ? await query.eq('id', orderId).maybeSingle()
+        : await query.eq('reference', orderId).maybeSingle();
+
+      if (data && !error) {
+        order = {
+          id: data.id,
+          reference: data.reference,
+          eventId: data.event_id,
+          eventTitle: data.event_title || 'Événement Thièsdn',
+          userId: data.user_id,
+          tierId: data.tier_id || 'std',
+          tierName: data.tier_name || 'Standard',
+          quantity: data.quantity || 1,
+          unitPrice: Number(data.unit_price) || 0,
+          totalAmount: Number(data.total_amount) || 0,
+          paymentMethod: data.payment_method || 'wave',
+          paymentReference: data.payment_reference || '',
+          paymentProofUrl: data.payment_proof_url || '',
+          customerName: data.customer_name || 'Client',
+          customerPhone: data.customer_phone || '',
+          status: data.status || 'pending',
+          confirmedBy: data.confirmed_by,
+          confirmedAt: data.confirmed_at,
+          createdAt: data.created_at || new Date().toISOString(),
+        };
+      }
+    } catch (e: any) {
+      console.warn('Erreur recherche commande Supabase confirm:', e.message);
+    }
+  }
 
   if (!order) {
     return { success: false, message: 'Commande introuvable.' };
@@ -3218,7 +3255,44 @@ export const confirmManualOrderAtomic = async (
 ): Promise<{ success: boolean; message: string; tickets?: UserTicket[]; order?: OrderRecord }> => {
   const client = getSupabaseClient();
   const orders = getStoredOrders();
-  const order = orders.find((o) => o.id === orderId || o.reference === orderId);
+  let order = orders.find((o) => o.id === orderId || o.reference === orderId);
+
+  // Si la commande n'est pas trouvée dans le cache local, interroger directement Supabase
+  if (!order && client) {
+    try {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orderId);
+      const query = client.from('orders').select('*');
+      const { data, error } = isUuid
+        ? await query.eq('id', orderId).maybeSingle()
+        : await query.eq('reference', orderId).maybeSingle();
+
+      if (data && !error) {
+        order = {
+          id: data.id,
+          reference: data.reference,
+          eventId: data.event_id,
+          eventTitle: data.event_title || 'Événement Thièsdn',
+          userId: data.user_id,
+          tierId: data.tier_id || 'std',
+          tierName: data.tier_name || 'Standard',
+          quantity: data.quantity || 1,
+          unitPrice: Number(data.unit_price) || 0,
+          totalAmount: Number(data.total_amount) || 0,
+          paymentMethod: data.payment_method || 'wave',
+          paymentReference: data.payment_reference || '',
+          paymentProofUrl: data.payment_proof_url || '',
+          customerName: data.customer_name || 'Client',
+          customerPhone: data.customer_phone || '',
+          status: data.status || 'pending',
+          confirmedBy: data.confirmed_by,
+          confirmedAt: data.confirmed_at,
+          createdAt: data.created_at || new Date().toISOString(),
+        };
+      }
+    } catch (e: any) {
+      console.warn('Erreur recherche commande Supabase confirm:', e.message);
+    }
+  }
 
   if (!order) {
     return { success: false, message: 'Commande introuvable.' };
@@ -3345,8 +3419,47 @@ export const rejectManualOrderAtomic = async (
   orderId: string,
   reason?: string
 ): Promise<{ success: boolean; message: string; order?: OrderRecord }> => {
+  const client = getSupabaseClient();
   const orders = getStoredOrders();
-  const order = orders.find((o) => o.id === orderId || o.reference === orderId);
+  let order = orders.find((o) => o.id === orderId || o.reference === orderId);
+
+  // Si la commande n'est pas trouvée dans le cache local, interroger directement Supabase
+  if (!order && client) {
+    try {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orderId);
+      const query = client.from('orders').select('*');
+      const { data, error } = isUuid
+        ? await query.eq('id', orderId).maybeSingle()
+        : await query.eq('reference', orderId).maybeSingle();
+
+      if (data && !error) {
+        order = {
+          id: data.id,
+          reference: data.reference,
+          eventId: data.event_id,
+          eventTitle: data.event_title || 'Événement Thièsdn',
+          userId: data.user_id,
+          tierId: data.tier_id || 'std',
+          tierName: data.tier_name || 'Standard',
+          quantity: data.quantity || 1,
+          unitPrice: Number(data.unit_price) || 0,
+          totalAmount: Number(data.total_amount) || 0,
+          paymentMethod: data.payment_method || 'wave',
+          paymentReference: data.payment_reference || '',
+          paymentProofUrl: data.payment_proof_url || '',
+          customerName: data.customer_name || 'Client',
+          customerPhone: data.customer_phone || '',
+          status: data.status || 'pending',
+          confirmedBy: data.confirmed_by,
+          confirmedAt: data.confirmed_at,
+          rejectionReason: data.rejection_reason,
+          createdAt: data.created_at || new Date().toISOString(),
+        };
+      }
+    } catch (e: any) {
+      console.warn('Erreur recherche commande Supabase lors du rejet:', e.message);
+    }
+  }
 
   if (!order) {
     return { success: false, message: 'Commande introuvable.' };
@@ -3360,13 +3473,21 @@ export const rejectManualOrderAtomic = async (
   order.rejectionReason = reason || 'Non justifié';
   saveOrderRecord(order);
 
-  const client = getSupabaseClient();
   if (client) {
     try {
-      await client
+      // Priorité stricte sur l'UUID (order.id) pour la mise à jour Supabase
+      const { error: updateError } = await client
         .from('orders')
         .update({ status: 'rejected', rejection_reason: order.rejectionReason })
         .eq('id', order.id);
+
+      if (updateError) {
+        console.warn('Update reject par UUID échoué, essai par référence:', updateError.message);
+        await client
+          .from('orders')
+          .update({ status: 'rejected', rejection_reason: order.rejectionReason })
+          .eq('reference', order.reference);
+      }
     } catch (e: any) {
       console.warn('Sync Supabase reject:', e.message);
     }
@@ -4508,6 +4629,11 @@ export const fetchOrdersFromSupabase = async (): Promise<{ orders: OrderRecord[]
       confirmedAt: db.confirmed_at,
       createdAt: db.created_at || new Date().toISOString(),
     }));
+
+    // Synchronisation automatique des commandes fraîches dans le cache local
+    if (mapped.length > 0) {
+      mapped.forEach((order) => saveOrderRecord(order));
+    }
 
     return { orders: mapped, error: null };
   } catch (err: any) {
