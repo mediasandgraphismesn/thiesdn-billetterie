@@ -4145,7 +4145,23 @@ $$;
 
 -- ====================================================================
 -- RLS (ROW LEVEL SECURITY) POLITIQUES DE SÉCURITÉ SERVEUR
+-- RÈGLE D'OR : Ne JAMAIS faire de SELECT direct sur public.profiles
+-- dans une politique RLS (risque d'infinite recursion).
+-- Toujours utiliser public.is_admin() en SECURITY DEFINER.
 -- ====================================================================
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = auth.uid() AND role = 'admin'
+  );
+$$;
+
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.platform_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.events ENABLE ROW LEVEL SECURITY;
@@ -4153,42 +4169,62 @@ ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tickets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY;
 
--- Profiles : lecture par tous, modification par le propriétaire
+-- Profiles : lecture par tous, modification par le propriétaire ou admin via is_admin()
 DROP POLICY IF EXISTS "Profiles select policy" ON public.profiles;
 CREATE POLICY "Profiles select policy" ON public.profiles FOR SELECT USING (true);
 DROP POLICY IF EXISTS "Profiles update policy" ON public.profiles;
-CREATE POLICY "Profiles update policy" ON public.profiles FOR UPDATE USING (auth.uid() = id);
+CREATE POLICY "Profiles update policy" ON public.profiles FOR UPDATE USING (auth.uid() = id OR public.is_admin());
 
 -- Settings : lecture par tous, modification par les admins
 DROP POLICY IF EXISTS "Settings read public" ON public.platform_settings;
 CREATE POLICY "Settings read public" ON public.platform_settings FOR SELECT USING (true);
 DROP POLICY IF EXISTS "Settings update admin only" ON public.platform_settings;
 CREATE POLICY "Settings update admin only" ON public.platform_settings FOR ALL 
-USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
+USING (public.is_admin());
 
--- Events : lecture des événements approuvés ou ses propres événements
+-- Events : lecture des événements approuvés, ses propres événements ou admin via is_admin()
 DROP POLICY IF EXISTS "Events read approved" ON public.events;
 CREATE POLICY "Events read approved" ON public.events FOR SELECT 
-USING (status = 'approved' OR promoter_id = auth.uid() OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
+USING (status = 'approved' OR promoter_id = auth.uid() OR public.is_admin());
 
--- Orders : lecture par le client propriétaire ou par les admins
+DROP POLICY IF EXISTS "Events insert promoter or admin" ON public.events;
+CREATE POLICY "Events insert promoter or admin" ON public.events FOR INSERT
+WITH CHECK (promoter_id = auth.uid() OR public.is_admin());
+
+DROP POLICY IF EXISTS "Events update promoter or admin" ON public.events;
+CREATE POLICY "Events update promoter or admin" ON public.events FOR UPDATE
+USING (promoter_id = auth.uid() OR public.is_admin());
+
+DROP POLICY IF EXISTS "Events delete promoter or admin" ON public.events;
+CREATE POLICY "Events delete promoter or admin" ON public.events FOR DELETE
+USING (promoter_id = auth.uid() OR public.is_admin());
+
+-- Orders : lecture par le client propriétaire ou par les admins via is_admin()
 DROP POLICY IF EXISTS "Orders client read" ON public.orders;
 CREATE POLICY "Orders client read" ON public.orders FOR SELECT 
-USING (user_id = auth.uid() OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
+USING (user_id = auth.uid() OR public.is_admin());
 DROP POLICY IF EXISTS "Orders client insert" ON public.orders;
-CREATE POLICY "Orders client insert" ON public.orders FOR INSERT WITH CHECK (true);
+CREATE POLICY "Orders client insert" ON public.orders FOR INSERT WITH CHECK (auth.uid() = user_id OR user_id IS NULL OR public.is_admin());
 DROP POLICY IF EXISTS "Orders admin update" ON public.orders;
 CREATE POLICY "Orders admin update" ON public.orders FOR UPDATE 
-USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
+USING (user_id = auth.uid() OR public.is_admin());
 
--- Tickets : lecture par le propriétaire du billet, collaborateur assigné, promoteur ou admin
+-- Tickets : lecture par le propriétaire du billet, collaborateur assigné, promoteur ou admin via is_admin()
 DROP POLICY IF EXISTS "Tickets read owner or admin" ON public.tickets;
 CREATE POLICY "Tickets read owner or admin" ON public.tickets FOR SELECT 
 USING (
   user_id = auth.uid() 
   OR agent_id = auth.uid()
   OR EXISTS (SELECT 1 FROM public.events WHERE events.id = tickets.event_id AND events.promoter_id = auth.uid())
-  OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+  OR public.is_admin()
+);
+
+DROP POLICY IF EXISTS "Tickets insert owner or admin" ON public.tickets;
+CREATE POLICY "Tickets insert owner or admin" ON public.tickets FOR INSERT
+WITH CHECK (
+  user_id = auth.uid()
+  OR EXISTS (SELECT 1 FROM public.events WHERE events.id = tickets.event_id AND events.promoter_id = auth.uid())
+  OR public.is_admin()
 );
 
 -- RLS Collaborateurs : activation exclusive des billets alloués lors de la vente
@@ -4216,22 +4252,22 @@ DROP POLICY IF EXISTS "Promoters update event tickets" ON public.tickets;
 CREATE POLICY "Promoters update event tickets" ON public.tickets FOR UPDATE
 USING (
   EXISTS (SELECT 1 FROM public.events WHERE events.id = tickets.event_id AND events.promoter_id = auth.uid())
-  OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+  OR public.is_admin()
 );
 
--- Transactions : lecture par promoteur ou admin
+-- Transactions : lecture par promoteur ou admin via is_admin()
 DROP POLICY IF EXISTS "Transactions read promoter or admin" ON public.transactions;
 CREATE POLICY "Transactions read promoter or admin" ON public.transactions FOR SELECT 
-USING (promoter_id = auth.uid() OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
+USING (promoter_id = auth.uid() OR public.is_admin());
 
--- Co-Producteurs : RLS
+-- Co-Producteurs : RLS sans SELECT sur profiles
 ALTER TABLE public.event_coproducers ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Coproducers read policy" ON public.event_coproducers;
 CREATE POLICY "Coproducers read policy" ON public.event_coproducers FOR SELECT 
 USING (
   user_id = auth.uid() OR 
   promoter_id = auth.uid() OR 
-  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+  public.is_admin()
 );
 
 DROP POLICY IF EXISTS "Coproducers update policy" ON public.event_coproducers;
@@ -4239,7 +4275,7 @@ CREATE POLICY "Coproducers update policy" ON public.event_coproducers FOR UPDATE
 USING (
   promoter_id = auth.uid() OR 
   user_id = auth.uid() OR 
-  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+  public.is_admin()
 );
 
 -- Guest List Artiste : RLS (Accès écriture à la liste d'invités pour l'artiste/staff)
@@ -4250,7 +4286,7 @@ CREATE POLICY "Guest tickets select policy" ON public.event_guest_tickets FOR SE
 DROP POLICY IF EXISTS "Guest tickets insert policy" ON public.event_guest_tickets;
 CREATE POLICY "Guest tickets insert policy" ON public.event_guest_tickets FOR INSERT WITH CHECK (true);
 
--- 11. Accréditations Staff, Invités & Presse : RLS
+-- 11. Accréditations Staff, Invités & Presse : RLS sans SELECT sur profiles
 ALTER TABLE public.accreditations ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Accreditations select policy" ON public.accreditations;
 CREATE POLICY "Accreditations select policy" ON public.accreditations FOR SELECT USING (true);
@@ -4258,17 +4294,15 @@ CREATE POLICY "Accreditations select policy" ON public.accreditations FOR SELECT
 DROP POLICY IF EXISTS "Accreditations insert policy" ON public.accreditations;
 CREATE POLICY "Accreditations insert policy" ON public.accreditations FOR INSERT 
 WITH CHECK (
-  EXISTS (
-    SELECT 1 FROM public.profiles 
-    WHERE id = auth.uid() AND role IN ('promoter', 'artist', 'admin')
-  ) OR auth.uid() IS NOT NULL
+  created_by = auth.uid() OR public.is_admin() OR auth.uid() IS NOT NULL
 );
 
 DROP POLICY IF EXISTS "Accreditations update policy" ON public.accreditations;
 CREATE POLICY "Accreditations update policy" ON public.accreditations FOR UPDATE 
 USING (
-  created_by = auth.uid() OR 
-  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('promoter', 'admin'))
+  created_by = auth.uid()
+  OR EXISTS (SELECT 1 FROM public.events WHERE events.id = accreditations.event_id AND events.promoter_id = auth.uid())
+  OR public.is_admin()
 );
 
 -- 12. Table des Postes de Contrôle (Scanners Multi-Entrées sans login)
@@ -4298,7 +4332,7 @@ ALTER TABLE public.scan_stations ADD COLUMN IF NOT EXISTS notes TEXT;
 ALTER TABLE public.tickets ADD COLUMN IF NOT EXISTS validated_station_id TEXT;
 ALTER TABLE public.tickets ADD COLUMN IF NOT EXISTS validated_station_name TEXT;
 
--- RLS Postes de Contrôle
+-- RLS Postes de Contrôle sans SELECT sur profiles
 ALTER TABLE public.scan_stations ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Scan stations select policy" ON public.scan_stations;
 CREATE POLICY "Scan stations select policy" ON public.scan_stations FOR SELECT USING (true);
@@ -4306,24 +4340,26 @@ CREATE POLICY "Scan stations select policy" ON public.scan_stations FOR SELECT U
 DROP POLICY IF EXISTS "Scan stations insert policy" ON public.scan_stations;
 CREATE POLICY "Scan stations insert policy" ON public.scan_stations FOR INSERT 
 WITH CHECK (
-  EXISTS (
-    SELECT 1 FROM public.profiles 
-    WHERE id = auth.uid() AND role IN ('promoter', 'admin')
-  ) OR auth.uid() IS NOT NULL
+  created_by = auth.uid()
+  OR EXISTS (SELECT 1 FROM public.events WHERE events.id = scan_stations.event_id AND events.promoter_id = auth.uid())
+  OR public.is_admin()
+  OR auth.uid() IS NOT NULL
 );
 
 DROP POLICY IF EXISTS "Scan stations update policy" ON public.scan_stations;
 CREATE POLICY "Scan stations update policy" ON public.scan_stations FOR UPDATE 
 USING (
-  created_by = auth.uid() OR 
-  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('promoter', 'admin'))
+  created_by = auth.uid()
+  OR EXISTS (SELECT 1 FROM public.events WHERE events.id = scan_stations.event_id AND events.promoter_id = auth.uid())
+  OR public.is_admin()
 );
 
 DROP POLICY IF EXISTS "Scan stations delete policy" ON public.scan_stations;
 CREATE POLICY "Scan stations delete policy" ON public.scan_stations FOR DELETE 
 USING (
-  created_by = auth.uid() OR 
-  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('promoter', 'admin'))
+  created_by = auth.uid()
+  OR EXISTS (SELECT 1 FROM public.events WHERE events.id = scan_stations.event_id AND events.promoter_id = auth.uid())
+  OR public.is_admin()
 );
 `;
 
