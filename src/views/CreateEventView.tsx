@@ -30,6 +30,7 @@ import {
   Plus,
   Scale,
   Lock,
+  X,
 } from 'lucide-react';
 import { EventItem, EventCategory, EventCoproducer, CoproducerRole, UserProfile, CURRENT_TERMS_VERSION } from '../types';
 import { createEventInSupabase, createCoproducer, acceptTermsOfServiceInSupabase } from '../services/supabase';
@@ -728,9 +729,63 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
             <span>Affiche Haute Définition</span>
           </div>
 
+          {/* URL de l'affiche personnalisée (prioritaire sur les présets) */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+              <Link className="w-3.5 h-3.5 text-[#E9C349]" />
+              Lien de l'affiche (URL) — Recommandé
+            </label>
+            <div className={`input-glass rounded-xl px-4 py-3 flex items-center gap-2 transition-all ${
+              posterUrl && !PRESET_POSTERS.some(p => p.url === posterUrl)
+                ? 'border border-[#E9C349]/60 ring-1 ring-[#E9C349]/20'
+                : 'border border-white/10'
+            }`}>
+              <ImageIcon className="w-4 h-4 text-gray-400 flex-shrink-0" />
+              <input
+                type="url"
+                value={PRESET_POSTERS.some(p => p.url === posterUrl) ? '' : posterUrl}
+                onChange={(e) => {
+                  const val = e.target.value.trim();
+                  if (val) setPosterUrl(val);
+                  else setPosterUrl(PRESET_POSTERS[0].url);
+                }}
+                placeholder="https://i.imgur.com/... ou autre URL d'image directe"
+                className="w-full bg-transparent border-none outline-none text-white text-sm focus:ring-0 p-0 placeholder-gray-500"
+              />
+              {posterUrl && !PRESET_POSTERS.some(p => p.url === posterUrl) && (
+                <button
+                  type="button"
+                  onClick={() => setPosterUrl(PRESET_POSTERS[0].url)}
+                  className="text-gray-500 hover:text-red-400 transition-colors flex-shrink-0"
+                  title="Effacer et revenir aux présets"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+            {posterUrl && !PRESET_POSTERS.some(p => p.url === posterUrl) && (
+              <div className="flex items-start gap-2 p-2.5 rounded-xl bg-[#E9C349]/5 border border-[#E9C349]/20">
+                <img
+                  src={posterUrl}
+                  alt="Aperçu de l'affiche"
+                  className="w-16 h-16 rounded-lg object-cover border border-white/10 flex-shrink-0"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = PRESET_POSTERS[0].url;
+                  }}
+                />
+                <div className="min-w-0">
+                  <p className="text-[11px] font-bold text-[#E9C349] flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Affiche personnalisée active
+                  </p>
+                  <p className="text-[10px] text-gray-400 truncate mt-0.5 font-mono">{posterUrl}</p>
+                </div>
+              </div>
+            )}
+          </div>
+
           <div>
             <label className="text-xs font-bold uppercase tracking-wider text-gray-400 block mb-2">
-              Sélectionner un visuel préconfiguré
+              Ou sélectionner un visuel préconfiguré
             </label>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
               {PRESET_POSTERS.map((preset, idx) => (
