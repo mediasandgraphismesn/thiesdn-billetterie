@@ -3166,7 +3166,6 @@ export const scanTicketFromStation = async (
   }
 
   // Synchro Supabase si client disponible
-  const client = getSupabaseClient();
   if (client) {
     try {
       await client
