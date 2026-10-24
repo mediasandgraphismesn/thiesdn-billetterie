@@ -545,7 +545,7 @@ export default function App() {
         )}
 
         {/* Dynamic Main View Canvas : Marges adaptées (Plein écran pour visiteurs, décalé pour clients connectés) */}
-        <main className={`flex-1 py-6 w-full mx-auto transition-all ${
+        <main className={`flex-grow flex flex-col pt-20 pb-6 w-full mx-auto transition-all ${
           isAuthenticated 
             ? 'px-4 sm:px-6 lg:pl-80 lg:pr-10 max-w-7xl' 
             : 'px-4 sm:px-8 lg:px-12 max-w-6xl'

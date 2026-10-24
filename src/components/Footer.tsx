@@ -74,26 +74,23 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateAdmin, onNavigateCGV }
 
   return (
     <>
-      <footer className="mt-24 border-t border-white/5 bg-[#0A0A0A]/95 text-gray-400 relative z-20 pb-28 md:pb-12 transition-all">
-        {/* Liseré lumineux discret Nocturnal Elegance */}
-        <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-[#8A2BE2]/40 to-transparent pointer-events-none" />
-
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-10">
-          {/* Grille principale aérée 4 colonnes */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-10 lg:gap-12 mb-14">
+      <footer className="mt-auto border-t border-white/5 bg-[#0A0A0A]/95 text-gray-400 transition-all">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-24 md:pb-8">
+          {/* Grille principale compacte 4 colonnes */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8 mb-6">
             
             {/* COLONNE 1 : IDENTITÉ */}
-            <div className="space-y-4">
+            <div className="space-y-3">
               <div className="flex items-center gap-3">
-                <div className="h-10 px-2.5 py-1 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center shadow-md">
+                <div className="h-9 px-2 py-1 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center shadow-md">
                   <img
                     src="/logo-tight.png"
                     alt="Thièsdn Logo"
-                    className="h-6 w-auto object-contain"
+                    className="h-5 w-auto object-contain"
                   />
                 </div>
                 <div>
-                  <span className="font-heading font-extrabold text-base text-white block leading-tight tracking-tight">
+                  <span className="font-heading font-extrabold text-sm text-white block leading-tight tracking-tight">
                     Thièsdn <span className="text-[#E9C349]">Billetterie</span>
                   </span>
                   <span className="text-[10px] uppercase font-semibold tracking-wider text-gray-500">
@@ -106,25 +103,25 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateAdmin, onNavigateCGV }
                 La billetterie officielle des événements de prestige à Thiès, Saly, Mbour et Dakar.
               </p>
 
-              <div className="flex items-center gap-2 pt-1 text-[11px] text-[#DCB8FF]/90">
+              <div className="flex items-center gap-2 text-[11px] text-[#DCB8FF]/90">
                 <ShieldCheck className="w-4 h-4 text-[#E9C349] shrink-0" />
                 <span>Pass QR certifié infalsifiable</span>
               </div>
             </div>
 
             {/* COLONNE 2 : CONTACT DIRECT */}
-            <div className="space-y-4">
-              <h4 className="font-heading font-bold text-xs uppercase tracking-wider text-[#E9C349] border-b border-white/5 pb-2">
+            <div className="space-y-3">
+              <h4 className="font-heading font-bold text-xs uppercase tracking-wider text-[#E9C349] border-b border-white/5 pb-1.5">
                 Contact Direct
               </h4>
 
-              <ul className="space-y-3 text-xs">
+              <ul className="space-y-2 text-xs">
                 <li>
                   <a
                     href="mailto:contact@mgartswork.site"
-                    className="flex items-center gap-2.5 text-gray-400 hover:text-white transition-colors group"
+                    className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors group"
                   >
-                    <div className="w-7 h-7 rounded-lg bg-white/[0.03] group-hover:bg-[#8A2BE2]/20 border border-white/5 flex items-center justify-center transition-colors">
+                    <div className="w-6 h-6 rounded-lg bg-white/[0.03] group-hover:bg-[#8A2BE2]/20 border border-white/5 flex items-center justify-center transition-colors">
                       <Mail className="w-3.5 h-3.5 text-[#DCB8FF]" />
                     </div>
                     <span className="truncate">contact@mgartswork.site</span>
@@ -136,9 +133,9 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateAdmin, onNavigateCGV }
                     href="https://wa.me/221774587474?text=Bonjour%20Thi%C3%A8sdn%20Billetterie"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-2.5 text-gray-400 hover:text-emerald-400 transition-colors group"
+                    className="flex items-center gap-2 text-gray-400 hover:text-emerald-400 transition-colors group"
                   >
-                    <div className="w-7 h-7 rounded-lg bg-white/[0.03] group-hover:bg-emerald-500/20 border border-white/5 flex items-center justify-center transition-colors">
+                    <div className="w-6 h-6 rounded-lg bg-white/[0.03] group-hover:bg-emerald-500/20 border border-white/5 flex items-center justify-center transition-colors">
                       <Phone className="w-3.5 h-3.5 text-emerald-400" />
                     </div>
                     <span>WhatsApp : +221 77 458 74 74</span>
@@ -150,9 +147,9 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateAdmin, onNavigateCGV }
                     href="https://thiesdn.mgartswork.site/"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-2.5 text-gray-400 hover:text-[#E9C349] transition-colors group"
+                    className="flex items-center gap-2 text-gray-400 hover:text-[#E9C349] transition-colors group"
                   >
-                    <div className="w-7 h-7 rounded-lg bg-white/[0.03] group-hover:bg-[#E9C349]/20 border border-white/5 flex items-center justify-center transition-colors">
+                    <div className="w-6 h-6 rounded-lg bg-white/[0.03] group-hover:bg-[#E9C349]/20 border border-white/5 flex items-center justify-center transition-colors">
                       <Globe className="w-3.5 h-3.5 text-[#E9C349]" />
                     </div>
                     <span className="truncate">thiesdn.mgartswork.site</span>
@@ -163,18 +160,18 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateAdmin, onNavigateCGV }
             </div>
 
             {/* COLONNE 3 : SUIVEZ-NOUS (RÉSEAUX SOCIAUX ÉPURÉS) */}
-            <div className="space-y-4">
-              <h4 className="font-heading font-bold text-xs uppercase tracking-wider text-[#E9C349] border-b border-white/5 pb-2">
+            <div className="space-y-3">
+              <h4 className="font-heading font-bold text-xs uppercase tracking-wider text-[#E9C349] border-b border-white/5 pb-1.5">
                 Suivez-nous
               </h4>
 
-              <div className="space-y-3">
+              <div className="space-y-2">
                 <p className="text-xs text-gray-400 leading-relaxed">
                   Restez connecté à l'actualité culturelle et aux sorties exclusives.
                 </p>
 
                 {/* Icônes seules, alignées horizontalement, sans gros rectangles noirs */}
-                <div className="flex items-center gap-2.5 pt-1">
+                <div className="flex items-center gap-2 pt-0.5">
                   {socialLinks.map((social) => {
                     const Icon = social.icon;
                     return (
@@ -185,27 +182,27 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateAdmin, onNavigateCGV }
                         rel="noopener noreferrer"
                         aria-label={social.name}
                         title={social.name}
-                        className={`w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 border border-white/10 bg-white/[0.02] hover:bg-white/[0.06] hover:scale-110 active:scale-95 transition-all duration-300 ${social.hoverColor}`}
+                        className={`w-8 h-8 rounded-xl flex items-center justify-center text-gray-400 border border-white/10 bg-white/[0.02] hover:bg-white/[0.06] hover:scale-110 active:scale-95 transition-all duration-300 ${social.hoverColor}`}
                       >
-                        <Icon className="w-4 h-4 transition-transform duration-300" />
+                        <Icon className="w-3.5 h-3.5 transition-transform duration-300" />
                       </a>
                     );
                   })}
                 </div>
 
-                <span className="text-[11px] text-gray-500 block pt-1">
+                <span className="text-[11px] text-gray-500 block">
                   @thiesdn • Communauté officielle
                 </span>
               </div>
             </div>
 
             {/* COLONNE 4 : INFORMATIONS LÉGALES & PAIEMENTS SÉCURISÉS */}
-            <div className="space-y-4">
-              <h4 className="font-heading font-bold text-xs uppercase tracking-wider text-[#E9C349] border-b border-white/5 pb-2">
+            <div className="space-y-3">
+              <h4 className="font-heading font-bold text-xs uppercase tracking-wider text-[#E9C349] border-b border-white/5 pb-1.5">
                 Informations Légales
               </h4>
 
-              <ul className="space-y-2 text-xs">
+              <ul className="space-y-1.5 text-xs">
                 <li>
                   <button
                     onClick={() => {
@@ -215,7 +212,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateAdmin, onNavigateCGV }
                         setIsCGVModalOpen(true);
                       }
                     }}
-                    className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors py-1 text-left"
+                    className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors py-0.5 text-left"
                   >
                     <FileText className="w-3.5 h-3.5 text-[#DCB8FF]" />
                     <span>Conditions Générales de Vente (CGV)</span>
@@ -224,7 +221,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateAdmin, onNavigateCGV }
                 <li>
                   <button
                     onClick={() => setLegalModal('confidentialite')}
-                    className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors py-1 text-left"
+                    className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors py-0.5 text-left"
                   >
                     <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
                     <span>Politique de Confidentialité</span>
@@ -233,7 +230,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateAdmin, onNavigateCGV }
                 <li>
                   <button
                     onClick={() => setLegalModal('faq')}
-                    className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors py-1 text-left"
+                    className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors py-0.5 text-left"
                   >
                     <HelpCircle className="w-3.5 h-3.5 text-[#E9C349]" />
                     <span>Foire Aux Questions (FAQ)</span>
@@ -248,7 +245,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateAdmin, onNavigateCGV }
                         window.location.href = '/admin';
                       }
                     }}
-                    className="flex items-center gap-2 text-gray-400 hover:text-[#E9C349] transition-colors py-1 text-left font-medium group"
+                    className="flex items-center gap-2 text-gray-400 hover:text-[#E9C349] transition-colors py-0.5 text-left font-medium group"
                   >
                     <ShieldCheck className="w-3.5 h-3.5 text-[#8A2BE2] group-hover:text-[#E9C349] transition-colors" />
                     <span>Accès Administration (Super Admin)</span>
@@ -257,11 +254,11 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateAdmin, onNavigateCGV }
               </ul>
 
               {/* Bloc Paiements 100% Sécurisés plus discret et aéré */}
-              <div className="p-3 rounded-2xl bg-white/[0.02] border border-white/5">
-                <span className="text-[10px] uppercase font-bold text-[#E9C349]/90 tracking-wider block mb-1">
+              <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/5">
+                <span className="text-[10px] uppercase font-bold text-[#E9C349]/90 tracking-wider block mb-0.5">
                   Paiements 100% Sécurisés
                 </span>
-                <p className="text-[11px] text-gray-400 leading-relaxed">
+                <p className="text-[11px] text-gray-400 leading-snug">
                   Règlements directs via Wave Sénégal & Orange Money sans intermédiaire bancaire.
                 </p>
               </div>
@@ -270,7 +267,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateAdmin, onNavigateCGV }
           </div>
 
           {/* BARRE INFÉRIEURE : COPYRIGHT & SIGNATURE DAW DIGITAL ARTS WORK */}
-          <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-gray-500">
+          <div className="pt-4 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-3 text-xs text-gray-500">
             {/* Mention légale */}
             <p className="text-center md:text-left">
               © {new Date().getFullYear()} Thièsdn Billetterie. Tous droits réservés.
