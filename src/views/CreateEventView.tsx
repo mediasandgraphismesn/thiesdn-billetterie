@@ -36,6 +36,7 @@ import { EventItem, EventCategory, EventCoproducer, CoproducerRole, UserProfile,
 import { createEventInSupabase, createCoproducer, acceptTermsOfServiceInSupabase } from '../services/supabase';
 import { THIES_33_QUARTIERS, THIES_QUARTIERS_BY_ZONE } from '../data/thiesQuartiers';
 import { TermsOfServiceModal } from '../components/TermsOfServiceModal';
+import { useAuth } from '../contexts/AuthContext';
 
 const TikTokIcon = ({ className = 'w-4 h-4' }: { className?: string }) => (
   <svg className={className} viewBox="0 0 24 24" fill="currentColor">
@@ -89,6 +90,10 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
   currentUser,
   onAcceptTerms,
 }) => {
+  const { userRole, user: authUser, isAuthenticated } = useAuth();
+  const effectiveUser = currentUser || authUser;
+  const isAllowedToCreate = userRole === 'promoter' || userRole === 'admin' || userRole === 'artist';
+
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [agreedTermsLocal, setAgreedTermsLocal] = useState(false);
   const [isAcceptingTerms, setIsAcceptingTerms] = useState(false);
@@ -324,17 +329,17 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
   };
 
   const isTermsAccepted = Boolean(
-    currentUser?.termsAccepted && currentUser?.termsVersion === CURRENT_TERMS_VERSION
+    effectiveUser?.termsAccepted && effectiveUser?.termsVersion === CURRENT_TERMS_VERSION
   );
 
   const handleValidateTermsInBlocker = async () => {
-    if (!currentUser || !agreedTermsLocal || isAcceptingTerms) return;
+    if (!effectiveUser || !agreedTermsLocal || isAcceptingTerms) return;
     setIsAcceptingTerms(true);
-    const res = await acceptTermsOfServiceInSupabase(currentUser.id, CURRENT_TERMS_VERSION);
+    const res = await acceptTermsOfServiceInSupabase(effectiveUser.id, CURRENT_TERMS_VERSION);
     setIsAcceptingTerms(false);
     if (res.success) {
       const updated: UserProfile = {
-        ...currentUser,
+        ...effectiveUser,
         termsAccepted: true,
         termsAcceptedAt: res.timestamp,
         termsVersion: CURRENT_TERMS_VERSION,
@@ -345,8 +350,43 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
     }
   };
 
+  // Tâche 2 : Si l'utilisateur n'est pas promoteur, artiste ou admin, afficher le message de blocage d'accès
+  if (!isAllowedToCreate) {
+    return (
+      <div className="max-w-xl mx-auto py-12 px-4 animate-in fade-in duration-300 text-center space-y-6">
+        <div className="glass-panel p-8 rounded-3xl border border-red-500/30 bg-[#121115] shadow-2xl space-y-5">
+          <div className="w-16 h-16 rounded-2xl bg-red-950/80 border border-red-500/50 flex items-center justify-center mx-auto text-red-400 shadow-lg">
+            <Lock className="w-8 h-8" />
+          </div>
+
+          <div className="space-y-2">
+            <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase bg-red-500/20 text-red-300 border border-red-500/40 tracking-wider inline-flex items-center gap-1.5">
+              Accès Réservé
+            </span>
+            <h2 className="font-heading text-2xl font-black text-white tracking-tight">
+              Espace Création Réservé aux Promoteurs & Artistes
+            </h2>
+            <p className="text-xs sm:text-sm text-gray-300 max-w-md mx-auto leading-relaxed">
+              La publication d'événements et la billetterie mobile sont exclusivement réservées aux organisateurs et promoteurs officiels.
+            </p>
+          </div>
+
+          <div className="pt-3">
+            <button
+              type="button"
+              onClick={onBack}
+              className="px-6 py-3 rounded-2xl btn-primary-glow font-heading font-extrabold text-xs uppercase tracking-wider"
+            >
+              Retour à l'accueil
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // ÉCRAN DE BLOCAGE CONTRACTUEL SI LES CGV NE SONT PAS ENCORE ACCEPTÉES (ÉTAPE 3)
-  if (currentUser && !isTermsAccepted) {
+  if (effectiveUser && !isTermsAccepted) {
     return (
       <div className="max-w-2xl mx-auto py-8 px-4 animate-in fade-in duration-300">
         <div className="glass-panel p-6 sm:p-8 rounded-3xl border-2 border-[#E9C349]/50 bg-[#121115] shadow-2xl space-y-6 text-center">

@@ -34,6 +34,7 @@ import {
   INITIAL_NOTIFICATIONS,
 } from './data/mockEvents';
 import { EventItem, UserProfile, UserTicket, NotificationItem } from './types';
+import { useAuth } from './contexts/AuthContext';
 import {
   getSupabaseClient,
   fetchUserProfile,
@@ -63,9 +64,19 @@ const getInitialScanCode = (): string | null => {
 };
 
 export default function App() {
+  const {
+    isAuthenticated: authIsAuthenticated,
+    user: contextUser,
+    userRole,
+    effectiveRole: contextEffectiveRole,
+    isAdminPreview,
+    setIsAdminPreview,
+    signOut: contextSignOut,
+  } = useAuth();
+
   const [scanStationCode, setScanStationCode] = useState<string | null>(getInitialScanCode());
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [user, setUser] = useState<UserProfile>(INITIAL_USER);
+  const [isAuthenticated, setIsAuthenticated] = useState(authIsAuthenticated);
+  const [user, setUser] = useState<UserProfile>(contextUser || INITIAL_USER);
   const [events, setEvents] = useState<EventItem[]>([]);
   const [isLoadingEvents, setIsLoadingEvents] = useState<boolean>(true);
   const [eventsError, setEventsError] = useState<string | null>(null);
@@ -73,10 +84,8 @@ export default function App() {
   const [notifications, setNotifications] = useState<NotificationItem[]>(INITIAL_NOTIFICATIONS);
 
   const [activeTab, setActiveTab] = useState<string>('home');
-  // Rôle de session réel provenant de Supabase Auth
-  const [currentRole, setCurrentRole] = useState<'user' | 'promoter' | 'admin' | 'sales_agent' | 'artist'>('user');
-  // Mode Test / Aperçu Visiteur réservé aux administrateurs
-  const [isAdminPreview, setIsAdminPreview] = useState<boolean>(false);
+  // Rôle de session réel provenant de Supabase Auth (synchronisé en temps réel avec le contexte)
+  const [currentRole, setCurrentRole] = useState<'user' | 'promoter' | 'admin' | 'sales_agent' | 'artist'>(userRole);
   const [ambientShader, setAmbientShader] = useState<boolean>(true);
   const [pendingOrdersCount, setPendingOrdersCount] = useState<number>(0);
 
@@ -84,7 +93,16 @@ export default function App() {
   const [selectedTicketForPass, setSelectedTicketForPass] = useState<UserTicket | null>(null);
 
   // Rôle effectif dans l'interface (si l'admin active l'aperçu visiteur, il expérimente le site comme un client)
-  const effectiveRole: 'user' | 'promoter' | 'admin' | 'sales_agent' | 'artist' = (isAdminPreview && currentRole === 'admin') ? 'user' : currentRole;
+  const effectiveRole: 'user' | 'promoter' | 'admin' | 'sales_agent' | 'artist' = contextEffectiveRole || ((isAdminPreview && currentRole === 'admin') ? 'user' : currentRole);
+
+  // Synchronisation continue de l'état local depuis le contexte Auth en temps réel
+  useEffect(() => {
+    setIsAuthenticated(authIsAuthenticated);
+    if (contextUser) {
+      setUser(contextUser);
+    }
+    setCurrentRole(userRole);
+  }, [authIsAuthenticated, contextUser, userRole]);
 
   // Détection des routes URL (/admin, redirection de l'ancien /baobab, ou ?preview=client)
   useEffect(() => {
