@@ -673,7 +673,7 @@ export default function App() {
                 />
               )}
 
-              {activeTab === 'create' && (effectiveRole === 'promoter' || effectiveRole === 'admin') && (
+              {activeTab === 'create' && (effectiveRole === 'promoter' || effectiveRole === 'artist' || effectiveRole === 'admin') && (
                 <CreateEventView
                   onEventCreated={handleCreateEvent}
                   onBack={() => handleTabChange(effectiveRole === 'admin' ? 'dashboard' : 'home')}
