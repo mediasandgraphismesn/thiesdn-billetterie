@@ -115,7 +115,12 @@ export default function App() {
         setActiveTab('dashboard');
       }
 
-      // 4. Route CGV publique /cgv
+      // 4. Route publique de création d'événement /create-event (séparée de /admin)
+      if (path === '/create-event' || hash.includes('/create-event') || search.includes('tab=create')) {
+        setActiveTab('create');
+      }
+
+      // 5. Route CGV publique /cgv
       if (path === '/cgv' || hash.includes('/cgv') || search.includes('tab=cgv')) {
         setActiveTab('cgv');
       }
@@ -132,6 +137,8 @@ export default function App() {
 
         if (window.location.pathname === '/admin') {
           setActiveTab('dashboard');
+        } else if (window.location.pathname === '/create-event') {
+          setActiveTab('create');
         } else if (window.location.pathname === '/cgv') {
           setActiveTab('cgv');
         } else if (window.location.pathname === '/') {
@@ -166,7 +173,7 @@ export default function App() {
       return ['home', 'explore', 'create', 'finances', 'artist', 'profile', 'accreditations', 'stations', 'cgv'].includes(tab);
     }
     if (role === 'artist') {
-      return ['artist', 'profile', 'accreditations', 'cgv'].includes(tab);
+      return ['home', 'explore', 'create', 'artist', 'profile', 'accreditations', 'cgv'].includes(tab);
     }
     if (role === 'sales_agent') {
       return ['sales_agent', 'profile', 'cgv'].includes(tab);
@@ -190,6 +197,8 @@ export default function App() {
     if (typeof window !== 'undefined') {
       if (targetTab === 'dashboard' && window.location.pathname !== '/admin') {
         window.history.pushState(null, '', '/admin');
+      } else if (targetTab === 'create' && window.location.pathname !== '/create-event') {
+        window.history.pushState(null, '', '/create-event');
       } else if (targetTab === 'cgv' && window.location.pathname !== '/cgv') {
         window.history.pushState(null, '', '/cgv');
       } else if (targetTab === 'home' && window.location.pathname !== '/') {
@@ -591,9 +600,15 @@ export default function App() {
                 <ShieldAlert className="w-8 h-8" />
               </div>
               <div>
-                <h3 className="font-heading text-lg font-bold text-white">Accès Restreint — Espace Administration</h3>
+                <h3 className="font-heading text-lg font-bold text-white">
+                  {activeTab === 'create'
+                    ? 'Accès Réservé aux Promoteurs & Artistes'
+                    : 'Accès Restreint — Espace Administration'}
+                </h3>
                 <p className="text-xs text-gray-400 mt-1">
-                  Cette section est strictement réservée aux Super Administrateurs de Thièsdn Billetterie. Votre compte est actuellement configuré comme compte client.
+                  {activeTab === 'create'
+                    ? 'La création d’événements est réservée aux comptes Promoteur et Artiste certifiés. Votre compte est actuellement configuré comme compte client.'
+                    : 'Cette section est strictement réservée aux Super Administrateurs de Thièsdn Billetterie. Votre compte est actuellement configuré comme compte client.'}
                 </p>
               </div>
               <button

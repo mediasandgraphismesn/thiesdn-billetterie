@@ -143,11 +143,11 @@ export const Header: React.FC<HeaderProps> = ({
         )}
 
 
-        {/* Bouton "Créer un Événement" : Strictement réservé aux Promoteurs */}
-        {isAuthenticated && currentRole === 'promoter' && (
+        {/* Bouton "Créer un Événement" : Visible pour les rôles promoter et artist */}
+        {isAuthenticated && (currentRole === 'promoter' || currentRole === 'artist') && (
           <button
             onClick={onOpenCreateModal}
-            className="hidden sm:flex items-center gap-1.5 bg-[#8A2BE2]/20 hover:bg-[#8A2BE2] text-[#DCB8FF] hover:text-white px-3.5 py-1.5 rounded-lg border border-[#8A2BE2]/40 text-xs font-bold tracking-wide transition-all shadow-sm"
+            className="flex items-center gap-1.5 bg-[#8A2BE2]/20 hover:bg-[#8A2BE2] text-[#DCB8FF] hover:text-white px-3 sm:px-3.5 py-1.5 rounded-lg border border-[#8A2BE2]/40 text-xs font-bold tracking-wide transition-all shadow-sm"
           >
             <Plus className="w-4 h-4" />
             <span>Créer un Événement</span>

@@ -88,6 +88,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
     if (user.role === 'artist') {
       return [
+        { id: 'home', label: 'Accueil / Événements', icon: LayoutDashboard, badge: totalEventsCount > 0 ? `${totalEventsCount}` : undefined },
+        { id: 'create', label: 'Créer un Événement', icon: PlusCircle },
         { id: 'artist', label: 'Mes Statistiques Artiste', icon: Award, badge: 'Co-Prod', badgeStyle: 'bg-[#E9C349]/20 text-[#E9C349]' },
         { id: 'accreditations', label: 'Mes Accréditations & Invités', icon: ShieldCheck, badge: 'VIP', badgeStyle: 'bg-[#8A2BE2]/20 text-[#DCB8FF]' },
         { id: 'profile', label: 'Mon Profil', icon: Settings },
@@ -179,8 +181,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
 
-      {/* Primary Action Button - For Promoters ONLY (Strictement interdit pour l'admin) */}
-      {user.role === 'promoter' && (
+      {/* Primary Action Button - For Promoters & Artists (Strictement interdit pour l'admin) */}
+      {(user.role === 'promoter' || user.role === 'artist') && (
         <button
           onClick={onOpenCreateModal}
           className="w-full mb-6 btn-primary-glow py-3 px-4 rounded-xl flex items-center justify-center gap-2 font-heading font-bold text-xs tracking-wider uppercase transition-all"

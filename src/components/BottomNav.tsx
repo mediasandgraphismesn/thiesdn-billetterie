@@ -61,6 +61,8 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     // 4. Espace Artiste / Staff Co-Production
     if (userRole === 'artist') {
       return [
+        { id: 'home', label: 'Accueil', icon: Home },
+        { id: 'create', label: 'Créer', icon: PlusCircle },
         { id: 'artist', label: 'Stats Artiste', icon: Award },
         { id: 'profile', label: 'Mon Profil', icon: User },
       ];
