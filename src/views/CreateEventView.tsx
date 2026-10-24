@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ArrowLeft,
   Info,
@@ -81,6 +81,18 @@ const PRESET_POSTERS = [
   },
 ];
 
+const DRAFT_STORAGE_KEY = 'thiesdn_create_event_draft';
+
+const getInitialDraft = () => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
 export const CreateEventView: React.FC<CreateEventViewProps> = ({
   onEventCreated,
   onBack,
@@ -94,53 +106,55 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
   const effectiveUser = currentUser || authUser;
   const isAllowedToCreate = userRole === 'promoter' || userRole === 'admin' || userRole === 'artist';
 
+  const [draftLoaded] = useState(() => getInitialDraft());
+
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [agreedTermsLocal, setAgreedTermsLocal] = useState(false);
   const [isAcceptingTerms, setIsAcceptingTerms] = useState(false);
 
-  const [title, setTitle] = useState('');
-  const [category, setCategory] = useState<EventCategory>('Gala');
-  const [startDatetime, setStartDatetime] = useState('2024-11-20T21:30');
-  const [endDatetime, setEndDatetime] = useState('');
-  const [venue, setVenue] = useState('');
-  const [city, setCity] = useState('Thiès');
-  const [quartier, setQuartier] = useState('Grand Standing');
-  const [posterUrl, setPosterUrl] = useState(PRESET_POSTERS[0].url);
-  const [youtubeUrl, setYoutubeUrl] = useState('');
-  const [whatsappContact, setWhatsappContact] = useState('+221 77 890 12 34');
-  const [description, setDescription] = useState('');
-  const [longDescription, setLongDescription] = useState('');
+  const [title, setTitle] = useState(() => draftLoaded?.title ?? '');
+  const [category, setCategory] = useState<EventCategory>(() => draftLoaded?.category ?? 'Gala');
+  const [startDatetime, setStartDatetime] = useState(() => draftLoaded?.startDatetime ?? '2024-11-20T21:30');
+  const [endDatetime, setEndDatetime] = useState(() => draftLoaded?.endDatetime ?? '');
+  const [venue, setVenue] = useState(() => draftLoaded?.venue ?? '');
+  const [city, setCity] = useState(() => draftLoaded?.city ?? 'Thiès');
+  const [quartier, setQuartier] = useState(() => draftLoaded?.quartier ?? 'Grand Standing');
+  const [posterUrl, setPosterUrl] = useState(() => draftLoaded?.posterUrl ?? PRESET_POSTERS[0].url);
+  const [youtubeUrl, setYoutubeUrl] = useState(() => draftLoaded?.youtubeUrl ?? '');
+  const [whatsappContact, setWhatsappContact] = useState(() => draftLoaded?.whatsappContact ?? '+221 77 890 12 34');
+  const [description, setDescription] = useState(() => draftLoaded?.description ?? '');
+  const [longDescription, setLongDescription] = useState(() => draftLoaded?.longDescription ?? '');
 
   // Réseaux sociaux & liens officiels (tous optionnels)
-  const [socialFacebook, setSocialFacebook] = useState('');
-  const [socialInstagram, setSocialInstagram] = useState('');
-  const [socialTiktok, setSocialTiktok] = useState('');
-  const [socialYoutube, setSocialYoutube] = useState('');
-  const [websiteUrl, setWebsiteUrl] = useState('');
+  const [socialFacebook, setSocialFacebook] = useState(() => draftLoaded?.socialFacebook ?? '');
+  const [socialInstagram, setSocialInstagram] = useState(() => draftLoaded?.socialInstagram ?? '');
+  const [socialTiktok, setSocialTiktok] = useState(() => draftLoaded?.socialTiktok ?? '');
+  const [socialYoutube, setSocialYoutube] = useState(() => draftLoaded?.socialYoutube ?? '');
+  const [websiteUrl, setWebsiteUrl] = useState(() => draftLoaded?.websiteUrl ?? '');
 
   // Tarifs des 3 formules
-  const [pricePrevente, setPricePrevente] = useState<number>(3500);
-  const [priceJourJ, setPriceJourJ] = useState<number>(5000);
-  const [priceVip, setPriceVip] = useState<number>(10000);
+  const [pricePrevente, setPricePrevente] = useState<number>(() => draftLoaded?.pricePrevente ?? 3500);
+  const [priceJourJ, setPriceJourJ] = useState<number>(() => draftLoaded?.priceJourJ ?? 5000);
+  const [priceVip, setPriceVip] = useState<number>(() => draftLoaded?.priceVip ?? 10000);
 
   // 3 Liens Wave obligatoires
-  const [waveLinkPrevente, setWaveLinkPrevente] = useState('https://pay.wave.com/m/M_p1_xT73E21bN/c/sn/?amount=3500');
-  const [waveLinkJourJ, setWaveLinkJourJ] = useState('https://pay.wave.com/m/M_p1_xT73E21bN/c/sn/?amount=5000');
-  const [waveLinkVip, setWaveLinkVip] = useState('https://pay.wave.com/m/M_p1_xT73E21bN/c/sn/?amount=10000');
+  const [waveLinkPrevente, setWaveLinkPrevente] = useState(() => draftLoaded?.waveLinkPrevente ?? 'https://pay.wave.com/m/M_p1_xT73E21bN/c/sn/?amount=3500');
+  const [waveLinkJourJ, setWaveLinkJourJ] = useState(() => draftLoaded?.waveLinkJourJ ?? 'https://pay.wave.com/m/M_p1_xT73E21bN/c/sn/?amount=5000');
+  const [waveLinkVip, setWaveLinkVip] = useState(() => draftLoaded?.waveLinkVip ?? 'https://pay.wave.com/m/M_p1_xT73E21bN/c/sn/?amount=10000');
 
   // Code Promo & Réduction Spéciale (Optionnel)
-  const [promoCode, setPromoCode] = useState('');
-  const [promoDiscountPercent, setPromoDiscountPercent] = useState<number | ''>('');
+  const [promoCode, setPromoCode] = useState(() => draftLoaded?.promoCode ?? '');
+  const [promoDiscountPercent, setPromoDiscountPercent] = useState<number | ''>(() => draftLoaded?.promoDiscountPercent ?? '');
 
   // Module Co-Production, Droits Artiste & Staff (Étape 2)
-  const [enableCoproduction, setEnableCoproduction] = useState<boolean>(true);
+  const [enableCoproduction, setEnableCoproduction] = useState<boolean>(() => draftLoaded?.enableCoproduction ?? true);
   const [coproducersList, setCoproducersList] = useState<Array<{
     name: string;
     phone: string;
     roleType: CoproducerRole;
     revenueShare: number;
     guestTicketsAllocated: number;
-  }>>([
+  }>>(() => draftLoaded?.coproducersList ?? [
     {
       name: 'Artiste Vedette Thiès',
       phone: '+221 77 555 12 34',
@@ -198,6 +212,73 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  // Sauvegarde automatique (Draft) dans localStorage à chaque modification
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const draftData = {
+      title,
+      category,
+      startDatetime,
+      endDatetime,
+      venue,
+      city,
+      quartier,
+      posterUrl,
+      youtubeUrl,
+      whatsappContact,
+      description,
+      longDescription,
+      socialFacebook,
+      socialInstagram,
+      socialTiktok,
+      socialYoutube,
+      websiteUrl,
+      pricePrevente,
+      priceJourJ,
+      priceVip,
+      waveLinkPrevente,
+      waveLinkJourJ,
+      waveLinkVip,
+      promoCode,
+      promoDiscountPercent,
+      enableCoproduction,
+      coproducersList,
+    };
+    try {
+      localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draftData));
+    } catch (e) {
+      console.warn('Erreur sauvegarde draft:', e);
+    }
+  }, [
+    title,
+    category,
+    startDatetime,
+    endDatetime,
+    venue,
+    city,
+    quartier,
+    posterUrl,
+    youtubeUrl,
+    whatsappContact,
+    description,
+    longDescription,
+    socialFacebook,
+    socialInstagram,
+    socialTiktok,
+    socialYoutube,
+    websiteUrl,
+    pricePrevente,
+    priceJourJ,
+    priceVip,
+    waveLinkPrevente,
+    waveLinkJourJ,
+    waveLinkVip,
+    promoCode,
+    promoDiscountPercent,
+    enableCoproduction,
+    coproducersList,
+  ]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -313,6 +394,13 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
             guestTicketsAllocated: c.guestTicketsAllocated,
           });
         }
+      }
+
+      // Nettoyage du draft après publication réussie
+      try {
+        localStorage.removeItem(DRAFT_STORAGE_KEY);
+      } catch (e) {
+        console.warn('Erreur suppression draft:', e);
       }
 
       setIsSubmitting(false);

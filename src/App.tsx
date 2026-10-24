@@ -72,6 +72,7 @@ export default function App() {
     isAdminPreview,
     setIsAdminPreview,
     signOut: contextSignOut,
+    isLoading: isAuthLoading,
   } = useAuth();
 
   const [scanStationCode, setScanStationCode] = useState<string | null>(getInitialScanCode());
@@ -499,6 +500,20 @@ export default function App() {
   // on affiche immédiatement l'interface de scan mobile autonome (sans header, sans sidebar ni accès admin)
   if (scanStationCode) {
     return <PublicScannerStationView accessCode={scanStationCode} />;
+  }
+
+  // TÂCHE 5 : État de chargement auth avant d'appliquer les redirections ou blocages (évite de vider ou rediriger /create-event)
+  if (isAuthLoading && (activeTab === 'create' || activeTab === 'dashboard')) {
+    return (
+      <div className="min-h-screen bg-[#0F0F0F] flex flex-col items-center justify-center p-6 text-center space-y-4">
+        <div className="w-12 h-12 rounded-2xl bg-[#8A2BE2]/20 border border-[#8A2BE2]/40 flex items-center justify-center animate-pulse">
+          <span className="w-6 h-6 border-2 border-[#E9C349] border-t-transparent rounded-full animate-spin" />
+        </div>
+        <p className="font-heading text-sm font-bold text-white tracking-wide">
+          Chargement de votre session sécurisée...
+        </p>
+      </div>
+    );
   }
 
   return (
