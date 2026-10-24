@@ -2958,12 +2958,157 @@ export const verifyScanStationAccess = async (
   };
 };
 
-export const scanTicketFromStation = async (
-  accessCode: string,
-  qrCode: string
-): Promise<{
+export interface OfflineScanItem {
+  ticketId: string;
+  qrCode: string;
+  scannedAt: string;
+  stationAccessCode: string;
+}
+
+const STORAGE_OFFLINE_SCAN_QUEUE = 'thiesdn_offline_scan_queue_v1';
+
+export const getOfflineScanQueue = (): OfflineScanItem[] => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(STORAGE_OFFLINE_SCAN_QUEUE);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
+export const addToOfflineScanQueue = (item: OfflineScanItem): void => {
+  if (typeof window === 'undefined') return;
+  const queue = getOfflineScanQueue();
+  if (!queue.some((q) => q.qrCode.toUpperCase() === item.qrCode.toUpperCase())) {
+    queue.push(item);
+    localStorage.setItem(STORAGE_OFFLINE_SCAN_QUEUE, JSON.stringify(queue));
+  }
+};
+
+export const clearOfflineScanQueue = (): void => {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem(STORAGE_OFFLINE_SCAN_QUEUE);
+};
+
+export const preloadStationTicketsCache = async (
+  accessCode: string
+): Promise<{ count: number; error?: string }> => {
+  const stationCheck = await verifyScanStationAccess(accessCode);
+  if (!stationCheck.success || !stationCheck.station) {
+    return { count: 0, error: 'Poste de contrôle invalide' };
+  }
+
+  const client = getSupabaseClient();
+  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+
+  if (!client || !isOnline) {
+    const local = getStoredTickets();
+    const count = stationCheck.station.eventId
+      ? local.filter((t) => t.eventId === stationCheck.station?.eventId).length
+      : local.length;
+    return { count };
+  }
+
+  try {
+    let query = client.from('tickets').select('*');
+    if (stationCheck.station.eventId) {
+      query = query.eq('event_id', stationCheck.station.eventId);
+    }
+    const { data, error } = await query;
+    if (error) {
+      return { count: 0, error: error.message };
+    }
+
+    if (data && data.length > 0) {
+      const remoteTickets: UserTicket[] = data.map((raw: any) => ({
+        id: raw.id,
+        eventId: raw.event_id || '',
+        eventTitle: raw.event_title || stationCheck.station?.eventTitle || '',
+        eventPoster: raw.event_poster || '',
+        eventDate: raw.event_date || '',
+        eventTime: raw.event_time || '',
+        eventVenue: raw.event_venue || '',
+        tierName: raw.tier_name || 'Standard',
+        price: Number(raw.price) || 0,
+        qrCode: raw.qr_code,
+        seatNumber: raw.seat_number,
+        holderName: raw.holder_name || 'Nom non renseigné',
+        holderPhone: raw.holder_phone || undefined,
+        holderEmail: raw.holder_email || undefined,
+        purchasedAt: raw.purchased_at || raw.created_at || new Date().toISOString(),
+        status: raw.status || 'valid',
+        isPhysical: Boolean(raw.is_physical),
+        agentId: raw.agent_id || undefined,
+        agentName: raw.agent_name || undefined,
+        batchNumber: raw.batch_number || undefined,
+        serialNumber: raw.serial_number || undefined,
+        usedAt: raw.used_at || undefined,
+      }));
+
+      const currentLocal = getStoredTickets();
+      const currentMap = new Map(currentLocal.map((t) => [t.qrCode.toUpperCase(), t]));
+      for (const rt of remoteTickets) {
+        currentMap.set(rt.qrCode.toUpperCase(), rt);
+      }
+      const merged = Array.from(currentMap.values());
+      saveStoredTickets(merged);
+      return { count: remoteTickets.length };
+    }
+    return { count: 0 };
+  } catch (err: any) {
+    return { count: 0, error: err.message };
+  }
+};
+
+export const syncOfflineScansToSupabase = async (
+  accessCode: string
+): Promise<{ syncedCount: number; errorsCount: number }> => {
+  const queue = getOfflineScanQueue();
+  if (queue.length === 0) return { syncedCount: 0, errorsCount: 0 };
+
+  const client = getSupabaseClient();
+  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+  if (!client || !isOnline) {
+    return { syncedCount: 0, errorsCount: 0 };
+  }
+
+  let syncedCount = 0;
+  let errorsCount = 0;
+  const remainingQueue: OfflineScanItem[] = [];
+
+  for (const item of queue) {
+    try {
+      const { data, error } = await client.rpc('scan_ticket', { p_qr_code: item.qrCode });
+      if (!error && data) {
+        syncedCount++;
+      } else {
+        remainingQueue.push(item);
+        errorsCount++;
+      }
+    } catch {
+      remainingQueue.push(item);
+      errorsCount++;
+    }
+  }
+
+  if (remainingQueue.length === 0) {
+    clearOfflineScanQueue();
+  } else {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_OFFLINE_SCAN_QUEUE, JSON.stringify(remainingQueue));
+    }
+  }
+
+  return { syncedCount, errorsCount };
+};
+
+export interface StationScanResult {
   success: boolean;
+  reason?: 'authorized' | 'already_scanned' | 'printed_not_sold' | 'cancelled' | 'not_found';
   message: string;
+  scannedAt?: string;
+  scannedAtFormatted?: string;
   ticketDetails?: {
     id: string;
     holderName: string;
@@ -2976,19 +3121,27 @@ export const scanTicketFromStation = async (
     isPhysical?: boolean;
     agentName?: string;
   };
-  /** Identité du titulaire, renvoyée aussi en cas de refus pour contrôle visuel */
   refusedDetails?: {
     holderName: string;
     holderPhone?: string;
     qrCode: string;
     tierName: string;
+    scannedAt?: string;
+    scannedAtFormatted?: string;
   };
   badgeTheme?: 'staff' | 'invite' | 'presse' | 'vip' | 'standard';
-}> => {
+  offlineValidated?: boolean;
+}
+
+export const scanTicketFromStation = async (
+  accessCode: string,
+  qrCode: string
+): Promise<StationScanResult> => {
   const stationCheck = await verifyScanStationAccess(accessCode);
   if (!stationCheck.success || !stationCheck.station) {
     return {
       success: false,
+      reason: 'not_found',
       message: stationCheck.message,
     };
   }
@@ -3000,7 +3153,6 @@ export const scanTicketFromStation = async (
   if (cleanCode.startsWith('ACC-')) {
     const accredRes = await scanAccreditationAtomic(cleanCode, station.eventId);
     if (accredRes.success && accredRes.accreditation) {
-      // Mettre à jour le compteur du poste
       station.scansCount = (station.scansCount || 0) + 1;
       station.lastScannedAt = new Date().toISOString();
       const allStations = getStoredScanStations();
@@ -3012,6 +3164,7 @@ export const scanTicketFromStation = async (
 
       return {
         success: true,
+        reason: 'authorized',
         message: accredRes.message,
         badgeTheme: accredRes.badgeTheme,
         ticketDetails: {
@@ -3027,6 +3180,7 @@ export const scanTicketFromStation = async (
     } else {
       return {
         success: false,
+        reason: 'already_scanned',
         message: accredRes.message || 'Badge d’accréditation déjà scanné ou révoqué !',
         badgeTheme: accredRes.badgeTheme,
       };
@@ -3048,6 +3202,7 @@ export const scanTicketFromStation = async (
 
       return {
         success: true,
+        reason: 'authorized',
         message: guestRes.message,
         badgeTheme: 'invite',
         ticketDetails: {
@@ -3063,89 +3218,126 @@ export const scanTicketFromStation = async (
     } else {
       return {
         success: false,
+        reason: 'already_scanned',
         message: guestRes.message || 'Pass invité déjà utilisé ou invalide !',
         badgeTheme: 'invite',
       };
     }
   }
 
-  // 3. CAS BILLET CLASSIQUE & BILLET PHYSIQUE PARTENAIRE
-  const tickets = getStoredTickets();
-  let ticketIdx = tickets.findIndex(
-    (t) => t.qrCode.toUpperCase() === cleanCode || t.id.toUpperCase() === cleanCode
-  );
-
-  // Si non présent dans le cache local mais que Supabase est connecté, interroger la RPC scan_ticket
+  // 3. BILLETS CLASSIQUES & BILLETS PHYSIQUES
   const client = getSupabaseClient();
-  if (ticketIdx === -1 && client) {
+  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+
+  // TENTATIVE EN LIGNE PRIORITAIRE AVEC SUPABASE RPC
+  if (client && isOnline) {
     try {
-      const rpcRes = await scanTicketWithSupabase(cleanCode);
-      if (rpcRes.ticket) {
-        const t = rpcRes.ticket;
-        const holderName = t.holderName?.trim() || 'Nom non renseigné';
-        const holderPhone = t.holderPhone;
-        const tierName = t.tierName || 'Standard';
+      const { data, error } = await client.rpc('scan_ticket', { p_qr_code: cleanCode });
+      if (!error && data) {
+        const raw = data.ticket;
+        const holderName = raw?.holder_name?.trim() || 'Nom non renseigné';
+        const holderPhone = raw?.holder_phone?.trim() || 'Téléphone non renseigné';
+        const tierName = raw?.tier_name || 'Standard';
         const isVip = tierName.toUpperCase().includes('VIP');
-        if (rpcRes.success) {
+        const reason = (data.reason || (data.success ? 'authorized' : 'not_found')) as any;
+        const scannedAt = data.scanned_at || new Date().toISOString();
+        const scannedAtFormatted = data.scanned_at_formatted || new Date(scannedAt).toLocaleTimeString('fr-FR');
+
+        // Mettre à jour le cache local pour synchronisation
+        const localTickets = getStoredTickets();
+        const tIdx = localTickets.findIndex(
+          (t) => t.qrCode.toUpperCase() === cleanCode || t.id.toUpperCase() === cleanCode
+        );
+        if (tIdx !== -1) {
+          localTickets[tIdx].status = data.success ? 'scanned' : (raw?.status || localTickets[tIdx].status);
+          if (data.success) {
+            localTickets[tIdx].usedAt = scannedAt;
+          }
+          saveStoredTickets(localTickets);
+        }
+
+        if (data.success) {
+          station.scansCount = (station.scansCount || 0) + 1;
+          station.lastScannedAt = scannedAt;
+          const allStations = getStoredScanStations();
+          const sIdx = allStations.findIndex((s) => s.id === station.id);
+          if (sIdx !== -1) {
+            allStations[sIdx] = station;
+            saveStoredScanStations(allStations);
+          }
+
           return {
             success: true,
-            message: rpcRes.message || `Accès Autorisé : ${holderName} (${tierName})`,
+            reason: 'authorized',
+            message: 'ACCÈS AUTORISÉ',
+            scannedAt,
+            scannedAtFormatted,
             badgeTheme: isVip ? 'vip' : 'standard',
             ticketDetails: {
-              id: t.id,
+              id: raw?.id || cleanCode,
               holderName,
               holderPhone,
-              eventTitle: t.eventTitle || station.eventTitle,
+              eventTitle: raw?.event_title || station.eventTitle,
               tierName,
-              qrCode: t.qrCode || cleanCode,
+              qrCode: raw?.qr_code || cleanCode,
               stationName: station.name,
-              scannedAt: new Date().toISOString(),
-              isPhysical: t.isPhysical,
-              agentName: t.agentName,
+              scannedAt,
+              isPhysical: Boolean(raw?.is_physical),
             },
           };
         } else {
           return {
             success: false,
-            message: rpcRes.message || 'Accès refusé.',
+            reason,
+            message: data.message || 'ACCÈS REFUSÉ',
+            scannedAt,
+            scannedAtFormatted,
             refusedDetails: {
               holderName,
               holderPhone,
-              qrCode: t.qrCode || cleanCode,
+              qrCode: raw?.qr_code || cleanCode,
               tierName,
+              scannedAt,
+              scannedAtFormatted,
             },
           };
         }
       }
     } catch (e: any) {
-      console.warn('Scan station RPC fallback error:', e.message);
+      console.warn('Erreur appel réseau Supabase RPC scan_ticket, bascule sur validation locale hors-ligne:', e?.message);
     }
   }
+
+  // 4. VALIDATION LOCALE (HORS-LIGNE OU SECOURS EN CAS DE COUPURE RÉSEAU)
+  const localTickets = getStoredTickets();
+  const ticketIdx = localTickets.findIndex(
+    (t) => t.qrCode.toUpperCase() === cleanCode || t.id.toUpperCase() === cleanCode
+  );
 
   if (ticketIdx === -1) {
     return {
       success: false,
-      message: 'Billet introuvable ou faux ! Entrée refusée.',
+      reason: 'not_found',
+      message: 'BILLET INTROUVABLE OU FAUX',
     };
   }
 
-  const ticket = tickets[ticketIdx];
-  const refusedInfo = {
-    holderName: ticket.holderName?.trim() || 'Nom non renseigné',
-    holderPhone: ticket.holderPhone,
+  const ticket = localTickets[ticketIdx];
+  const holderName = ticket.holderName?.trim() || 'Nom non renseigné';
+  const holderPhone = ticket.holderPhone?.trim() || 'Téléphone non renseigné';
+  const tierName = ticket.tierName || 'Standard';
+  const isVip = tierName.toUpperCase().includes('VIP');
+
+  const refusedDetails = {
+    holderName,
+    holderPhone,
     qrCode: ticket.qrCode,
-    tierName: ticket.tierName,
+    tierName,
+    scannedAt: ticket.usedAt,
+    scannedAtFormatted: ticket.usedAt ? new Date(ticket.usedAt).toLocaleTimeString('fr-FR') : undefined,
   };
 
-  // Vérifier concordance d'événement
-  if (station.eventId && ticket.eventId && ticket.eventId !== station.eventId) {
-    return {
-      success: false,
-      message: `Billet non valide pour cet événement ! Reçu pour "${ticket.eventTitle}".`,
-    };
-  }
-
-  // 1. Détection de billet physique non vendu (QR code inactif par défaut)
+  // 4.1 Billet physique non vendu
   if (
     ticket.status === 'printed_not_sold' ||
     ticket.status === 'physical_printed' ||
@@ -3153,38 +3345,57 @@ export const scanTicketFromStation = async (
   ) {
     return {
       success: false,
-      message: "Ce billet n'a pas été déclaré comme vendu. Contactez le promoteur.",
-      refusedDetails: refusedInfo,
+      reason: 'printed_not_sold',
+      message: 'BILLET NON DÉCLARÉ VENDU',
+      refusedDetails,
     };
   }
 
-  // 2. Détection de billet déjà utilisé
-  if (ticket.status === 'used' || ticket.status === 'scanned') {
+  // 4.2 Billet déjà utilisé
+  if (ticket.status === 'scanned' || ticket.status === 'used') {
+    const formattedTime = ticket.usedAt
+      ? new Date(ticket.usedAt).toLocaleTimeString('fr-FR')
+      : 'heure inconnue';
     return {
       success: false,
-      message: 'Billet déjà utilisé. Double entrée interdite.',
-      refusedDetails: refusedInfo,
+      reason: 'already_scanned',
+      message: 'BILLET DÉJÀ UTILISÉ',
+      scannedAt: ticket.usedAt,
+      scannedAtFormatted: formattedTime,
+      refusedDetails: {
+        ...refusedDetails,
+        scannedAtFormatted: formattedTime,
+      },
     };
   }
 
-  // 3. Détection de billet annulé ou désactivé par l'organisation
+  // 4.3 Billet annulé
   if (ticket.status === 'cancelled') {
     return {
       success: false,
-      message: "Ce billet a été désactivé ou annulé par l'organisation.",
-      refusedDetails: refusedInfo,
+      reason: 'cancelled',
+      message: 'BILLET ANNULÉ PAR L’ORGANISATION',
+      refusedDetails,
     };
   }
 
-  // 4. Billet valide (sold_valid ou valid digital) : passage au statut scanned
+  // 4.4 Billet valide (valid ou sold_valid) : passage IMMÉDIAT à scanned
   const nowIso = new Date().toISOString();
   ticket.status = 'scanned';
   ticket.usedAt = nowIso;
   ticket.validatedBy = station.accessCode;
-  tickets[ticketIdx] = ticket;
-  saveStoredTickets(tickets);
+  localTickets[ticketIdx] = ticket;
+  saveStoredTickets(localTickets);
 
-  // Mettre à jour la station de scan
+  // Enregistrer dans la file d'attente hors-ligne pour synchronisation ultérieure
+  addToOfflineScanQueue({
+    ticketId: ticket.id,
+    qrCode: ticket.qrCode,
+    scannedAt: nowIso,
+    stationAccessCode: station.accessCode,
+  });
+
+  // Mettre à jour la station
   station.scansCount = (station.scansCount || 0) + 1;
   station.lastScannedAt = nowIso;
   const allStations = getStoredScanStations();
@@ -3194,42 +3405,20 @@ export const scanTicketFromStation = async (
     saveStoredScanStations(allStations);
   }
 
-  // Synchro Supabase si client disponible
-  if (client) {
-    try {
-      await client
-        .from('tickets')
-        .update({
-          status: 'scanned',
-          used_at: nowIso,
-          validated_station_id: station.accessCode,
-        })
-        .eq('id', ticket.id);
-
-      await client
-        .from('scan_stations')
-        .update({
-          scans_count: station.scansCount,
-          last_scanned_at: nowIso,
-        })
-        .eq('id', station.id);
-    } catch (e: any) {
-      console.warn('Sync Supabase scanTicketFromStation:', e.message);
-    }
-  }
-
-  const isVipTier = (ticket.tierName || '').toUpperCase().includes('VIP');
-
   return {
     success: true,
-    message: `Accès Autorisé : ${ticket.holderName} (${ticket.tierName})`,
-    badgeTheme: isVipTier ? 'vip' : 'standard',
+    reason: 'authorized',
+    message: 'ACCÈS AUTORISÉ',
+    scannedAt: nowIso,
+    scannedAtFormatted: new Date(nowIso).toLocaleTimeString('fr-FR'),
+    badgeTheme: isVip ? 'vip' : 'standard',
+    offlineValidated: true,
     ticketDetails: {
       id: ticket.id,
-      holderName: ticket.holderName?.trim() || 'Nom non renseigné',
-      holderPhone: ticket.holderPhone,
+      holderName,
+      holderPhone,
       eventTitle: ticket.eventTitle,
-      tierName: ticket.tierName,
+      tierName,
       qrCode: ticket.qrCode,
       stationName: station.name,
       scannedAt: nowIso,
@@ -3906,32 +4095,63 @@ SECURITY DEFINER
 AS $$
 DECLARE
   v_ticket public.tickets%ROWTYPE;
+  v_previous_scan_time TEXT;
+  v_clean_code TEXT;
 BEGIN
+  v_clean_code := upper(trim(p_qr_code));
+
   -- Verrouillage de la ligne avec FOR UPDATE pour empêcher la validation concurrente
   SELECT * INTO v_ticket 
   FROM public.tickets
-  WHERE qr_code = p_qr_code OR id::text = p_qr_code
+  WHERE upper(trim(qr_code)) = v_clean_code OR id::text = trim(p_qr_code)
   FOR UPDATE;
 
   IF NOT FOUND THEN
-    RETURN jsonb_build_object('success', false, 'message', 'Billet introuvable ou faux');
+    RETURN jsonb_build_object(
+      'success', false, 
+      'reason', 'not_found',
+      'message', 'BILLET INTROUVABLE OU FAUX'
+    );
   END IF;
 
   -- 1. Billet physique non vendu : ACCÈS STRICTEMENT REFUSÉ
   IF v_ticket.status = 'printed_not_sold' OR v_ticket.status IN ('physical_printed', 'physical_allocated') THEN
     RETURN jsonb_build_object(
       'success', false, 
-      'message', 'Ce billet n''a pas été déclaré comme vendu. Contactez le promoteur.', 
-      'ticket', row_to_json(v_ticket)
+      'reason', 'printed_not_sold',
+      'message', 'BILLET NON DÉCLARÉ VENDU', 
+      'ticket', jsonb_build_object(
+        'id', v_ticket.id,
+        'holder_name', coalesce(nullif(trim(v_ticket.holder_name), ''), 'Nom non renseigné'),
+        'holder_phone', coalesce(nullif(trim(v_ticket.holder_phone), ''), 'Téléphone non renseigné'),
+        'qr_code', v_ticket.qr_code,
+        'event_title', v_ticket.event_title,
+        'tier_name', v_ticket.tier_name,
+        'status', v_ticket.status,
+        'is_physical', coalesce(v_ticket.is_physical, false)
+      )
     );
   END IF;
 
   -- 2. Billet déjà scanné
   IF v_ticket.status IN ('scanned', 'used') THEN
+    v_previous_scan_time := coalesce(to_char(v_ticket.used_at, 'HH24:MI:SS'), 'heure inconnue');
     RETURN jsonb_build_object(
       'success', false, 
-      'message', 'Billet déjà utilisé. Double entrée interdite.', 
-      'ticket', row_to_json(v_ticket)
+      'reason', 'already_scanned',
+      'message', 'BILLET DÉJÀ UTILISÉ', 
+      'scanned_at', v_ticket.used_at,
+      'scanned_at_formatted', v_previous_scan_time,
+      'ticket', jsonb_build_object(
+        'id', v_ticket.id,
+        'holder_name', coalesce(nullif(trim(v_ticket.holder_name), ''), 'Nom non renseigné'),
+        'holder_phone', coalesce(nullif(trim(v_ticket.holder_phone), ''), 'Téléphone non renseigné'),
+        'qr_code', v_ticket.qr_code,
+        'event_title', v_ticket.event_title,
+        'tier_name', v_ticket.tier_name,
+        'status', v_ticket.status,
+        'is_physical', coalesce(v_ticket.is_physical, false)
+      )
     );
   END IF;
 
@@ -3939,28 +4159,43 @@ BEGIN
   IF v_ticket.status = 'cancelled' THEN
     RETURN jsonb_build_object(
       'success', false, 
-      'message', 'Ce billet a été désactivé ou annulé par l''organisation.', 
-      'ticket', row_to_json(v_ticket)
+      'reason', 'cancelled',
+      'message', 'BILLET ANNULÉ PAR L''ORGANISATION', 
+      'ticket', jsonb_build_object(
+        'id', v_ticket.id,
+        'holder_name', coalesce(nullif(trim(v_ticket.holder_name), ''), 'Nom non renseigné'),
+        'holder_phone', coalesce(nullif(trim(v_ticket.holder_phone), ''), 'Téléphone non renseigné'),
+        'qr_code', v_ticket.qr_code,
+        'event_title', v_ticket.event_title,
+        'tier_name', v_ticket.tier_name,
+        'status', v_ticket.status,
+        'is_physical', coalesce(v_ticket.is_physical, false)
+      )
     );
   END IF;
 
-  -- 4. Billet valide (sold_valid ou digital valid)
+  -- 4. Billet valide (sold_valid ou digital valid) : passage IMMÉDIAT à scanned
   UPDATE public.tickets
-  SET status = 'scanned', used_at = now(), validated_by = auth.uid()
+  SET 
+    status = 'scanned', 
+    used_at = timezone('utc'::text, now())
   WHERE id = v_ticket.id;
 
   RETURN jsonb_build_object(
     'success', true, 
-    'message', 'Accès Autorisé : ' || v_ticket.tier_name,
+    'reason', 'authorized',
+    'message', 'ACCÈS AUTORISÉ',
+    'scanned_at', timezone('utc'::text, now()),
+    'scanned_at_formatted', to_char(timezone('utc'::text, now()), 'HH24:MI:SS'),
     'ticket', jsonb_build_object(
       'id', v_ticket.id,
       'holder_name', coalesce(nullif(trim(v_ticket.holder_name), ''), 'Nom non renseigné'),
-      'holder_phone', v_ticket.holder_phone,
+      'holder_phone', coalesce(nullif(trim(v_ticket.holder_phone), ''), 'Téléphone non renseigné'),
       'qr_code', v_ticket.qr_code,
       'event_title', v_ticket.event_title,
       'tier_name', v_ticket.tier_name,
       'status', 'scanned',
-      'is_physical', v_ticket.is_physical
+      'is_physical', coalesce(v_ticket.is_physical, false)
     )
   );
 END;
@@ -4752,9 +4987,18 @@ export const fetchOrdersFromSupabase = async (): Promise<{ orders: OrderRecord[]
   }
 };
 
+export interface SupabaseScanRpcResponse {
+  success: boolean;
+  reason?: 'authorized' | 'already_scanned' | 'printed_not_sold' | 'cancelled' | 'not_found';
+  message: string;
+  scannedAt?: string;
+  scannedAtFormatted?: string;
+  ticket?: UserTicket;
+}
+
 export const scanTicketWithSupabase = async (
   qrCode: string
-): Promise<{ success: boolean; message: string; ticket?: UserTicket }> => {
+): Promise<SupabaseScanRpcResponse> => {
   const client = getSupabaseClient();
   if (!client) {
     return { success: false, message: 'Base de données Supabase déconnectée.' };
@@ -4789,12 +5033,16 @@ export const scanTicketWithSupabase = async (
           agentName: rawTicket.agent_name || undefined,
           batchNumber: rawTicket.batch_number || undefined,
           serialNumber: rawTicket.serial_number || undefined,
+          usedAt: data?.scanned_at || rawTicket.used_at,
         }
       : undefined;
 
     return {
       success: Boolean(data?.success),
+      reason: data?.reason,
       message: data?.message || 'Billet vérifié.',
+      scannedAt: data?.scanned_at,
+      scannedAtFormatted: data?.scanned_at_formatted,
       ticket: mappedTicket,
     };
   } catch (err: any) {

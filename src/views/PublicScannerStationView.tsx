@@ -6,19 +6,25 @@ import {
   AlertTriangle,
   XCircle,
   ShieldCheck,
-  Sparkles,
-  Newspaper,
-  Users,
   RefreshCw,
   Lock,
-  Smartphone,
-  Check,
-  Copy,
+  Wifi,
+  WifiOff,
+  RotateCcw,
+  Clock,
+  UserCheck,
+  Phone,
+  Ticket,
+  ArrowRight,
 } from 'lucide-react';
 import { ScanStation } from '../types';
 import {
   verifyScanStationAccess,
   scanTicketFromStation,
+  preloadStationTicketsCache,
+  syncOfflineScansToSupabase,
+  getOfflineScanQueue,
+  StationScanResult,
   getStoredTickets,
   getStoredAccreditations,
 } from '../services/supabase';
@@ -37,23 +43,17 @@ export const PublicScannerStationView: React.FC<PublicScannerStationViewProps> =
   const [inputCode, setInputCode] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
 
-  const [scanResult, setScanResult] = useState<{
-    status: 'success' | 'error' | null;
-    message: string;
-    badgeTheme?: 'staff' | 'invite' | 'presse' | 'vip' | 'standard';
-    details?: {
-      holderName: string;
-      holderPhone?: string;
-      tierName: string;
-      eventTitle?: string;
-      qrCode: string;
-      scannedAt?: string;
-      isPhysical?: boolean;
-      agentName?: string;
-    };
-  }>({ status: null, message: '' });
+  // Connectivité réseau & synchronisation hors-ligne
+  const [isOnline, setIsOnline] = useState<boolean>(
+    typeof navigator !== 'undefined' ? navigator.onLine : true
+  );
+  const [pendingSyncCount, setPendingSyncCount] = useState<number>(0);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [cacheTicketsCount, setCacheTicketsCount] = useState<number>(0);
 
-  // Sons de feedback simples avec Web Audio API (aucun fichier MP3 requis)
+  const [scanResult, setScanResult] = useState<StationScanResult | null>(null);
+
+  // Sons de feedback simples avec Web Audio API (aucun MP3 externe requis)
   const playFeedbackSound = (type: 'success' | 'error') => {
     try {
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -83,13 +83,47 @@ export const PublicScannerStationView: React.FC<PublicScannerStationViewProps> =
     }
   };
 
-  // Chargement et vérification du poste
+  // Synchronisation des scans hors-ligne vers Supabase
+  const handleSyncOfflineScans = async () => {
+    if (isSyncing || !accessCode) return;
+    setIsSyncing(true);
+    try {
+      await syncOfflineScansToSupabase(accessCode);
+      const queue = getOfflineScanQueue();
+      setPendingSyncCount(queue.length);
+    } catch (e) {
+      console.warn('Erreur lors de la synchronisation hors-ligne:', e);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // Chargement et vérification du poste + préchargement du cache hors-ligne
   const loadStation = async () => {
     setIsLoading(true);
     setErrorMessage(null);
     const res = await verifyScanStationAccess(accessCode);
     if (res.success && res.station) {
       setStation(res.station);
+
+      // Pré-chargement des billets de l'événement dans le cache local (mode hors-ligne)
+      try {
+        const preloadRes = await preloadStationTicketsCache(accessCode);
+        setCacheTicketsCount(preloadRes.count);
+      } catch (err) {
+        console.warn('Préchargement cache billets:', err);
+      }
+
+      // Vérifier les éventuels scans hors-ligne en attente
+      const queue = getOfflineScanQueue();
+      setPendingSyncCount(queue.length);
+
+      // Si en ligne et scans en attente, lancer la synchro
+      if (typeof navigator !== 'undefined' && navigator.onLine && queue.length > 0) {
+        syncOfflineScansToSupabase(accessCode).then(() => {
+          setPendingSyncCount(getOfflineScanQueue().length);
+        });
+      }
     } else {
       setErrorMessage(res.message);
     }
@@ -98,6 +132,23 @@ export const PublicScannerStationView: React.FC<PublicScannerStationViewProps> =
 
   useEffect(() => {
     loadStation();
+
+    const handleOnlineStatus = () => {
+      setIsOnline(true);
+      handleSyncOfflineScans();
+    };
+
+    const handleOfflineStatus = () => {
+      setIsOnline(false);
+    };
+
+    window.addEventListener('online', handleOnlineStatus);
+    window.addEventListener('offline', handleOfflineStatus);
+
+    return () => {
+      window.removeEventListener('online', handleOnlineStatus);
+      window.removeEventListener('offline', handleOfflineStatus);
+    };
   }, [accessCode]);
 
   // Traitement d'un scan ou d'une saisie manuelle
@@ -108,35 +159,35 @@ export const PublicScannerStationView: React.FC<PublicScannerStationViewProps> =
     setIsVerifying(true);
     try {
       const res = await scanTicketFromStation(station.accessCode, trimmed);
-      if (res.success && res.ticketDetails) {
+      setScanResult(res);
+
+      if (res.success) {
         playFeedbackSound('success');
-        setScanResult({
-          status: 'success',
-          message: res.message,
-          badgeTheme: res.badgeTheme,
-          details: res.ticketDetails,
-        });
-        // Mettre à jour localement le compteur de scans
         setStation((prev) => (prev ? { ...prev, scansCount: prev.scansCount + 1 } : null));
         setInputCode('');
       } else {
         playFeedbackSound('error');
-        setScanResult({
-          status: 'error',
-          message: res.message,
-          badgeTheme: res.badgeTheme,
-          details: res.refusedDetails,
-        });
       }
+
+      // Mettre à jour le compteur de la file d'attente hors-ligne si besoin
+      const queue = getOfflineScanQueue();
+      setPendingSyncCount(queue.length);
     } catch {
       playFeedbackSound('error');
       setScanResult({
-        status: 'error',
+        success: false,
+        reason: 'not_found',
         message: 'Erreur réseau lors de la validation. Réessayez.',
       });
     } finally {
       setIsVerifying(false);
     }
+  };
+
+  // Réarmer pour le billet suivant
+  const handleResetForNext = () => {
+    setScanResult(null);
+    setInputCode('');
   };
 
   // 1. Écran de chargement
@@ -187,15 +238,31 @@ export const PublicScannerStationView: React.FC<PublicScannerStationViewProps> =
   // 3. Écran Principal du Scanner Mobile Autonome
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-white flex flex-col max-w-md mx-auto relative select-none">
-      {/* HEADER FIXE : NOM DU POSTE & STATUT */}
+      {/* HEADER FIXE : NOM DU POSTE & STATUT RÉSEAU */}
       <header className="sticky top-0 z-20 bg-[#111111]/95 backdrop-blur-md border-b border-white/10 p-4 shadow-xl">
         <div className="flex items-center justify-between">
           <div>
-            <span className="text-[10px] font-black uppercase text-[#E9C349] tracking-wider flex items-center gap-1">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              Poste de Contrôle Sécurisé
-            </span>
-            <h1 className="font-heading text-lg font-black text-white leading-tight">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-black uppercase text-[#E9C349] tracking-wider flex items-center gap-1">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                Poste de Contrôle Sécurisé
+              </span>
+
+              {/* Pastille Connectivité Réseau */}
+              {isOnline ? (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[9px] font-bold">
+                  <Wifi className="w-2.5 h-2.5 text-emerald-400" />
+                  En Ligne
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[9px] font-bold animate-pulse">
+                  <WifiOff className="w-2.5 h-2.5 text-amber-400" />
+                  Hors-Ligne
+                </span>
+              )}
+            </div>
+
+            <h1 className="font-heading text-lg font-black text-white leading-tight mt-0.5">
               {station.name}
             </h1>
             <p className="text-[11px] text-gray-400 truncate max-w-[240px]">
@@ -203,14 +270,28 @@ export const PublicScannerStationView: React.FC<PublicScannerStationViewProps> =
             </p>
           </div>
 
-          {/* Compteur de Scans en Direct */}
-          <div className="text-right bg-black/50 px-3 py-1.5 rounded-xl border border-white/10">
-            <span className="text-[9px] uppercase tracking-wider text-gray-400 font-bold block">
-              Entrées
-            </span>
-            <span className="font-mono text-lg font-black text-emerald-400">
-              {station.scansCount}
-            </span>
+          {/* Compteur de Scans en Direct & File Synchro */}
+          <div className="flex items-center gap-2">
+            {pendingSyncCount > 0 && (
+              <button
+                onClick={handleSyncOfflineScans}
+                disabled={isSyncing || !isOnline}
+                title="Synchroniser les scans hors-ligne avec Supabase"
+                className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 px-2 py-1.5 rounded-xl text-[10px] font-black flex items-center gap-1 transition-all"
+              >
+                <RotateCcw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
+                {pendingSyncCount} en attente
+              </button>
+            )}
+
+            <div className="text-right bg-black/50 px-3 py-1.5 rounded-xl border border-white/10">
+              <span className="text-[9px] uppercase tracking-wider text-gray-400 font-bold block">
+                Entrées
+              </span>
+              <span className="font-mono text-lg font-black text-emerald-400">
+                {station.scansCount}
+              </span>
+            </div>
           </div>
         </div>
       </header>
@@ -219,7 +300,7 @@ export const PublicScannerStationView: React.FC<PublicScannerStationViewProps> =
       <main className="flex-1 p-4 space-y-4 flex flex-col justify-between pb-8">
         <div className="space-y-4">
           {/* SIMULATEUR VISEUR / ZONE CAMERA */}
-          <div className="relative h-60 rounded-3xl overflow-hidden bg-gradient-to-b from-[#181822] via-[#0E0E14] to-[#0A0A0C] border-2 border-[#8A2BE2]/40 flex flex-col items-center justify-center p-6 shadow-2xl">
+          <div className="relative h-56 rounded-3xl overflow-hidden bg-gradient-to-b from-[#181822] via-[#0E0E14] to-[#0A0A0C] border-2 border-[#8A2BE2]/40 flex flex-col items-center justify-center p-6 shadow-2xl">
             {/* Coins Dorés */}
             <div className="absolute top-4 left-4 w-6 h-6 border-t-2 border-l-2 border-[#E9C349]" />
             <div className="absolute top-4 right-4 w-6 h-6 border-t-2 border-r-2 border-[#E9C349]" />
@@ -227,8 +308,8 @@ export const PublicScannerStationView: React.FC<PublicScannerStationViewProps> =
             <div className="absolute bottom-4 right-4 w-6 h-6 border-b-2 border-r-2 border-[#E9C349]" />
 
             {/* Viseur QR Code animé */}
-            <div className="w-40 h-40 border border-[#8A2BE2]/50 rounded-2xl relative flex items-center justify-center">
-              <QrCode className="w-24 h-24 text-[#8A2BE2]/40 animate-pulse" />
+            <div className="w-36 h-36 border border-[#8A2BE2]/50 rounded-2xl relative flex items-center justify-center">
+              <QrCode className="w-20 h-20 text-[#8A2BE2]/40 animate-pulse" />
               <div className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-[#E9C349] to-transparent shadow-[0_0_12px_#E9C349] animate-bounce" />
             </div>
 
@@ -266,7 +347,7 @@ export const PublicScannerStationView: React.FC<PublicScannerStationViewProps> =
               </button>
             </div>
 
-            {/* Raccourcis de test sur mobile pour tester immédiatement */}
+            {/* Raccourcis de test sur mobile pour validation immédiate */}
             <div className="pt-2 border-t border-white/5 space-y-2">
               <div>
                 <p className="text-[9px] text-amber-300 uppercase font-bold flex items-center gap-1">
@@ -346,84 +427,149 @@ export const PublicScannerStationView: React.FC<PublicScannerStationViewProps> =
             </div>
           </div>
 
-          {/* AFFICHAGE DU RÉSULTAT DU SCAN (ÉCRAN VERT / ÉCRAN ROUGE ANTI-FRAUDE) */}
-          {scanResult.status && (
+          {/* ==================================================================== */}
+          {/* AFFICHAGE DU RÉSULTAT DU SCAN EN GRAND ET EN HAUTE VISIBILITÉ        */}
+          {/* ==================================================================== */}
+          {scanResult && (
             <div
-              className={`p-5 rounded-2xl border-2 animate-in zoom-in-95 duration-200 shadow-2xl ${
-                scanResult.status === 'success'
-                  ? scanResult.badgeTheme === 'staff'
-                    ? 'bg-purple-950/90 border-[#8A2BE2] text-purple-100 shadow-[0_0_25px_rgba(138,43,226,0.4)]'
-                    : scanResult.badgeTheme === 'invite'
-                    ? 'bg-amber-950/90 border-[#E9C349] text-amber-100 shadow-[0_0_25px_rgba(233,195,73,0.4)]'
-                    : scanResult.badgeTheme === 'presse'
-                    ? 'bg-sky-950/90 border-sky-500 text-sky-100 shadow-[0_0_25px_rgba(2,132,199,0.4)]'
-                    : 'bg-emerald-950/90 border-emerald-500 text-emerald-100 shadow-[0_0_25px_rgba(16,185,129,0.4)]'
-                  : 'bg-red-950/90 border-red-500 text-red-100 shadow-[0_0_25px_rgba(239,68,68,0.5)]'
+              className={`rounded-3xl border-4 p-6 animate-in zoom-in-95 duration-200 shadow-2xl space-y-4 ${
+                scanResult.success
+                  ? 'bg-[#052E16] border-emerald-400 text-white shadow-[0_0_40px_rgba(16,185,129,0.45)]'
+                  : 'bg-[#450A0A] border-red-500 text-white shadow-[0_0_40px_rgba(239,68,68,0.55)]'
               }`}
             >
-              <div className="flex items-start gap-3">
-                {scanResult.status === 'success' ? (
-                  <CheckCircle2
-                    className={`w-10 h-10 shrink-0 ${
-                      scanResult.badgeTheme === 'staff'
-                        ? 'text-[#8A2BE2]'
-                        : scanResult.badgeTheme === 'invite'
-                        ? 'text-[#E9C349]'
-                        : scanResult.badgeTheme === 'presse'
-                        ? 'text-sky-400'
-                        : 'text-emerald-400'
-                    }`}
-                  />
-                ) : (
-                  <AlertTriangle className="w-10 h-10 text-red-400 shrink-0 animate-bounce" />
-                )}
-
-                <div className="flex-1 space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                        scanResult.status === 'success'
-                          ? scanResult.badgeTheme === 'staff'
-                            ? 'bg-[#8A2BE2] text-white'
-                            : scanResult.badgeTheme === 'invite'
-                            ? 'bg-[#E9C349] text-black font-extrabold'
-                            : scanResult.badgeTheme === 'presse'
-                            ? 'bg-sky-500 text-white'
-                            : 'bg-emerald-500 text-black font-extrabold'
-                          : 'bg-red-600 text-white animate-pulse'
-                      }`}
-                    >
-                      {scanResult.status === 'success' ? '✅ ACCÈS AUTORISÉ' : '❌ ACCÈS REFUSÉ'}
+              {/* CAS 1 : SUCCÈS -> ÉCRAN VERT XXL AVEC ACCÈS AUTORISÉ + NOM + TÉLÉPHONE */}
+              {scanResult.success ? (
+                <div className="space-y-4 text-center">
+                  <div className="flex flex-col items-center justify-center gap-2">
+                    <div className="w-16 h-16 rounded-2xl bg-emerald-500/20 border-2 border-emerald-400 flex items-center justify-center">
+                      <CheckCircle2 className="w-10 h-10 text-emerald-400" />
+                    </div>
+                    <span className="px-4 py-1 rounded-full bg-emerald-500 text-black font-black text-sm uppercase tracking-widest">
+                      ✅ ACCÈS AUTORISÉ
                     </span>
+                    {scanResult.offlineValidated && (
+                      <span className="text-[10px] uppercase font-bold text-emerald-300/80 bg-emerald-950/80 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
+                        ⚡ Contrôle Validé Hors-Ligne (Enregistré localement)
+                      </span>
+                    )}
                   </div>
 
-                  <h3 className="font-heading text-lg font-black leading-tight text-white">
-                    {scanResult.message}
-                  </h3>
+                  {/* IDENTITÉ DU TITULAIRE EN TRÈS GRAND POUR CONTRÔLE VISUEL */}
+                  {scanResult.ticketDetails && (
+                    <div className="bg-black/40 border border-emerald-500/30 rounded-2xl p-4 space-y-3">
+                      <div>
+                        <span className="text-[11px] font-bold uppercase tracking-widest text-emerald-300 block mb-1">
+                          Nom du Titulaire
+                        </span>
+                        <p className="font-heading text-3xl sm:text-4xl font-black text-[#FACC15] leading-tight break-words drop-shadow">
+                          {scanResult.ticketDetails.holderName?.trim() || 'Nom non renseigné'}
+                        </p>
+                      </div>
 
-                  {scanResult.details && (
-                    <div className="pt-3 mt-3 border-t border-white/10 space-y-2 text-center">
-                      <p className="font-heading text-3xl font-black text-[#E9C349] leading-tight break-words">
-                        {scanResult.details.holderName?.trim() || 'Nom non renseigné'}
-                      </p>
-                      <p className="font-mono text-2xl font-bold text-white tracking-wide">
-                        {scanResult.details.holderPhone?.trim() || 'Téléphone non renseigné'}
-                      </p>
-                      <p className="font-mono text-lg font-black text-[#B57BFF]">
-                        N° {scanResult.details.qrCode}
-                      </p>
-                      <p className="text-xs text-gray-300">
-                        Catégorie : {scanResult.details.tierName}
-                      </p>
-                      {scanResult.details.isPhysical && (
-                        <p className="text-[#E9C349] font-bold text-[11px]">
-                          🏷️ Billet Papier Partenaire {scanResult.details.agentName ? `(${scanResult.details.agentName})` : ''}
+                      <div className="pt-2 border-t border-emerald-500/20">
+                        <span className="text-[11px] font-bold uppercase tracking-widest text-emerald-300 block mb-1">
+                          Numéro de Téléphone
+                        </span>
+                        <p className="font-mono text-2xl font-black text-white tracking-widest">
+                          {scanResult.ticketDetails.holderPhone?.trim() || 'Téléphone non renseigné'}
+                        </p>
+                      </div>
+
+                      <div className="pt-2 border-t border-emerald-500/20 flex items-center justify-between text-xs text-emerald-200">
+                        <span>Formule : <strong>{scanResult.ticketDetails.tierName}</strong></span>
+                        <span className="font-mono font-bold">N° {scanResult.ticketDetails.qrCode}</span>
+                      </div>
+
+                      {scanResult.ticketDetails.isPhysical && (
+                        <p className="text-[#FACC15] font-bold text-[11px]">
+                          🏷️ Billet Papier Partenaire {scanResult.ticketDetails.agentName ? `(${scanResult.ticketDetails.agentName})` : ''}
                         </p>
                       )}
                     </div>
                   )}
+
+                  {/* BOUTON PASSER AU SUIVANT */}
+                  <button
+                    onClick={handleResetForNext}
+                    className="w-full py-3.5 px-4 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-black font-heading font-black text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-lg"
+                  >
+                    Scanner le Billet Suivant <ArrowRight className="w-4 h-4" />
+                  </button>
                 </div>
-              </div>
+              ) : (
+                /* CAS 2 : REFUS -> ÉCRAN ROUGE XXL SELON LA RAISON (DÉJÀ UTILISÉ, NON VENDU, FAUX) */
+                <div className="space-y-4 text-center">
+                  <div className="flex flex-col items-center justify-center gap-2">
+                    <div className="w-16 h-16 rounded-2xl bg-red-500/20 border-2 border-red-500 flex items-center justify-center animate-pulse">
+                      <AlertTriangle className="w-10 h-10 text-red-400" />
+                    </div>
+
+                    {/* TITRE EXPLICITE EN GRAND */}
+                    {scanResult.reason === 'already_scanned' ? (
+                      <span className="px-4 py-1.5 rounded-full bg-red-600 text-white font-black text-base uppercase tracking-wider animate-bounce">
+                        ❌ BILLET DÉJÀ UTILISÉ
+                      </span>
+                    ) : scanResult.reason === 'printed_not_sold' ? (
+                      <span className="px-4 py-1.5 rounded-full bg-red-600 text-white font-black text-base uppercase tracking-wider animate-bounce">
+                        ❌ BILLET NON DÉCLARÉ VENDU
+                      </span>
+                    ) : (
+                      <span className="px-4 py-1.5 rounded-full bg-red-600 text-white font-black text-base uppercase tracking-wider">
+                        ❌ ACCÈS STRICTEMENT REFUSÉ
+                      </span>
+                    )}
+                  </div>
+
+                  {/* HORODATAGE DU SCAN PRÉCÉDENT SI BILLET DÉJÀ UTILISÉ */}
+                  {scanResult.reason === 'already_scanned' && (
+                    <div className="bg-red-950/80 border-2 border-red-500/60 rounded-2xl p-3 inline-block mx-auto">
+                      <p className="font-mono text-base font-black text-red-200 flex items-center justify-center gap-2">
+                        <Clock className="w-5 h-5 text-red-400 shrink-0" />
+                        Scanné à {scanResult.scannedAtFormatted || scanResult.refusedDetails?.scannedAtFormatted || 'heure inconnue'}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* MESSAGE EXPLICATIF */}
+                  <p className="text-sm font-bold text-red-200 px-2">
+                    {scanResult.message}
+                  </p>
+
+                  {/* IDENTITÉ DU TITULAIRE INITIAL POUR CONTRÔLE VISUEL DE LA FRAUDE */}
+                  {scanResult.refusedDetails && (
+                    <div className="bg-black/40 border border-red-500/30 rounded-2xl p-4 space-y-2 text-left">
+                      <p className="text-[10px] uppercase font-bold text-red-300/80 tracking-wider">
+                        Contrôle Identité du Porteur Déclaré :
+                      </p>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-gray-300">Nom :</span>
+                        <span className="font-heading font-black text-lg text-[#FACC15]">
+                          {scanResult.refusedDetails.holderName?.trim() || 'Nom non renseigné'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-gray-300">Téléphone :</span>
+                        <span className="font-mono font-bold text-base text-white">
+                          {scanResult.refusedDetails.holderPhone?.trim() || 'Téléphone non renseigné'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-gray-400 pt-1 border-t border-white/10 font-mono">
+                        <span>Billet : {scanResult.refusedDetails.qrCode}</span>
+                        <span>{scanResult.refusedDetails.tierName}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* BOUTON RÉESSAYER / SUIVANT */}
+                  <button
+                    onClick={handleResetForNext}
+                    className="w-full py-3.5 px-4 rounded-xl bg-white/20 hover:bg-white/30 text-white font-heading font-black text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2"
+                  >
+                    <RotateCcw className="w-4 h-4" /> Scanner un Autre Billet
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -434,7 +580,7 @@ export const PublicScannerStationView: React.FC<PublicScannerStationViewProps> =
             Thièsdn Billetterie • Sécurité Portes
           </p>
           <p className="text-[9px] text-gray-400 font-mono">
-            Poste : {station.name} • Code : {station.accessCode}
+            Poste : {station.name} • Code : {station.accessCode} • Cache billets : {cacheTicketsCount}
           </p>
         </footer>
       </main>
