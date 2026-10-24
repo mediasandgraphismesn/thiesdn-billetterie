@@ -17,25 +17,37 @@ import {
   Film,
   Play,
   History,
+  UserPlus,
+  UserCheck,
+  MessageSquare,
+  RotateCcw,
+  User,
 } from 'lucide-react';
 import { UserTicket, OrderRecord } from '../types';
-import { getStoredOrders, fetchOrdersFromSupabase } from '../services/supabase';
+import { getStoredOrders, fetchOrdersFromSupabase, cancelTicketAssignment } from '../services/supabase';
 import { AddToCalendarButton } from '../components/AddToCalendarButton';
+import { AssignTicketModal } from '../components/AssignTicketModal';
 
 interface TicketsWalletViewProps {
   tickets: UserTicket[];
+  userName?: string;
   onOpenPass: (ticket: UserTicket) => void;
   onExploreEvents: () => void;
+  onTicketUpdated?: (ticket: UserTicket) => void;
 }
 
 export const TicketsWalletView: React.FC<TicketsWalletViewProps> = ({
   tickets,
+  userName = 'Moi',
   onOpenPass,
   onExploreEvents,
+  onTicketUpdated,
 }) => {
   const [activeTab, setActiveTab] = useState<'tickets' | 'orders'>('tickets');
   const [ticketFilter, setTicketFilter] = useState<'upcoming' | 'past'>('upcoming');
   const [orders, setOrders] = useState<OrderRecord[]>([]);
+  const [selectedTicketForAssign, setSelectedTicketForAssign] = useState<UserTicket | null>(null);
+  const [cancellingTicketId, setCancellingTicketId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchOrdersFromSupabase().then((res) => {
@@ -46,6 +58,24 @@ export const TicketsWalletView: React.FC<TicketsWalletViewProps> = ({
       }
     });
   }, []);
+
+  const handleCancelAssignment = async (ticketId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm('Voulez-vous annuler l’assignation de ce billet ? Il redeviendra disponible dans votre portefeuille.')) {
+      return;
+    }
+    setCancellingTicketId(ticketId);
+    try {
+      const res = await cancelTicketAssignment(ticketId);
+      if (res.success && res.ticket && onTicketUpdated) {
+        onTicketUpdated(res.ticket);
+      }
+    } catch (err: any) {
+      alert(err.message || 'Erreur.');
+    } finally {
+      setCancellingTicketId(null);
+    }
+  };
 
   // Détection des événements passés vs à venir
   const isTicketPast = (ticket: UserTicket): boolean => {
@@ -262,6 +292,108 @@ export const TicketsWalletView: React.FC<TicketsWalletViewProps> = ({
                             />
                           </div>
                         </div>
+                      </div>
+
+                      {/* SECTION ASSIGNATION / TRANSFERT À UN AMI */}
+                      <div
+                        className="mt-4 pt-3.5 border-t border-white/5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {ticket.assignmentStatus === 'pending' ? (
+                          <div className="flex-1 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3 w-full">
+                            <div className="flex items-center gap-2">
+                              <Clock className="w-4 h-4 text-amber-400 shrink-0 animate-pulse" />
+                              <div>
+                                <p className="text-xs font-bold text-amber-200">
+                                  En attente d'acceptation par <span className="text-white font-black">{ticket.assignedToName}</span>
+                                </p>
+                                <p className="text-[10px] text-amber-300/80 font-mono">
+                                  {ticket.assignedToPhone}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 self-end sm:self-auto">
+                              {ticket.claimToken && (
+                                <a
+                                  href={`https://wa.me/${ticket.assignedToPhone?.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
+                                    `Bonjour ${ticket.assignedToName} ! Voici votre lien officiel pour récupérer votre pass ${ticket.eventTitle} (${ticket.tierName}) : ${
+                                      typeof window !== 'undefined' ? window.location.origin : 'https://thiesdn-billetterie.vercel.app'
+                                    }/claim-ticket/${ticket.claimToken}`
+                                  )}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-heading font-black text-[11px] uppercase tracking-wider flex items-center gap-1.5 shadow transition-all"
+                                >
+                                  <MessageSquare className="w-3.5 h-3.5 fill-current" />
+                                  <span>Renvoyer WhatsApp</span>
+                                </a>
+                              )}
+
+                              <button
+                                onClick={(e) => handleCancelAssignment(ticket.id, e)}
+                                disabled={cancellingTicketId === ticket.id}
+                                className="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white text-[11px] font-bold transition-colors"
+                              >
+                                {cancellingTicketId === ticket.id ? 'Annulation...' : 'Annuler'}
+                              </button>
+                            </div>
+                          </div>
+                        ) : ticket.assignmentStatus === 'accepted' ? (
+                          <div className="flex items-center justify-between gap-2 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-3 w-full">
+                            <div className="flex items-center gap-2.5">
+                              {ticket.assignedToAvatar || ticket.holderAvatar ? (
+                                <img
+                                  src={ticket.assignedToAvatar || ticket.holderAvatar}
+                                  alt={ticket.assignedToName}
+                                  className="w-9 h-9 rounded-xl object-cover border border-emerald-400"
+                                />
+                              ) : (
+                                <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center">
+                                  <UserCheck className="w-5 h-5 text-emerald-400" />
+                                </div>
+                              )}
+                              <div>
+                                <p className="text-xs font-bold text-emerald-200">
+                                  Pass accepté & transféré à <span className="text-white font-black">{ticket.assignedToName}</span>
+                                </p>
+                                <p className="text-[10px] text-gray-400">
+                                  Billet sécurisé et rattaché à son propre smartphone
+                                </p>
+                              </div>
+                            </div>
+
+                            <span className="text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full bg-emerald-500 text-black">
+                              Transféré
+                            </span>
+                          </div>
+                        ) : ticket.assignmentStatus === 'declined' ? (
+                          <div className="flex items-center justify-between gap-2 bg-rose-500/10 border border-rose-500/30 rounded-2xl p-3 w-full">
+                            <p className="text-xs text-rose-200">
+                              Ce pass a été décliné et est de nouveau disponible dans votre portefeuille.
+                            </p>
+                            <button
+                              onClick={() => setSelectedTicketForAssign(ticket)}
+                              className="px-3 py-1.5 rounded-xl bg-[#8A2BE2] hover:bg-[#7822c9] text-white text-[11px] font-heading font-black uppercase tracking-wider flex items-center gap-1.5 transition-all"
+                            >
+                              <UserPlus className="w-3.5 h-3.5" />
+                              <span>Réassigner</span>
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 w-full">
+                            <span className="text-[11px] text-gray-400">
+                              Vous venez à plusieurs ? Offrez ou transférez cette place à votre ami.
+                            </span>
+                            <button
+                              onClick={() => setSelectedTicketForAssign(ticket)}
+                              className="self-end sm:self-auto px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#8A2BE2]/20 to-[#E9C349]/20 hover:from-[#8A2BE2]/30 hover:to-[#E9C349]/30 text-white border border-[#E9C349]/40 hover:border-[#E9C349] text-xs font-heading font-black uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-md active:scale-95"
+                            >
+                              <UserPlus className="w-3.5 h-3.5 text-[#E9C349]" />
+                              <span>Assigner à un ami</span>
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -497,6 +629,17 @@ export const TicketsWalletView: React.FC<TicketsWalletViewProps> = ({
           )}
         </div>
       )}
+
+      {/* Modale d'assignation de billet à un ami */}
+      <AssignTicketModal
+        ticket={selectedTicketForAssign}
+        isOpen={selectedTicketForAssign !== null}
+        buyerName={userName}
+        onClose={() => setSelectedTicketForAssign(null)}
+        onAssignedSuccess={(updatedTicket) => {
+          if (onTicketUpdated) onTicketUpdated(updatedTicket);
+        }}
+      />
     </div>
   );
 };

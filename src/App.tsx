@@ -26,6 +26,7 @@ import { ArtistDashboardView } from './views/ArtistDashboardView';
 import { AccreditationsView } from './views/AccreditationsView';
 import { ScanStationsView } from './views/ScanStationsView';
 import { PublicScannerStationView } from './views/PublicScannerStationView';
+import { ClaimTicketView } from './views/ClaimTicketView';
 import { CGVView } from './views/CGVView';
 
 import {
@@ -63,6 +64,24 @@ const getInitialScanCode = (): string | null => {
   return null;
 };
 
+const getInitialClaimToken = (): string | null => {
+  if (typeof window === 'undefined') return null;
+  const path = window.location.pathname;
+  const hash = window.location.hash;
+  const search = new URLSearchParams(window.location.search);
+
+  const queryCode = search.get('claim') || search.get('token');
+  if (queryCode) return queryCode.trim();
+
+  const pathMatch = path.match(/\/claim-ticket\/([A-Za-z0-9_-]+)/i);
+  if (pathMatch && pathMatch[1]) return pathMatch[1].trim();
+
+  const hashMatch = hash.match(/#\/?claim-ticket\/([A-Za-z0-9_-]+)/i);
+  if (hashMatch && hashMatch[1]) return hashMatch[1].trim();
+
+  return null;
+};
+
 export default function App() {
   const {
     isAuthenticated: authIsAuthenticated,
@@ -76,6 +95,7 @@ export default function App() {
   } = useAuth();
 
   const [scanStationCode, setScanStationCode] = useState<string | null>(getInitialScanCode());
+  const [claimToken, setClaimToken] = useState<string | null>(getInitialClaimToken());
   const [isAuthenticated, setIsAuthenticated] = useState(authIsAuthenticated);
   const [user, setUser] = useState<UserProfile>(contextUser || INITIAL_USER);
   const [events, setEvents] = useState<EventItem[]>([]);
@@ -502,6 +522,31 @@ export default function App() {
     return <PublicScannerStationView accessCode={scanStationCode} />;
   }
 
+  // Écran autonome de réclamation de billet offert (/claim-ticket/:token)
+  if (claimToken) {
+    return (
+      <ClaimTicketView
+        claimToken={claimToken}
+        currentUser={isAuthenticated ? user : null}
+        onClaimSuccess={(claimedTicket) => {
+          setTickets((prev) => [claimedTicket, ...prev.filter((t) => t.id !== claimedTicket.id)]);
+          setClaimToken(null);
+          setActiveTab('tickets');
+          if (typeof window !== 'undefined') {
+            window.history.pushState({}, '', '/');
+          }
+        }}
+        onNavigateHome={() => {
+          setClaimToken(null);
+          setActiveTab('home');
+          if (typeof window !== 'undefined') {
+            window.history.pushState({}, '', '/');
+          }
+        }}
+      />
+    );
+  }
+
   // TÂCHE 2 : État de chargement auth avant d'appliquer les redirections ou blocages (évite de vider ou rediriger /create-event)
   if (isAuthLoading && (activeTab === 'create' || activeTab === 'dashboard' || (typeof window !== 'undefined' && window.location.pathname === '/create-event'))) {
     return (
@@ -832,8 +877,12 @@ export default function App() {
               {activeTab === 'tickets' && (
                 <TicketsWalletView
                   tickets={tickets}
+                  userName={user.name}
                   onOpenPass={(tkt) => setSelectedTicketForPass(tkt)}
                   onExploreEvents={() => handleTabChange('home')}
+                  onTicketUpdated={(tkt) => {
+                    setTickets((prev) => prev.map((t) => (t.id === tkt.id ? tkt : t)));
+                  }}
                 />
               )}
 

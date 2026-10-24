@@ -211,7 +211,16 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
           <div className="grid grid-cols-2 gap-3 bg-[#1F1F1F] p-4 rounded-2xl border border-white/5 text-xs">
             <div>
               <p className="text-[10px] uppercase text-gray-400 font-bold">Titulaire</p>
-              <p className="font-bold text-white truncate">{ticket.holderName}</p>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                {(ticket.holderAvatar || ticket.assignedToAvatar) && (
+                  <img
+                    src={ticket.holderAvatar || ticket.assignedToAvatar}
+                    alt={ticket.holderName}
+                    className="w-5 h-5 rounded-full object-cover border border-[#E9C349]"
+                  />
+                )}
+                <p className="font-bold text-white truncate">{ticket.holderName}</p>
+              </div>
             </div>
             <div>
               <p className="text-[10px] uppercase text-gray-400 font-bold">Placement</p>

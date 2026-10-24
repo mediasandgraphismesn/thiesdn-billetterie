@@ -167,6 +167,8 @@ export interface SalesAgent {
   createdAt: string;
 }
 
+export type TicketAssignmentStatus = 'unassigned' | 'pending' | 'accepted' | 'declined';
+
 export interface UserTicket {
   id: string;
   eventId: string;
@@ -182,6 +184,7 @@ export interface UserTicket {
   holderName: string;
   holderPhone?: string;
   holderEmail?: string;
+  holderAvatar?: string;
   purchasedAt: string;
   status:
     | 'valid'
@@ -203,6 +206,17 @@ export interface UserTicket {
   validatedBy?: string;
   validatedStationId?: string;
   validatedStationName?: string;
+  // Champs d'assignation / transfert à un ami
+  assignedToProfileId?: string;
+  assignedToName?: string;
+  assignedToPhone?: string;
+  assignedToEmail?: string;
+  assignedToAvatar?: string;
+  assignmentStatus?: TicketAssignmentStatus;
+  assignedAt?: string;
+  claimedAt?: string;
+  claimToken?: string;
+  userId?: string;
 }
 
 export interface UserProfile {

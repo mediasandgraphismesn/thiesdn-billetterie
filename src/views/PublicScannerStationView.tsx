@@ -458,6 +458,17 @@ export const PublicScannerStationView: React.FC<PublicScannerStationViewProps> =
                   {/* IDENTITÉ DU TITULAIRE EN TRÈS GRAND POUR CONTRÔLE VISUEL */}
                   {scanResult.ticketDetails && (
                     <div className="bg-black/40 border border-emerald-500/30 rounded-2xl p-4 space-y-3">
+                      {/* Photo / Selfie du titulaire pour contrôle facial immédiat */}
+                      {scanResult.ticketDetails.holderAvatar && (
+                        <div className="flex justify-center pb-1">
+                          <img
+                            src={scanResult.ticketDetails.holderAvatar}
+                            alt={scanResult.ticketDetails.holderName}
+                            className="w-24 h-24 rounded-2xl object-cover border-4 border-[#FACC15] shadow-xl"
+                          />
+                        </div>
+                      )}
+
                       <div>
                         <span className="text-[11px] font-bold uppercase tracking-widest text-emerald-300 block mb-1">
                           Nom du Titulaire
@@ -539,6 +550,15 @@ export const PublicScannerStationView: React.FC<PublicScannerStationViewProps> =
                   {/* IDENTITÉ DU TITULAIRE INITIAL POUR CONTRÔLE VISUEL DE LA FRAUDE */}
                   {scanResult.refusedDetails && (
                     <div className="bg-black/40 border border-red-500/30 rounded-2xl p-4 space-y-2 text-left">
+                      {scanResult.refusedDetails.holderAvatar && (
+                        <div className="flex justify-center pb-2 border-b border-red-500/20">
+                          <img
+                            src={scanResult.refusedDetails.holderAvatar}
+                            alt={scanResult.refusedDetails.holderName}
+                            className="w-20 h-20 rounded-2xl object-cover border-2 border-red-500 shadow-md"
+                          />
+                        </div>
+                      )}
                       <p className="text-[10px] uppercase font-bold text-red-300/80 tracking-wider">
                         Contrôle Identité du Porteur Déclaré :
                       </p>

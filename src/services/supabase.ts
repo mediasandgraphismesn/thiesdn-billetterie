@@ -3113,6 +3113,7 @@ export interface StationScanResult {
     id: string;
     holderName: string;
     holderPhone?: string;
+    holderAvatar?: string;
     eventTitle: string;
     tierName: string;
     qrCode: string;
@@ -3124,6 +3125,7 @@ export interface StationScanResult {
   refusedDetails?: {
     holderName: string;
     holderPhone?: string;
+    holderAvatar?: string;
     qrCode: string;
     tierName: string;
     scannedAt?: string;
@@ -3256,6 +3258,8 @@ export const scanTicketFromStation = async (
           saveStoredTickets(localTickets);
         }
 
+        const holderAvatar = raw?.holder_avatar || raw?.assigned_to_avatar;
+
         if (data.success) {
           station.scansCount = (station.scansCount || 0) + 1;
           station.lastScannedAt = scannedAt;
@@ -3277,6 +3281,7 @@ export const scanTicketFromStation = async (
               id: raw?.id || cleanCode,
               holderName,
               holderPhone,
+              holderAvatar,
               eventTitle: raw?.event_title || station.eventTitle,
               tierName,
               qrCode: raw?.qr_code || cleanCode,
@@ -3295,6 +3300,7 @@ export const scanTicketFromStation = async (
             refusedDetails: {
               holderName,
               holderPhone,
+              holderAvatar,
               qrCode: raw?.qr_code || cleanCode,
               tierName,
               scannedAt,
@@ -3325,12 +3331,14 @@ export const scanTicketFromStation = async (
   const ticket = localTickets[ticketIdx];
   const holderName = ticket.holderName?.trim() || 'Nom non renseigné';
   const holderPhone = ticket.holderPhone?.trim() || 'Téléphone non renseigné';
+  const holderAvatar = ticket.holderAvatar || ticket.assignedToAvatar;
   const tierName = ticket.tierName || 'Standard';
   const isVip = tierName.toUpperCase().includes('VIP');
 
   const refusedDetails = {
     holderName,
     holderPhone,
+    holderAvatar,
     qrCode: ticket.qrCode,
     tierName,
     scannedAt: ticket.usedAt,
@@ -3417,6 +3425,7 @@ export const scanTicketFromStation = async (
       id: ticket.id,
       holderName,
       holderPhone,
+      holderAvatar,
       eventTitle: ticket.eventTitle,
       tierName,
       qrCode: ticket.qrCode,
@@ -5060,7 +5069,7 @@ export const fetchUserTicketsFromSupabase = async (
     const { data, error } = await client
       .from('tickets')
       .select('*')
-      .eq('user_id', userId)
+      .or(`user_id.eq.${userId},assigned_to_profile_id.eq.${userId}`)
       .order('created_at', { ascending: false });
 
     if (error) return { tickets: [], error: error.message };
@@ -5080,15 +5089,376 @@ export const fetchUserTicketsFromSupabase = async (
       holderName: t.holder_name || 'Nom non renseigné',
       holderPhone: t.holder_phone || undefined,
       holderEmail: t.holder_email || undefined,
+      holderAvatar: t.assigned_to_avatar || undefined,
       purchasedAt: t.created_at || new Date().toISOString(),
       status: t.status || 'valid',
       isPhysical: Boolean(t.is_physical),
       agentId: t.agent_id || undefined,
       agentName: t.agent_name || undefined,
+      userId: t.user_id,
+      assignedToProfileId: t.assigned_to_profile_id || undefined,
+      assignedToName: t.assigned_to_name || undefined,
+      assignedToPhone: t.assigned_to_phone || undefined,
+      assignedToEmail: t.assigned_to_email || undefined,
+      assignedToAvatar: t.assigned_to_avatar || undefined,
+      assignmentStatus: t.assignment_status || 'unassigned',
+      assignedAt: t.assigned_at || undefined,
+      claimedAt: t.claimed_at || undefined,
+      claimToken: t.claim_token || undefined,
     }));
 
     return { tickets: mapped, error: null };
   } catch (err: any) {
     return { tickets: [], error: err.message };
   }
+};
+
+// ====================================================================
+// TRANSFERT & ASSIGNATION DE BILLETS À UN AMI (ACHATS MULTIPLES)
+// ====================================================================
+
+/**
+ * Assigner un billet à un ami avec génération du claimToken unique
+ */
+export const assignTicketToFriend = async (
+  ticketId: string,
+  friendName: string,
+  friendPhone: string,
+  friendEmail?: string
+): Promise<{ success: boolean; message: string; claimToken?: string; ticket?: UserTicket }> => {
+  const client = getSupabaseClient();
+  const cleanName = friendName.trim();
+  const cleanPhone = friendPhone.trim();
+
+  if (!cleanName || !cleanPhone) {
+    return { success: false, message: 'Le nom et le numéro de téléphone de l’ami sont obligatoires.' };
+  }
+
+  // Tentative en ligne Supabase RPC
+  if (client) {
+    try {
+      const { data, error } = await client.rpc('assign_ticket_to_friend', {
+        p_ticket_id: ticketId,
+        p_friend_name: cleanName,
+        p_friend_phone: cleanPhone,
+        p_friend_email: friendEmail?.trim() || null,
+      });
+
+      if (!error && data && data.success) {
+        // Mettre à jour le cache local
+        const localTickets = getStoredTickets();
+        const idx = localTickets.findIndex((t) => t.id === ticketId);
+        if (idx !== -1) {
+          localTickets[idx] = {
+            ...localTickets[idx],
+            assignedToName: cleanName,
+            assignedToPhone: cleanPhone,
+            assignedToEmail: friendEmail?.trim() || undefined,
+            assignmentStatus: 'pending',
+            assignedAt: new Date().toISOString(),
+            claimToken: data.claim_token,
+          };
+          saveStoredTickets(localTickets);
+          return { success: true, message: data.message, claimToken: data.claim_token, ticket: localTickets[idx] };
+        }
+        return { success: true, message: data.message, claimToken: data.claim_token };
+      } else if (error) {
+        console.warn('Erreur RPC assign_ticket_to_friend:', error.message);
+      }
+    } catch (e: any) {
+      console.warn('Fallback assignation locale:', e.message);
+    }
+  }
+
+  // Fallback local instantané
+  const localTickets = getStoredTickets();
+  const idx = localTickets.findIndex((t) => t.id === ticketId);
+  if (idx === -1) {
+    return { success: false, message: 'Billet introuvable.' };
+  }
+
+  const generatedToken = 'CLM-' + Math.random().toString(36).substring(2, 10).toUpperCase();
+  const updatedTicket: UserTicket = {
+    ...localTickets[idx],
+    assignedToName: cleanName,
+    assignedToPhone: cleanPhone,
+    assignedToEmail: friendEmail?.trim() || undefined,
+    assignmentStatus: 'pending',
+    assignedAt: new Date().toISOString(),
+    claimToken: generatedToken,
+  };
+
+  localTickets[idx] = updatedTicket;
+  saveStoredTickets(localTickets);
+
+  return {
+    success: true,
+    message: 'Billet assigné avec succès. Vous pouvez maintenant envoyer le lien à votre ami.',
+    claimToken: generatedToken,
+    ticket: updatedTicket,
+  };
+};
+
+/**
+ * Annuler ou révoquer une assignation en attente
+ */
+export const cancelTicketAssignment = async (
+  ticketId: string
+): Promise<{ success: boolean; message: string; ticket?: UserTicket }> => {
+  const client = getSupabaseClient();
+
+  if (client) {
+    try {
+      const { data, error } = await client.rpc('cancel_ticket_assignment', {
+        p_ticket_id: ticketId,
+      });
+
+      if (!error && data && data.success) {
+        const localTickets = getStoredTickets();
+        const idx = localTickets.findIndex((t) => t.id === ticketId);
+        if (idx !== -1) {
+          localTickets[idx] = {
+            ...localTickets[idx],
+            assignedToName: undefined,
+            assignedToPhone: undefined,
+            assignedToEmail: undefined,
+            assignedToAvatar: undefined,
+            assignmentStatus: 'unassigned',
+            assignedAt: undefined,
+            claimToken: undefined,
+          };
+          saveStoredTickets(localTickets);
+          return { success: true, message: data.message, ticket: localTickets[idx] };
+        }
+      }
+    } catch (e: any) {
+      console.warn('Fallback annulation assignation locale:', e.message);
+    }
+  }
+
+  const localTickets = getStoredTickets();
+  const idx = localTickets.findIndex((t) => t.id === ticketId);
+  if (idx === -1) {
+    return { success: false, message: 'Billet introuvable.' };
+  }
+
+  localTickets[idx] = {
+    ...localTickets[idx],
+    assignedToName: undefined,
+    assignedToPhone: undefined,
+    assignedToEmail: undefined,
+    assignedToAvatar: undefined,
+    assignmentStatus: 'unassigned',
+    assignedAt: undefined,
+    claimToken: undefined,
+  };
+  saveStoredTickets(localTickets);
+
+  return {
+    success: true,
+    message: 'Assignation annulée. Le billet est de nouveau dans votre portefeuille personnel.',
+    ticket: localTickets[idx],
+  };
+};
+
+/**
+ * Récupérer les détails d'un billet via son claimToken ou son id pour la page de réclamation
+ */
+export const getTicketByClaimToken = async (
+  tokenOrId: string
+): Promise<{ success: boolean; ticket?: UserTicket; message?: string }> => {
+  const clean = tokenOrId.trim();
+  const client = getSupabaseClient();
+
+  if (client) {
+    try {
+      const { data, error } = await client
+        .from('tickets')
+        .select('*')
+        .or(`claim_token.eq.${clean},id.eq.${clean}`)
+        .maybeSingle();
+
+      if (!error && data) {
+        const t = data;
+        const mapped: UserTicket = {
+          id: t.id,
+          eventId: t.event_id,
+          eventTitle: t.event_title || 'Événement Thièsdn Billetterie',
+          eventPoster: t.event_poster || 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=1200&auto=format&fit=crop',
+          eventDate: t.event_date || 'Date à confirmer',
+          eventTime: t.event_time || '20:00',
+          eventVenue: t.event_venue || 'Thiès, Sénégal',
+          tierName: t.tier_name || 'Standard',
+          price: Number(t.price) || 0,
+          qrCode: t.qr_code,
+          seatNumber: t.seat_number,
+          holderName: t.holder_name || 'Nom non renseigné',
+          holderPhone: t.holder_phone || undefined,
+          holderEmail: t.holder_email || undefined,
+          holderAvatar: t.assigned_to_avatar || undefined,
+          purchasedAt: t.created_at || new Date().toISOString(),
+          status: t.status || 'valid',
+          isPhysical: Boolean(t.is_physical),
+          assignedToProfileId: t.assigned_to_profile_id || undefined,
+          assignedToName: t.assigned_to_name || undefined,
+          assignedToPhone: t.assigned_to_phone || undefined,
+          assignedToEmail: t.assigned_to_email || undefined,
+          assignedToAvatar: t.assigned_to_avatar || undefined,
+          assignmentStatus: t.assignment_status || 'unassigned',
+          assignedAt: t.assigned_at || undefined,
+          claimedAt: t.claimed_at || undefined,
+          claimToken: t.claim_token || undefined,
+        };
+        return { success: true, ticket: mapped };
+      }
+    } catch (e: any) {
+      console.warn('Erreur recherche billet claim:', e.message);
+    }
+  }
+
+  // Recherche dans le cache local
+  const localTickets = getStoredTickets();
+  const found = localTickets.find(
+    (t) => (t.claimToken && t.claimToken.toUpperCase() === clean.toUpperCase()) || t.id.toUpperCase() === clean.toUpperCase()
+  );
+
+  if (found) {
+    return { success: true, ticket: found };
+  }
+
+  return { success: false, message: 'Ce lien d’invitation est invalide ou a expiré.' };
+};
+
+/**
+ * Réclamer et accepter le billet avec identité (Nom, Téléphone, Photo)
+ */
+export const claimTicketWithIdentity = async (
+  tokenOrId: string,
+  friendName: string,
+  friendPhone: string,
+  friendAvatar?: string,
+  friendProfileId?: string
+): Promise<{ success: boolean; message: string; ticket?: UserTicket }> => {
+  const cleanName = friendName.trim();
+  const cleanPhone = friendPhone.trim();
+  const client = getSupabaseClient();
+
+  if (!cleanName || !cleanPhone) {
+    return { success: false, message: 'Votre nom complet et votre téléphone sont obligatoires.' };
+  }
+
+  if (client) {
+    try {
+      const { data, error } = await client.rpc('claim_ticket', {
+        p_token_or_id: tokenOrId.trim(),
+        p_friend_name: cleanName,
+        p_friend_phone: cleanPhone,
+        p_friend_avatar: friendAvatar || null,
+        p_friend_profile_id: friendProfileId || null,
+      });
+
+      if (!error && data && data.success) {
+        const localTickets = getStoredTickets();
+        const idx = localTickets.findIndex(
+          (t) => t.claimToken === tokenOrId || t.id === tokenOrId
+        );
+        if (idx !== -1) {
+          localTickets[idx] = {
+            ...localTickets[idx],
+            holderName: cleanName,
+            holderPhone: cleanPhone,
+            holderAvatar: friendAvatar,
+            assignedToName: cleanName,
+            assignedToPhone: cleanPhone,
+            assignedToAvatar: friendAvatar,
+            assignedToProfileId: friendProfileId,
+            assignmentStatus: 'accepted',
+            claimedAt: new Date().toISOString(),
+          };
+          saveStoredTickets(localTickets);
+          return { success: true, message: data.message, ticket: localTickets[idx] };
+        }
+        return { success: true, message: data.message };
+      } else if (error) {
+        return { success: false, message: error.message };
+      }
+    } catch (e: any) {
+      console.warn('Fallback réclamation locale:', e.message);
+    }
+  }
+
+  // Fallback local
+  const localTickets = getStoredTickets();
+  const idx = localTickets.findIndex(
+    (t) => (t.claimToken && t.claimToken.toUpperCase() === tokenOrId.trim().toUpperCase()) || t.id.toUpperCase() === tokenOrId.trim().toUpperCase()
+  );
+
+  if (idx === -1) {
+    return { success: false, message: 'Billet introuvable ou lien expiré.' };
+  }
+
+  const updated: UserTicket = {
+    ...localTickets[idx],
+    holderName: cleanName,
+    holderPhone: cleanPhone,
+    holderAvatar: friendAvatar,
+    assignedToName: cleanName,
+    assignedToPhone: cleanPhone,
+    assignedToAvatar: friendAvatar,
+    assignedToProfileId: friendProfileId,
+    assignmentStatus: 'accepted',
+    claimedAt: new Date().toISOString(),
+  };
+
+  localTickets[idx] = updated;
+  saveStoredTickets(localTickets);
+
+  return {
+    success: true,
+    message: `Félicitations ${cleanName} ! Votre pass officiel pour ${updated.eventTitle} a été validé et ajouté à votre portefeuille.`,
+    ticket: updated,
+  };
+};
+
+/**
+ * Décliner un billet offert
+ */
+export const declineTicketAssignment = async (
+  tokenOrId: string
+): Promise<{ success: boolean; message: string }> => {
+  const client = getSupabaseClient();
+
+  if (client) {
+    try {
+      const { data, error } = await client.rpc('decline_ticket', {
+        p_token_or_id: tokenOrId.trim(),
+      });
+      if (!error && data && data.success) {
+        const localTickets = getStoredTickets();
+        const idx = localTickets.findIndex(
+          (t) => t.claimToken === tokenOrId || t.id === tokenOrId
+        );
+        if (idx !== -1) {
+          localTickets[idx].assignmentStatus = 'declined';
+          localTickets[idx].claimToken = undefined;
+          saveStoredTickets(localTickets);
+        }
+        return { success: true, message: data.message };
+      }
+    } catch (e: any) {
+      console.warn('Fallback déclin local:', e.message);
+    }
+  }
+
+  const localTickets = getStoredTickets();
+  const idx = localTickets.findIndex(
+    (t) => (t.claimToken && t.claimToken.toUpperCase() === tokenOrId.trim().toUpperCase()) || t.id.toUpperCase() === tokenOrId.trim().toUpperCase()
+  );
+  if (idx !== -1) {
+    localTickets[idx].assignmentStatus = 'declined';
+    localTickets[idx].claimToken = undefined;
+    saveStoredTickets(localTickets);
+  }
+
+  return { success: true, message: 'Le billet a été décliné et restitué à l’acheteur.' };
 };
