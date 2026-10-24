@@ -81,16 +81,87 @@ const PRESET_POSTERS = [
   },
 ];
 
-const DRAFT_STORAGE_KEY = 'thiesdn_create_event_draft';
+const DRAFT_STORAGE_KEY = 'thiesdn_event_draft';
 
-const getInitialDraft = () => {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
+interface EventFormData {
+  title: string;
+  category: EventCategory;
+  startDatetime: string;
+  endDatetime: string;
+  venue: string;
+  city: string;
+  quartier: string;
+  posterUrl: string;
+  youtubeUrl: string;
+  whatsappContact: string;
+  description: string;
+  longDescription: string;
+  socialFacebook: string;
+  socialInstagram: string;
+  socialTiktok: string;
+  socialYoutube: string;
+  websiteUrl: string;
+  pricePrevente: number;
+  priceJourJ: number;
+  priceVip: number;
+  waveLinkPrevente: string;
+  waveLinkJourJ: string;
+  waveLinkVip: string;
+  promoCode: string;
+  promoDiscountPercent: number | '';
+  enableCoproduction: boolean;
+  coproducersList: Array<{
+    name: string;
+    phone: string;
+    roleType: CoproducerRole;
+    revenueShare: number;
+    guestTicketsAllocated: number;
+  }>;
+}
+
+const INITIAL_FORM_STATE: EventFormData = {
+  title: '',
+  category: 'Gala',
+  startDatetime: '2024-11-20T21:30',
+  endDatetime: '',
+  venue: '',
+  city: 'Thiès',
+  quartier: 'Grand Standing',
+  posterUrl: PRESET_POSTERS[0].url,
+  youtubeUrl: '',
+  whatsappContact: '+221 77 890 12 34',
+  description: '',
+  longDescription: '',
+  socialFacebook: '',
+  socialInstagram: '',
+  socialTiktok: '',
+  socialYoutube: '',
+  websiteUrl: '',
+  pricePrevente: 3500,
+  priceJourJ: 5000,
+  priceVip: 10000,
+  waveLinkPrevente: 'https://pay.wave.com/m/M_p1_xT73E21bN/c/sn/?amount=3500',
+  waveLinkJourJ: 'https://pay.wave.com/m/M_p1_xT73E21bN/c/sn/?amount=5000',
+  waveLinkVip: 'https://pay.wave.com/m/M_p1_xT73E21bN/c/sn/?amount=10000',
+  promoCode: '',
+  promoDiscountPercent: '',
+  enableCoproduction: true,
+  coproducersList: [
+    {
+      name: 'Artiste Vedette Thiès',
+      phone: '+221 77 555 12 34',
+      roleType: 'artiste',
+      revenueShare: 50,
+      guestTicketsAllocated: 20,
+    },
+    {
+      name: 'Manager / Staff Artiste',
+      phone: '+221 78 222 33 44',
+      roleType: 'staff_artiste',
+      revenueShare: 0,
+      guestTicketsAllocated: 10,
+    },
+  ],
 };
 
 export const CreateEventView: React.FC<CreateEventViewProps> = ({
@@ -106,151 +177,32 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
   const effectiveUser = currentUser || authUser;
   const isAllowedToCreate = userRole === 'promoter' || userRole === 'admin' || userRole === 'artist';
 
-  const [draftLoaded] = useState(() => getInitialDraft());
-
-  const [showTermsModal, setShowTermsModal] = useState(false);
-  const [agreedTermsLocal, setAgreedTermsLocal] = useState(false);
-  const [isAcceptingTerms, setIsAcceptingTerms] = useState(false);
-
-  const [title, setTitle] = useState(() => draftLoaded?.title ?? '');
-  const [category, setCategory] = useState<EventCategory>(() => draftLoaded?.category ?? 'Gala');
-  const [startDatetime, setStartDatetime] = useState(() => draftLoaded?.startDatetime ?? '2024-11-20T21:30');
-  const [endDatetime, setEndDatetime] = useState(() => draftLoaded?.endDatetime ?? '');
-  const [venue, setVenue] = useState(() => draftLoaded?.venue ?? '');
-  const [city, setCity] = useState(() => draftLoaded?.city ?? 'Thiès');
-  const [quartier, setQuartier] = useState(() => draftLoaded?.quartier ?? 'Grand Standing');
-  const [posterUrl, setPosterUrl] = useState(() => draftLoaded?.posterUrl ?? PRESET_POSTERS[0].url);
-  const [youtubeUrl, setYoutubeUrl] = useState(() => draftLoaded?.youtubeUrl ?? '');
-  const [whatsappContact, setWhatsappContact] = useState(() => draftLoaded?.whatsappContact ?? '+221 77 890 12 34');
-  const [description, setDescription] = useState(() => draftLoaded?.description ?? '');
-  const [longDescription, setLongDescription] = useState(() => draftLoaded?.longDescription ?? '');
-
-  // Réseaux sociaux & liens officiels (tous optionnels)
-  const [socialFacebook, setSocialFacebook] = useState(() => draftLoaded?.socialFacebook ?? '');
-  const [socialInstagram, setSocialInstagram] = useState(() => draftLoaded?.socialInstagram ?? '');
-  const [socialTiktok, setSocialTiktok] = useState(() => draftLoaded?.socialTiktok ?? '');
-  const [socialYoutube, setSocialYoutube] = useState(() => draftLoaded?.socialYoutube ?? '');
-  const [websiteUrl, setWebsiteUrl] = useState(() => draftLoaded?.websiteUrl ?? '');
-
-  // Tarifs des 3 formules
-  const [pricePrevente, setPricePrevente] = useState<number>(() => draftLoaded?.pricePrevente ?? 3500);
-  const [priceJourJ, setPriceJourJ] = useState<number>(() => draftLoaded?.priceJourJ ?? 5000);
-  const [priceVip, setPriceVip] = useState<number>(() => draftLoaded?.priceVip ?? 10000);
-
-  // 3 Liens Wave obligatoires
-  const [waveLinkPrevente, setWaveLinkPrevente] = useState(() => draftLoaded?.waveLinkPrevente ?? 'https://pay.wave.com/m/M_p1_xT73E21bN/c/sn/?amount=3500');
-  const [waveLinkJourJ, setWaveLinkJourJ] = useState(() => draftLoaded?.waveLinkJourJ ?? 'https://pay.wave.com/m/M_p1_xT73E21bN/c/sn/?amount=5000');
-  const [waveLinkVip, setWaveLinkVip] = useState(() => draftLoaded?.waveLinkVip ?? 'https://pay.wave.com/m/M_p1_xT73E21bN/c/sn/?amount=10000');
-
-  // Code Promo & Réduction Spéciale (Optionnel)
-  const [promoCode, setPromoCode] = useState(() => draftLoaded?.promoCode ?? '');
-  const [promoDiscountPercent, setPromoDiscountPercent] = useState<number | ''>(() => draftLoaded?.promoDiscountPercent ?? '');
-
-  // Module Co-Production, Droits Artiste & Staff (Étape 2)
-  const [enableCoproduction, setEnableCoproduction] = useState<boolean>(() => draftLoaded?.enableCoproduction ?? true);
-  const [coproducersList, setCoproducersList] = useState<Array<{
-    name: string;
-    phone: string;
-    roleType: CoproducerRole;
-    revenueShare: number;
-    guestTicketsAllocated: number;
-  }>>(() => draftLoaded?.coproducersList ?? [
-    {
-      name: 'Artiste Vedette Thiès',
-      phone: '+221 77 555 12 34',
-      roleType: 'artiste',
-      revenueShare: 50,
-      guestTicketsAllocated: 20,
-    },
-    {
-      name: 'Manager / Staff Artiste',
-      phone: '+221 78 222 33 44',
-      roleType: 'staff_artiste',
-      revenueShare: 0,
-      guestTicketsAllocated: 10,
-    },
-  ]);
-
-  // Formulaire d'ajout rapide d'un ayant-droit
-  const [newCoprodName, setNewCoprodName] = useState('');
-  const [newCoprodPhone, setNewCoprodPhone] = useState('');
-  const [newCoprodRole, setNewCoprodRole] = useState<CoproducerRole>('artiste');
-  const [newCoprodShare, setNewCoprodShare] = useState<number>(30);
-  const [newCoprodGuestQuota, setNewCoprodGuestQuota] = useState<number>(15);
-
-  const totalCoProdShare = coproducersList.reduce((acc, c) => acc + (Number(c.revenueShare) || 0), 0);
-  const remainingProducerShare = Math.max(0, 100 - totalCoProdShare);
-
-  const handleAddCoproducer = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newCoprodName.trim() || !newCoprodPhone.trim()) {
-      alert('Veuillez renseigner le nom et le téléphone du co-producteur/artiste.');
-      return;
+  // Initialisation du state avec les données du localStorage si présentes
+  const [formData, setFormData] = useState<EventFormData>(() => {
+    if (typeof window === 'undefined') return INITIAL_FORM_STATE;
+    try {
+      const saved = localStorage.getItem(DRAFT_STORAGE_KEY) || localStorage.getItem('thiesdn_create_event_draft');
+      return saved ? { ...INITIAL_FORM_STATE, ...JSON.parse(saved) } : INITIAL_FORM_STATE;
+    } catch {
+      return INITIAL_FORM_STATE;
     }
+  });
 
-    setCoproducersList((prev) => [
-      ...prev,
-      {
-        name: newCoprodName.trim(),
-        phone: newCoprodPhone.trim(),
-        roleType: newCoprodRole,
-        revenueShare: Number(newCoprodShare) || 0,
-        guestTicketsAllocated: Number(newCoprodGuestQuota) || 0,
-      },
-    ]);
-
-    setNewCoprodName('');
-    setNewCoprodPhone('');
-    setNewCoprodShare(20);
-    setNewCoprodGuestQuota(10);
-  };
-
-  const handleRemoveCoproducer = (index: number) => {
-    setCoproducersList((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showSuccessToast, setShowSuccessToast] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-
-  // Sauvegarde automatique (Draft) dans localStorage à chaque modification
+  // Sauvegarde automatique à chaque modification
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const draftData = {
-      title,
-      category,
-      startDatetime,
-      endDatetime,
-      venue,
-      city,
-      quartier,
-      posterUrl,
-      youtubeUrl,
-      whatsappContact,
-      description,
-      longDescription,
-      socialFacebook,
-      socialInstagram,
-      socialTiktok,
-      socialYoutube,
-      websiteUrl,
-      pricePrevente,
-      priceJourJ,
-      priceVip,
-      waveLinkPrevente,
-      waveLinkJourJ,
-      waveLinkVip,
-      promoCode,
-      promoDiscountPercent,
-      enableCoproduction,
-      coproducersList,
-    };
     try {
-      localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draftData));
+      localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(formData));
     } catch (e) {
-      console.warn('Erreur sauvegarde draft:', e);
+      console.warn('Erreur sauvegarde thiesdn_event_draft:', e);
     }
-  }, [
+  }, [formData]);
+
+  const updateField = <K extends keyof EventFormData>(field: K, value: EventFormData[K]) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const {
     title,
     category,
     startDatetime,
@@ -278,7 +230,89 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
     promoDiscountPercent,
     enableCoproduction,
     coproducersList,
-  ]);
+  } = formData;
+
+  // Individual state setters mapped to formData updates for seamless reactivity
+  const setTitle = (val: string) => updateField('title', val);
+  const setCategory = (val: EventCategory) => updateField('category', val);
+  const setStartDatetime = (val: string) => updateField('startDatetime', val);
+  const setEndDatetime = (val: string) => updateField('endDatetime', val);
+  const setVenue = (val: string) => updateField('venue', val);
+  const setCity = (val: string) => updateField('city', val);
+  const setQuartier = (val: string) => updateField('quartier', val);
+  const setPosterUrl = (val: string) => updateField('posterUrl', val);
+  const setYoutubeUrl = (val: string) => updateField('youtubeUrl', val);
+  const setWhatsappContact = (val: string) => updateField('whatsappContact', val);
+  const setDescription = (val: string) => updateField('description', val);
+  const setLongDescription = (val: string) => updateField('longDescription', val);
+  const setSocialFacebook = (val: string) => updateField('socialFacebook', val);
+  const setSocialInstagram = (val: string) => updateField('socialInstagram', val);
+  const setSocialTiktok = (val: string) => updateField('socialTiktok', val);
+  const setSocialYoutube = (val: string) => updateField('socialYoutube', val);
+  const setWebsiteUrl = (val: string) => updateField('websiteUrl', val);
+  const setPricePrevente = (val: number) => updateField('pricePrevente', val);
+  const setPriceJourJ = (val: number) => updateField('priceJourJ', val);
+  const setPriceVip = (val: number) => updateField('priceVip', val);
+  const setWaveLinkPrevente = (val: string) => updateField('waveLinkPrevente', val);
+  const setWaveLinkJourJ = (val: string) => updateField('waveLinkJourJ', val);
+  const setWaveLinkVip = (val: string) => updateField('waveLinkVip', val);
+  const setPromoCode = (val: string) => updateField('promoCode', val);
+  const setPromoDiscountPercent = (val: number | '') => updateField('promoDiscountPercent', val);
+  const setEnableCoproduction = (val: boolean) => updateField('enableCoproduction', val);
+  const setCoproducersList = (val: Array<any> | ((prev: Array<any>) => Array<any>)) => {
+    if (typeof val === 'function') {
+      updateField('coproducersList', val(formData.coproducersList));
+    } else {
+      updateField('coproducersList', val);
+    }
+  };
+
+  const [showTermsModal, setShowTermsModal] = useState(false);
+  const [agreedTermsLocal, setAgreedTermsLocal] = useState(false);
+  const [isAcceptingTerms, setIsAcceptingTerms] = useState(false);
+
+  // Formulaire d'ajout rapide d'un ayant-droit
+  const [newCoprodName, setNewCoprodName] = useState('');
+  const [newCoprodPhone, setNewCoprodPhone] = useState('');
+  const [newCoprodRole, setNewCoprodRole] = useState<CoproducerRole>('artiste');
+  const [newCoprodShare, setNewCoprodShare] = useState<number>(30);
+  const [newCoprodGuestQuota, setNewCoprodGuestQuota] = useState<number>(15);
+
+  const totalCoProdShare = coproducersList.reduce((acc, c) => acc + (Number(c.revenueShare) || 0), 0);
+  const remainingProducerShare = Math.max(0, 100 - totalCoProdShare);
+
+  const handleAddCoproducer = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCoprodName.trim() || !newCoprodPhone.trim()) {
+      alert('Veuillez renseigner le nom et le téléphone du co-producteur/artiste.');
+      return;
+    }
+
+    const updatedList = [
+      ...coproducersList,
+      {
+        name: newCoprodName.trim(),
+        phone: newCoprodPhone.trim(),
+        roleType: newCoprodRole,
+        revenueShare: Number(newCoprodShare) || 0,
+        guestTicketsAllocated: Number(newCoprodGuestQuota) || 0,
+      },
+    ];
+
+    updateField('coproducersList', updatedList);
+    setNewCoprodName('');
+    setNewCoprodPhone('');
+    setNewCoprodShare(20);
+    setNewCoprodGuestQuota(10);
+  };
+
+  const handleRemoveCoproducer = (index: number) => {
+    updateField('coproducersList', coproducersList.filter((_, i) => i !== index));
+  };
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showSuccessToast, setShowSuccessToast] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -399,6 +433,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
       // Nettoyage du draft après publication réussie
       try {
         localStorage.removeItem(DRAFT_STORAGE_KEY);
+        localStorage.removeItem('thiesdn_create_event_draft');
       } catch (e) {
         console.warn('Erreur suppression draft:', e);
       }

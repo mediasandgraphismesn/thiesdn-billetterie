@@ -502,15 +502,15 @@ export default function App() {
     return <PublicScannerStationView accessCode={scanStationCode} />;
   }
 
-  // TÂCHE 5 : État de chargement auth avant d'appliquer les redirections ou blocages (évite de vider ou rediriger /create-event)
-  if (isAuthLoading && (activeTab === 'create' || activeTab === 'dashboard')) {
+  // TÂCHE 2 : État de chargement auth avant d'appliquer les redirections ou blocages (évite de vider ou rediriger /create-event)
+  if (isAuthLoading && (activeTab === 'create' || activeTab === 'dashboard' || (typeof window !== 'undefined' && window.location.pathname === '/create-event'))) {
     return (
       <div className="min-h-screen bg-[#0F0F0F] flex flex-col items-center justify-center p-6 text-center space-y-4">
         <div className="w-12 h-12 rounded-2xl bg-[#8A2BE2]/20 border border-[#8A2BE2]/40 flex items-center justify-center animate-pulse">
           <span className="w-6 h-6 border-2 border-[#E9C349] border-t-transparent rounded-full animate-spin" />
         </div>
         <p className="font-heading text-sm font-bold text-white tracking-wide">
-          Chargement de votre session sécurisée...
+          Chargement de votre session...
         </p>
       </div>
     );
