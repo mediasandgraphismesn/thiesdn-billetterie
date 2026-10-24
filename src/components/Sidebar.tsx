@@ -113,7 +113,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const navItems = getNavItems();
 
   return (
-    <aside className="hidden lg:flex flex-col fixed inset-y-0 left-0 z-40 w-72 bg-[#1C1B1B]/95 backdrop-blur-2xl border-r border-white/10 p-5 shadow-2xl">
+    <aside className="hidden lg:flex flex-col fixed inset-y-0 left-0 z-40 w-72 bg-[#1C1B1B]/95 backdrop-blur-2xl border-r border-white/10 p-5 pt-20 shadow-2xl">
       {/* User Status Badge */}
       <div className="p-4 rounded-2xl bg-gradient-to-br from-[#201F1F] to-[#141414] border border-white/10 mb-6 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-24 h-24 bg-[#8A2BE2]/10 rounded-full blur-2xl pointer-events-none" />

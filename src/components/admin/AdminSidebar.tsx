@@ -89,7 +89,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
   ];
 
   return (
-    <aside className="hidden lg:flex flex-col fixed inset-y-0 left-0 z-40 w-72 bg-[#141414]/95 backdrop-blur-2xl border-r border-white/10 p-5 shadow-2xl">
+    <aside className="hidden lg:flex flex-col fixed inset-y-0 left-0 z-40 w-72 bg-[#141414]/95 backdrop-blur-2xl border-r border-white/10 p-5 pt-20 shadow-2xl">
       {/* Profil Super Admin */}
       <div className="p-4 rounded-2xl bg-gradient-to-br from-[#1C1B1B] to-[#121212] border border-[#8A2BE2]/30 mb-6 relative overflow-hidden shadow-lg">
         <div className="absolute top-0 right-0 w-24 h-24 bg-[#8A2BE2]/15 rounded-full blur-2xl pointer-events-none" />
