@@ -75,212 +75,152 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateAdmin, onNavigateCGV }
   return (
     <>
       <footer className="mt-auto border-t border-white/5 bg-[#0A0A0A]/95 text-gray-400 transition-all">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-24 md:pb-8">
-          {/* Grille principale compacte 4 colonnes */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8 mb-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-20 md:pb-6">
+          {/* Grille principale épurée 3 colonnes */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4 items-start">
             
             {/* COLONNE 1 : IDENTITÉ */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <div className="h-9 px-2 py-1 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center shadow-md">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2.5">
+                <div className="h-8 px-2 py-1 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shadow-sm">
                   <img
                     src="/logo-tight.png"
                     alt="Thièsdn Logo"
-                    className="h-5 w-auto object-contain"
+                    className="h-4 w-auto object-contain"
                   />
                 </div>
                 <div>
                   <span className="font-heading font-extrabold text-sm text-white block leading-tight tracking-tight">
                     Thièsdn <span className="text-[#E9C349]">Billetterie</span>
                   </span>
-                  <span className="text-[10px] uppercase font-semibold tracking-wider text-gray-500">
-                    Plateforme Officielle
-                  </span>
                 </div>
               </div>
 
-              <p className="text-xs text-gray-400 leading-relaxed max-w-sm">
-                La billetterie officielle des événements de prestige à Thiès, Saly, Mbour et Dakar.
+              <p className="text-xs text-gray-400 leading-snug max-w-xs">
+                Thièsdn Billetterie, la billetterie officielle des événements de prestige à Thiès, Saly, Mbour et Dakar.
               </p>
 
-              <div className="flex items-center gap-2 text-[11px] text-[#DCB8FF]/90">
-                <ShieldCheck className="w-4 h-4 text-[#E9C349] shrink-0" />
-                <span>Pass QR certifié infalsifiable</span>
+              <div className="flex items-center gap-1.5 text-[11px] text-[#DCB8FF]/90">
+                <ShieldCheck className="w-3.5 h-3.5 text-[#E9C349] shrink-0" />
+                <span>Pass QR certifié • Paiements sécurisés via Wave & Orange Money</span>
               </div>
             </div>
 
-            {/* COLONNE 2 : CONTACT DIRECT */}
-            <div className="space-y-3">
-              <h4 className="font-heading font-bold text-xs uppercase tracking-wider text-[#E9C349] border-b border-white/5 pb-1.5">
-                Contact Direct
-              </h4>
+            {/* COLONNE 2 : CONTACT RAPIDE & RÉSEAUX SOCIAUX */}
+            <div className="space-y-2.5">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs">
+                <a
+                  href="mailto:contact@mgartswork.site"
+                  className="flex items-center gap-1.5 text-gray-400 hover:text-white transition-colors"
+                >
+                  <Mail className="w-3.5 h-3.5 text-[#DCB8FF]" />
+                  <span>contact@mgartswork.site</span>
+                </a>
 
-              <ul className="space-y-2 text-xs">
-                <li>
-                  <a
-                    href="mailto:contact@mgartswork.site"
-                    className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors group"
-                  >
-                    <div className="w-6 h-6 rounded-lg bg-white/[0.03] group-hover:bg-[#8A2BE2]/20 border border-white/5 flex items-center justify-center transition-colors">
-                      <Mail className="w-3.5 h-3.5 text-[#DCB8FF]" />
-                    </div>
-                    <span className="truncate">contact@mgartswork.site</span>
-                  </a>
-                </li>
+                <a
+                  href="https://wa.me/221774587474?text=Bonjour%20Thi%C3%A8sdn%20Billetterie"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 text-gray-400 hover:text-emerald-400 transition-colors"
+                >
+                  <Phone className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>+221 77 458 74 74</span>
+                </a>
 
-                <li>
-                  <a
-                    href="https://wa.me/221774587474?text=Bonjour%20Thi%C3%A8sdn%20Billetterie"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-gray-400 hover:text-emerald-400 transition-colors group"
-                  >
-                    <div className="w-6 h-6 rounded-lg bg-white/[0.03] group-hover:bg-emerald-500/20 border border-white/5 flex items-center justify-center transition-colors">
-                      <Phone className="w-3.5 h-3.5 text-emerald-400" />
-                    </div>
-                    <span>WhatsApp : +221 77 458 74 74</span>
-                  </a>
-                </li>
+                <a
+                  href="https://thiesdn.mgartswork.site/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-gray-400 hover:text-[#E9C349] transition-colors"
+                >
+                  <Globe className="w-3.5 h-3.5 text-[#E9C349]" />
+                  <span>thiesdn.mgartswork.site</span>
+                  <ExternalLink className="w-2.5 h-2.5 text-gray-600" />
+                </a>
+              </div>
 
-                <li>
-                  <a
-                    href="https://thiesdn.mgartswork.site/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-gray-400 hover:text-[#E9C349] transition-colors group"
-                  >
-                    <div className="w-6 h-6 rounded-lg bg-white/[0.03] group-hover:bg-[#E9C349]/20 border border-white/5 flex items-center justify-center transition-colors">
-                      <Globe className="w-3.5 h-3.5 text-[#E9C349]" />
-                    </div>
-                    <span className="truncate">thiesdn.mgartswork.site</span>
-                    <ExternalLink className="w-3 h-3 text-gray-600 group-hover:text-[#E9C349]" />
-                  </a>
-                </li>
-              </ul>
-            </div>
-
-            {/* COLONNE 3 : SUIVEZ-NOUS (RÉSEAUX SOCIAUX ÉPURÉS) */}
-            <div className="space-y-3">
-              <h4 className="font-heading font-bold text-xs uppercase tracking-wider text-[#E9C349] border-b border-white/5 pb-1.5">
-                Suivez-nous
-              </h4>
-
-              <div className="space-y-2">
-                <p className="text-xs text-gray-400 leading-relaxed">
-                  Restez connecté à l'actualité culturelle et aux sorties exclusives.
-                </p>
-
-                {/* Icônes seules, alignées horizontalement, sans gros rectangles noirs */}
-                <div className="flex items-center gap-2 pt-0.5">
-                  {socialLinks.map((social) => {
-                    const Icon = social.icon;
-                    return (
-                      <a
-                        key={social.name}
-                        href={social.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        aria-label={social.name}
-                        title={social.name}
-                        className={`w-8 h-8 rounded-xl flex items-center justify-center text-gray-400 border border-white/10 bg-white/[0.02] hover:bg-white/[0.06] hover:scale-110 active:scale-95 transition-all duration-300 ${social.hoverColor}`}
-                      >
-                        <Icon className="w-3.5 h-3.5 transition-transform duration-300" />
-                      </a>
-                    );
-                  })}
-                </div>
-
-                <span className="text-[11px] text-gray-500 block">
-                  @thiesdn • Communauté officielle
-                </span>
+              {/* Icônes Réseaux Sociaux alignées horizontalement sans blocs noirs */}
+              <div className="flex items-center gap-3 pt-0.5">
+                {socialLinks.map((social) => {
+                  const Icon = social.icon;
+                  return (
+                    <a
+                      key={social.name}
+                      href={social.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={social.name}
+                      title={social.name}
+                      className={`text-gray-400 transition-all duration-200 hover:scale-110 ${social.hoverColor.replace(/hover:bg-[^\s]+|hover:border-[^\s]+/g, '')}`}
+                    >
+                      <Icon className="w-4 h-4" />
+                    </a>
+                  );
+                })}
+                <span className="text-[11px] text-gray-500 ml-1">@thiesdn</span>
               </div>
             </div>
 
-            {/* COLONNE 4 : INFORMATIONS LÉGALES & PAIEMENTS SÉCURISÉS */}
-            <div className="space-y-3">
-              <h4 className="font-heading font-bold text-xs uppercase tracking-wider text-[#E9C349] border-b border-white/5 pb-1.5">
-                Informations Légales
-              </h4>
+            {/* COLONNE 3 : LIENS UTILES SUR UNE SEULE COLONNE DISCRÈTE */}
+            <div className="space-y-1 text-xs md:justify-self-end">
+              <button
+                onClick={() => {
+                  if (onNavigateCGV) {
+                    onNavigateCGV();
+                  } else {
+                    setIsCGVModalOpen(true);
+                  }
+                }}
+                className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors py-0.5 text-left"
+              >
+                <FileText className="w-3.5 h-3.5 text-[#DCB8FF]" />
+                <span>Conditions Générales de Vente (CGV)</span>
+              </button>
 
-              <ul className="space-y-1.5 text-xs">
-                <li>
-                  <button
-                    onClick={() => {
-                      if (onNavigateCGV) {
-                        onNavigateCGV();
-                      } else {
-                        setIsCGVModalOpen(true);
-                      }
-                    }}
-                    className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors py-0.5 text-left"
-                  >
-                    <FileText className="w-3.5 h-3.5 text-[#DCB8FF]" />
-                    <span>Conditions Générales de Vente (CGV)</span>
-                  </button>
-                </li>
-                <li>
-                  <button
-                    onClick={() => setLegalModal('confidentialite')}
-                    className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors py-0.5 text-left"
-                  >
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Politique de Confidentialité</span>
-                  </button>
-                </li>
-                <li>
-                  <button
-                    onClick={() => setLegalModal('faq')}
-                    className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors py-0.5 text-left"
-                  >
-                    <HelpCircle className="w-3.5 h-3.5 text-[#E9C349]" />
-                    <span>Foire Aux Questions (FAQ)</span>
-                  </button>
-                </li>
-                <li className="pt-1 border-t border-white/5">
-                  <button
-                    onClick={() => {
-                      if (onNavigateAdmin) {
-                        onNavigateAdmin();
-                      } else {
-                        window.location.href = '/admin';
-                      }
-                    }}
-                    className="flex items-center gap-2 text-gray-400 hover:text-[#E9C349] transition-colors py-0.5 text-left font-medium group"
-                  >
-                    <ShieldCheck className="w-3.5 h-3.5 text-[#8A2BE2] group-hover:text-[#E9C349] transition-colors" />
-                    <span>Accès Administration (Super Admin)</span>
-                  </button>
-                </li>
-              </ul>
+              <button
+                onClick={() => setLegalModal('confidentialite')}
+                className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors py-0.5 text-left"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Politique de Confidentialité</span>
+              </button>
 
-              {/* Bloc Paiements 100% Sécurisés plus discret et aéré */}
-              <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/5">
-                <span className="text-[10px] uppercase font-bold text-[#E9C349]/90 tracking-wider block mb-0.5">
-                  Paiements 100% Sécurisés
-                </span>
-                <p className="text-[11px] text-gray-400 leading-snug">
-                  Règlements directs via Wave Sénégal & Orange Money sans intermédiaire bancaire.
-                </p>
-              </div>
+              <button
+                onClick={() => setLegalModal('faq')}
+                className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors py-0.5 text-left"
+              >
+                <HelpCircle className="w-3.5 h-3.5 text-[#E9C349]" />
+                <span>Foire Aux Questions (FAQ)</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  if (onNavigateAdmin) {
+                    onNavigateAdmin();
+                  } else {
+                    window.location.href = '/admin';
+                  }
+                }}
+                className="flex items-center gap-2 text-gray-400 hover:text-[#E9C349] transition-colors py-0.5 text-left font-medium group"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-[#8A2BE2] group-hover:text-[#E9C349] transition-colors" />
+                <span>Accès Administration (Super Admin)</span>
+              </button>
             </div>
 
           </div>
 
-          {/* BARRE INFÉRIEURE : COPYRIGHT & SIGNATURE DAW DIGITAL ARTS WORK */}
-          <div className="pt-4 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-3 text-xs text-gray-500">
-            {/* Mention légale */}
-            <p className="text-center md:text-left">
-              © {new Date().getFullYear()} Thièsdn Billetterie. Tous droits réservés.
-            </p>
+          {/* BARRE INFÉRIEURE SUR UNE SEULE LIGNE (flex justify-between) */}
+          <div className="pt-3 border-t border-white/5 flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-500">
+            <p>© 2026 Thièsdn Billetterie. Tous droits réservés.</p>
 
-            {/* Signature DAW Digital Arts Work */}
-            <div className="flex items-center gap-1.5 text-center md:text-right">
+            <div className="flex items-center gap-1 text-[#E9C349]">
               <span className="text-gray-500">Conçu & Développé par</span>
               <a
                 href="https://mgartswork.site"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="font-heading font-extrabold text-[#E9C349] hover:text-[#DCB8FF] transition-colors underline decoration-[#E9C349]/30 hover:decoration-[#DCB8FF] inline-flex items-center gap-1"
+                className="font-heading font-bold text-[#E9C349] hover:text-[#DCB8FF] transition-colors inline-flex items-center gap-1"
               >
                 <span>DAW Digital Arts Work by MG</span>
                 <Sparkles className="w-3 h-3 text-[#E9C349]" />
