@@ -3042,9 +3042,56 @@ export const scanTicketFromStation = async (
 
   // 3. CAS BILLET CLASSIQUE & BILLET PHYSIQUE PARTENAIRE
   const tickets = getStoredTickets();
-  const ticketIdx = tickets.findIndex(
+  let ticketIdx = tickets.findIndex(
     (t) => t.qrCode.toUpperCase() === cleanCode || t.id.toUpperCase() === cleanCode
   );
+
+  // Si non présent dans le cache local mais que Supabase est connecté, interroger la RPC scan_ticket
+  const client = getSupabaseClient();
+  if (ticketIdx === -1 && client) {
+    try {
+      const rpcRes = await scanTicketWithSupabase(cleanCode);
+      if (rpcRes.ticket) {
+        const t = rpcRes.ticket;
+        const holderName = t.holderName?.trim() || 'Nom non renseigné';
+        const holderPhone = t.holderPhone;
+        const tierName = t.tierName || 'Standard';
+        const isVip = tierName.toUpperCase().includes('VIP');
+        if (rpcRes.success) {
+          return {
+            success: true,
+            message: rpcRes.message || `Accès Autorisé : ${holderName} (${tierName})`,
+            badgeTheme: isVip ? 'vip' : 'standard',
+            ticketDetails: {
+              id: t.id,
+              holderName,
+              holderPhone,
+              eventTitle: t.eventTitle || station.eventTitle,
+              tierName,
+              qrCode: t.qrCode || cleanCode,
+              stationName: station.name,
+              scannedAt: new Date().toISOString(),
+              isPhysical: t.isPhysical,
+              agentName: t.agentName,
+            },
+          };
+        } else {
+          return {
+            success: false,
+            message: rpcRes.message || 'Accès refusé.',
+            refusedDetails: {
+              holderName,
+              holderPhone,
+              qrCode: t.qrCode || cleanCode,
+              tierName,
+            },
+          };
+        }
+      }
+    } catch (e: any) {
+      console.warn('Scan station RPC fallback error:', e.message);
+    }
+  }
 
   if (ticketIdx === -1) {
     return {
@@ -4066,11 +4113,11 @@ BEGIN
     v_qr := 'THIESDN-' || upper(v_event.city) || '-' || substr(md5(random()::text || clock_timestamp()::text), 1, 8);
     INSERT INTO public.tickets (
       order_id, event_id, user_id, event_title, event_poster, event_date,
-      event_time, event_venue, tier_name, price, qr_code, holder_name, status
+      event_time, event_venue, tier_name, price, qr_code, holder_name, holder_phone, status
     ) VALUES (
       v_order.id, v_event.id, v_order.user_id, v_event.title, v_event.poster_url,
       v_event.date, v_event.time, v_event.venue, v_order.tier_name,
-      v_order.unit_price, v_qr, v_order.customer_name, 'valid'
+      v_order.unit_price, v_qr, v_order.customer_name, v_order.customer_phone, 'valid'
     );
   END LOOP;
 
@@ -4679,7 +4726,7 @@ export const fetchOrdersFromSupabase = async (): Promise<{ orders: OrderRecord[]
 
 export const scanTicketWithSupabase = async (
   qrCode: string
-): Promise<{ success: boolean; message: string; ticket?: any }> => {
+): Promise<{ success: boolean; message: string; ticket?: UserTicket }> => {
   const client = getSupabaseClient();
   if (!client) {
     return { success: false, message: 'Base de données Supabase déconnectée.' };
@@ -4690,10 +4737,37 @@ export const scanTicketWithSupabase = async (
     if (error) {
       return { success: false, message: error.message };
     }
+    const rawTicket = data?.ticket;
+    const mappedTicket: UserTicket | undefined = rawTicket
+      ? {
+          id: rawTicket.id,
+          eventId: rawTicket.event_id || '',
+          eventTitle: rawTicket.event_title || 'Événement Thièsdn',
+          eventPoster: rawTicket.event_poster || '',
+          eventDate: rawTicket.event_date || '',
+          eventTime: rawTicket.event_time || '',
+          eventVenue: rawTicket.event_venue || '',
+          tierName: rawTicket.tier_name || 'Standard',
+          price: Number(rawTicket.price) || 0,
+          qrCode: rawTicket.qr_code || qrCode.trim(),
+          seatNumber: rawTicket.seat_number,
+          holderName: rawTicket.holder_name || 'Nom non renseigné',
+          holderPhone: rawTicket.holder_phone || undefined,
+          holderEmail: rawTicket.holder_email || undefined,
+          purchasedAt: rawTicket.purchased_at || rawTicket.created_at || new Date().toISOString(),
+          status: rawTicket.status || 'scanned',
+          isPhysical: Boolean(rawTicket.is_physical),
+          agentId: rawTicket.agent_id || undefined,
+          agentName: rawTicket.agent_name || undefined,
+          batchNumber: rawTicket.batch_number || undefined,
+          serialNumber: rawTicket.serial_number || undefined,
+        }
+      : undefined;
+
     return {
       success: Boolean(data?.success),
       message: data?.message || 'Billet vérifié.',
-      ticket: data?.ticket,
+      ticket: mappedTicket,
     };
   } catch (err: any) {
     return { success: false, message: err.message || 'Erreur lors du scan du billet.' };
@@ -4726,9 +4800,15 @@ export const fetchUserTicketsFromSupabase = async (
       tierName: t.tier_name || 'Standard',
       price: Number(t.price) || 0,
       qrCode: t.qr_code,
-      holderName: t.holder_name,
+      seatNumber: t.seat_number,
+      holderName: t.holder_name || 'Nom non renseigné',
+      holderPhone: t.holder_phone || undefined,
+      holderEmail: t.holder_email || undefined,
       purchasedAt: t.created_at || new Date().toISOString(),
       status: t.status || 'valid',
+      isPhysical: Boolean(t.is_physical),
+      agentId: t.agent_id || undefined,
+      agentName: t.agent_name || undefined,
     }));
 
     return { tickets: mapped, error: null };

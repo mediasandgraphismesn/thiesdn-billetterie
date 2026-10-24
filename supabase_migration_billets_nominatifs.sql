@@ -34,9 +34,12 @@ CREATE TABLE IF NOT EXISTS public.sales_agents (
   status TEXT DEFAULT 'active',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
--- 2. Colonne du titulaire (absente des anciens schémas). Nullable : les billets existants
---    sans nom s'afficheront « Nom non renseigné » au scan.
+
+-- 2. Colonnes d'identité de l'acheteur sur la table tickets (Étape 1 : holder_name, holder_phone, holder_email)
+--    Nullable : les billets existants sans nom s'afficheront « Nom non renseigné » au scan.
 ALTER TABLE public.tickets ADD COLUMN IF NOT EXISTS holder_name TEXT;
+ALTER TABLE public.tickets ADD COLUMN IF NOT EXISTS holder_phone TEXT;
+ALTER TABLE public.tickets ADD COLUMN IF NOT EXISTS holder_email TEXT;
 
 -- Colonnes d'affichage du billet (absentes des anciens schémas, nullables)
 ALTER TABLE public.tickets ADD COLUMN IF NOT EXISTS event_title TEXT;
@@ -61,10 +64,9 @@ BEGIN
     RAISE EXCEPTION 'Colonnes manquantes sur public.tickets : % . Envoyez la liste des colonnes de la table pour adapter le script.', missing;
   END IF;
 END $$;
+
 ALTER TABLE public.tickets ADD COLUMN IF NOT EXISTS used_at TIMESTAMP WITH TIME ZONE;
 ALTER TABLE public.tickets ADD COLUMN IF NOT EXISTS validated_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL;
-ALTER TABLE public.tickets ADD COLUMN IF NOT EXISTS holder_phone TEXT;
-ALTER TABLE public.tickets ADD COLUMN IF NOT EXISTS holder_email TEXT;
 ALTER TABLE public.tickets ADD COLUMN IF NOT EXISTS sold_at TIMESTAMP WITH TIME ZONE;
 ALTER TABLE public.tickets ADD COLUMN IF NOT EXISTS is_physical BOOLEAN DEFAULT FALSE;
 ALTER TABLE public.tickets ADD COLUMN IF NOT EXISTS agent_id UUID REFERENCES public.sales_agents(id) ON DELETE SET NULL;
@@ -209,15 +211,33 @@ BEGIN
 END;
 $$;
 
+-- ====================================================================
+-- RLS (ROW LEVEL SECURITY) POLITIQUES DE SÉCURITÉ SERVEUR
+-- RÈGLE D'OR : Ne JAMAIS faire de SELECT direct sur public.profiles
+-- dans une politique RLS (risque d'infinite recursion).
+-- Toujours utiliser public.is_admin() en SECURITY DEFINER.
+-- ====================================================================
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = auth.uid() AND role = 'admin'
+  );
+$$;
 
--- Tickets : lecture par le propriétaire du billet, collaborateur assigné, promoteur ou admin
+-- Tickets : lecture par le propriétaire du billet, collaborateur assigné, promoteur ou admin via is_admin()
 DROP POLICY IF EXISTS "Tickets read owner or admin" ON public.tickets;
 CREATE POLICY "Tickets read owner or admin" ON public.tickets FOR SELECT 
 USING (
   user_id = auth.uid() 
   OR agent_id = auth.uid()
   OR EXISTS (SELECT 1 FROM public.events WHERE events.id = tickets.event_id AND events.promoter_id = auth.uid())
-  OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+  OR public.is_admin()
 );
 
 -- RLS Collaborateurs : activation exclusive des billets alloués lors de la vente
@@ -240,13 +260,12 @@ WITH CHECK (
 -- ils passent uniquement par la RPC SECURITY DEFINER scan_ticket (lecture + validation).
 -- Les promoteurs/admins corrigent nom/téléphone via la policy "Promoters update event tickets".
 
--- RLS Promoteurs : désactivation / annulation sécurisée de leurs billets
+-- RLS Promoteurs : désactivation / annulation / correction sécurisée de leurs billets
 DROP POLICY IF EXISTS "Promoters update event tickets" ON public.tickets;
 CREATE POLICY "Promoters update event tickets" ON public.tickets FOR UPDATE
 USING (
   EXISTS (SELECT 1 FROM public.events WHERE events.id = tickets.event_id AND events.promoter_id = auth.uid())
-  OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+  OR public.is_admin()
 );
-
 
 ALTER TABLE public.tickets ENABLE ROW LEVEL SECURITY;

@@ -267,6 +267,7 @@ export const CheckInScannerView: React.FC<CheckInScannerViewProps> = ({
           setScanResult({
             status: 'error',
             message: rpcResult.message || localResult.message || 'Billet non reconnu ou invalide.',
+            ticket: rpcResult.ticket || localResult.ticket,
           });
         }
       }
@@ -634,33 +635,44 @@ export const CheckInScannerView: React.FC<CheckInScannerViewProps> = ({
                   </div>
                 </div>
               ) : (
-                /* Billet standard */
-                <div className="flex items-center gap-3">
+                /* Billet standard ou physique */
+                <div className="flex items-start gap-3">
                   {scanResult.status === 'success' ? (
-                    <CheckCircle className="w-8 h-8 text-emerald-400 flex-shrink-0" />
+                    <CheckCircle className="w-10 h-10 text-emerald-400 flex-shrink-0" />
                   ) : (
-                    <XCircle className="w-8 h-8 text-red-400 flex-shrink-0" />
+                    <XCircle className="w-10 h-10 text-red-400 flex-shrink-0 animate-bounce" />
                   )}
-                  <div>
-                    <h4 className="font-heading font-bold text-base text-white">
+                  <div className="flex-1 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${
+                          scanResult.status === 'success'
+                            ? 'bg-emerald-500 text-black font-extrabold'
+                            : 'bg-red-600 text-white animate-pulse'
+                        }`}
+                      >
+                        {scanResult.status === 'success' ? '✅ ACCÈS AUTORISÉ' : '❌ ACCÈS REFUSÉ'}
+                      </span>
+                    </div>
+                    <h4 className="font-heading font-extrabold text-lg text-white">
                       {scanResult.message}
                     </h4>
                     {scanResult.ticket && (
-                      <div className="space-y-1 mt-1">
-                        <p className="font-heading text-2xl font-black text-[#E9C349] leading-tight">
+                      <div className="pt-2 mt-2 border-t border-white/10 space-y-1.5">
+                        <p className="font-heading text-2xl sm:text-3xl font-black text-[#E9C349] leading-tight">
                           {scanResult.ticket.holderName?.trim() || 'Nom non renseigné'}
                         </p>
-                        <p className="font-mono text-xl font-bold text-white">
+                        <p className="font-mono text-xl sm:text-2xl font-bold text-white">
                           {scanResult.ticket.holderPhone?.trim() || 'Téléphone non renseigné'}
                         </p>
-                        <p className="font-mono text-sm font-bold text-[#B57BFF]">
+                        <p className="font-mono text-base font-black text-[#B57BFF]">
                           N° {scanResult.ticket.qrCode}
                         </p>
                         <p className="text-xs opacity-85">
-                          Événement: {scanResult.ticket.eventTitle}
+                          Événement : {scanResult.ticket.eventTitle} ({scanResult.ticket.tierName})
                         </p>
                         {scanResult.ticket.isPhysical && (
-                          <div className="mt-2 pt-2 border-t border-emerald-500/30 flex flex-wrap items-center gap-2 text-[11px]">
+                          <div className="mt-2 pt-2 border-t border-white/10 flex flex-wrap items-center gap-2 text-[11px]">
                             <span className="bg-[#E9C349]/20 text-[#E9C349] font-extrabold px-2 py-0.5 rounded-full border border-[#E9C349]/30">
                               🏷️ Billet Papier Partenaire
                             </span>
