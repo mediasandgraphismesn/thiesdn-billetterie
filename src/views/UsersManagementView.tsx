@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { UserProfile, CURRENT_TERMS_VERSION } from '../types';
 import { fetchAllProfilesFromSupabase, updateUserRoleOrVip } from '../services/supabase';
+import { useAuth } from '../contexts/AuthContext';
 
 interface UsersManagementViewProps {
   onBackToDashboard: () => void;
@@ -27,6 +28,7 @@ interface UsersManagementViewProps {
 export const UsersManagementView: React.FC<UsersManagementViewProps> = ({
   onBackToDashboard,
 }) => {
+  const { user: currentAuthUser, refreshUserProfile } = useAuth();
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<'all' | 'user' | 'promoter' | 'admin'>('all');
@@ -46,20 +48,43 @@ export const UsersManagementView: React.FC<UsersManagementViewProps> = ({
 
   const handleToggleVip = async (user: UserProfile) => {
     const newStatus = !user.isVip;
+    // Mise à jour optimiste
     setProfiles((prev) =>
       prev.map((p) => (p.id === user.id ? { ...p, isVip: newStatus } : p))
     );
-    await updateUserRoleOrVip(user.id, { isVip: newStatus });
-    setSuccessToast(`Statut VIP mis à jour pour ${user.name} (${newStatus ? 'Actif' : 'Désactivé'})`);
+    const res = await updateUserRoleOrVip(user.id, { isVip: newStatus });
+    if (res.success) {
+      setSuccessToast(`Statut VIP mis à jour pour ${user.name} (${newStatus ? 'Actif' : 'Désactivé'})`);
+      // Refetch immédiat des données depuis Supabase pour garantir la synchronisation
+      await loadProfiles();
+      if (currentAuthUser?.id === user.id) {
+        await refreshUserProfile();
+      }
+    } else {
+      alert(`Erreur lors de la mise à jour : ${res.error || 'Échec de la requête'}`);
+      await loadProfiles();
+    }
     setTimeout(() => setSuccessToast(null), 3000);
   };
 
   const handleChangeRole = async (user: UserProfile, newRole: 'user' | 'promoter' | 'admin') => {
+    // Mise à jour optimiste
     setProfiles((prev) =>
       prev.map((p) => (p.id === user.id ? { ...p, role: newRole } : p))
     );
-    await updateUserRoleOrVip(user.id, { role: newRole });
-    setSuccessToast(`Rôle de ${user.name} mis à jour : ${newRole.toUpperCase()}`);
+    const res = await updateUserRoleOrVip(user.id, { role: newRole });
+    if (res.success) {
+      setSuccessToast(`Rôle de ${user.name} mis à jour : ${newRole.toUpperCase()}`);
+      // Refetch immédiat depuis Supabase pour afficher les données fraîches persistées
+      await loadProfiles();
+      // Si le rôle modifié est celui de la session active, forcer le rafraîchissement global
+      if (currentAuthUser?.id === user.id) {
+        await refreshUserProfile();
+      }
+    } else {
+      alert(`Erreur lors du changement de rôle : ${res.error || 'Échec de la requête'}`);
+      await loadProfiles();
+    }
     setTimeout(() => setSuccessToast(null), 3000);
   };
 

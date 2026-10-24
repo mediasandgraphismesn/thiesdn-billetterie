@@ -847,6 +847,17 @@ export const updateUserRoleOrVip = async (
 
     const { error } = await client.from('profiles').update(payload).eq('id', userId);
     if (error) throw error;
+
+    // Si la mise à jour concerne l'utilisateur actuellement connecté, forcer le rafraîchissement de session
+    try {
+      const { data: sessionData } = await client.auth.getSession();
+      if (sessionData.session?.user?.id === userId) {
+        await client.auth.refreshSession();
+      }
+    } catch (refreshErr) {
+      console.warn('refreshSession notice:', refreshErr);
+    }
+
     return { success: true };
   } catch (err: any) {
     console.error('Erreur updateUserRoleOrVip:', err);
