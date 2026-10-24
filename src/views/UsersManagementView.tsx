@@ -34,6 +34,8 @@ export const UsersManagementView: React.FC<UsersManagementViewProps> = ({
   const [roleFilter, setRoleFilter] = useState<'all' | 'user' | 'promoter' | 'admin'>('all');
   const [isLoading, setIsLoading] = useState(true);
   const [successToast, setSuccessToast] = useState<string | null>(null);
+  const [errorToast, setErrorToast] = useState<string | null>(null);
+  const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
 
   const loadProfiles = async () => {
     setIsLoading(true);
@@ -48,44 +50,52 @@ export const UsersManagementView: React.FC<UsersManagementViewProps> = ({
 
   const handleToggleVip = async (user: UserProfile) => {
     const newStatus = !user.isVip;
-    // Mise à jour optimiste
-    setProfiles((prev) =>
-      prev.map((p) => (p.id === user.id ? { ...p, isVip: newStatus } : p))
-    );
+    setUpdatingUserId(user.id);
     const res = await updateUserRoleOrVip(user.id, { isVip: newStatus });
+    setUpdatingUserId(null);
+
     if (res.success) {
       setSuccessToast(`Statut VIP mis à jour pour ${user.name} (${newStatus ? 'Actif' : 'Désactivé'})`);
-      // Refetch immédiat des données depuis Supabase pour garantir la synchronisation
+      setErrorToast(null);
+      // Rechargement obligatoire depuis Supabase pour refléter la réalité de la base
       await loadProfiles();
       if (currentAuthUser?.id === user.id) {
         await refreshUserProfile();
       }
+      setTimeout(() => setSuccessToast(null), 3500);
     } else {
-      alert(`Erreur lors de la mise à jour : ${res.error || 'Échec de la requête'}`);
+      console.error('Échec mise à jour VIP Supabase:', res.error);
+      setErrorToast(`Échec de la modification : ${res.error || 'Erreur inconnue'}`);
+      setSuccessToast(null);
+      // Recharger pour annuler tout état incohérent
       await loadProfiles();
+      setTimeout(() => setErrorToast(null), 6000);
     }
-    setTimeout(() => setSuccessToast(null), 3000);
   };
 
   const handleChangeRole = async (user: UserProfile, newRole: 'user' | 'promoter' | 'admin') => {
-    // Mise à jour optimiste
-    setProfiles((prev) =>
-      prev.map((p) => (p.id === user.id ? { ...p, role: newRole } : p))
-    );
+    setUpdatingUserId(user.id);
     const res = await updateUserRoleOrVip(user.id, { role: newRole });
+    setUpdatingUserId(null);
+
     if (res.success) {
-      setSuccessToast(`Rôle de ${user.name} mis à jour : ${newRole.toUpperCase()}`);
-      // Refetch immédiat depuis Supabase pour afficher les données fraîches persistées
+      setSuccessToast(`Rôle de ${user.name} mis à jour avec succès : ${newRole.toUpperCase()}`);
+      setErrorToast(null);
+      // CRUCIAL : Rechargement complet de la liste depuis Supabase
       await loadProfiles();
-      // Si le rôle modifié est celui de la session active, forcer le rafraîchissement global
+      // Synchronisation de session immédiate si c'est l'utilisateur connecté
       if (currentAuthUser?.id === user.id) {
         await refreshUserProfile();
       }
+      setTimeout(() => setSuccessToast(null), 3500);
     } else {
-      alert(`Erreur lors du changement de rôle : ${res.error || 'Échec de la requête'}`);
+      console.error('Échec changement de rôle Supabase:', res.error);
+      setErrorToast(`Échec de mise à jour du rôle : ${res.error || 'Permission refusée'}`);
+      setSuccessToast(null);
+      // Recharger pour restaurer l'état réel de la base
       await loadProfiles();
+      setTimeout(() => setErrorToast(null), 6000);
     }
-    setTimeout(() => setSuccessToast(null), 3000);
   };
 
   const filteredProfiles = profiles.filter((p) => {
@@ -101,11 +111,19 @@ export const UsersManagementView: React.FC<UsersManagementViewProps> = ({
 
   return (
     <div className="space-y-6 pb-16 animate-in fade-in duration-300">
-      {/* Toast */}
+      {/* Toast Succès */}
       {successToast && (
         <div className="fixed top-20 right-6 z-50 p-4 rounded-2xl bg-[#1C1B1B] border border-emerald-500 shadow-2xl text-white flex items-center gap-3 animate-in slide-in-from-top-4 duration-300">
           <CheckCircle2 className="w-5 h-5 text-emerald-400" />
           <span className="text-sm font-semibold">{successToast}</span>
+        </div>
+      )}
+
+      {/* Toast Erreur RLS / Réseau */}
+      {errorToast && (
+        <div className="fixed top-20 right-6 z-50 p-4 rounded-2xl bg-[#1C1B1B] border border-red-500 shadow-2xl text-white flex items-center gap-3 animate-in slide-in-from-top-4 duration-300 max-w-md">
+          <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
+          <span className="text-sm font-semibold text-red-200">{errorToast}</span>
         </div>
       )}
 
@@ -288,19 +306,21 @@ export const UsersManagementView: React.FC<UsersManagementViewProps> = ({
             <div className="flex items-center gap-2.5 self-end md:self-auto flex-shrink-0">
               <button
                 onClick={() => handleToggleVip(user)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                disabled={updatingUserId === user.id}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border disabled:opacity-50 ${
                   user.isVip
                     ? 'bg-[#E9C349]/20 text-[#E9C349] border-[#E9C349]/40 hover:bg-[#E9C349]/30'
                     : 'bg-white/5 text-gray-400 border-white/10 hover:text-white hover:bg-white/10'
                 }`}
               >
-                {user.isVip ? '★ Membre VIP' : '☆ Passer VIP'}
+                {updatingUserId === user.id ? 'Mise à jour...' : user.isVip ? '★ Membre VIP' : '☆ Passer VIP'}
               </button>
 
               <select
                 value={user.role}
+                disabled={updatingUserId === user.id}
                 onChange={(e) => handleChangeRole(user, e.target.value as any)}
-                className="bg-[#141414] border border-white/10 text-white rounded-xl px-3 py-1.5 text-xs font-bold focus:outline-none focus:border-[#8A2BE2] cursor-pointer"
+                className="bg-[#141414] border border-white/10 text-white rounded-xl px-3 py-1.5 text-xs font-bold focus:outline-none focus:border-[#8A2BE2] cursor-pointer disabled:opacity-50"
               >
                 <option value="user">Rôle : Client</option>
                 <option value="promoter">Rôle : Promoteur</option>

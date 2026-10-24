@@ -836,19 +836,37 @@ export const fetchAllProfilesFromSupabase = async (): Promise<{ profiles: UserPr
 export const updateUserRoleOrVip = async (
   userId: string,
   updates: { role?: 'user' | 'promoter' | 'admin'; isVip?: boolean }
-): Promise<{ success: boolean; error?: string }> => {
+): Promise<{ success: boolean; data?: any; error?: string }> => {
   const client = getSupabaseClient();
-  if (!client || !userId) return { success: true };
+  if (!client || !userId) {
+    return { success: false, error: 'Connexion Supabase non initialisée ou identifiant utilisateur manquant.' };
+  }
 
   try {
     const payload: Record<string, any> = {};
     if (updates.role !== undefined) payload.role = updates.role;
     if (updates.isVip !== undefined) payload.is_vip = updates.isVip;
 
-    const { error } = await client.from('profiles').update(payload).eq('id', userId);
-    if (error) throw error;
+    // Requête explicite avec .select() pour vérifier que la ligne a bien été modifiée par PostgreSQL/RLS
+    const { data, error } = await client
+      .from('profiles')
+      .update(payload)
+      .eq('id', userId)
+      .select();
 
-    // Si la mise à jour concerne l'utilisateur actuellement connecté, forcer le rafraîchissement de session
+    if (error) {
+      console.error('Erreur Supabase updateUserRoleOrVip:', error);
+      return { success: false, error: error.message };
+    }
+
+    // Contrôle anti-faux succès : si la RLS bloque silencieusement, data est vide []
+    if (!data || data.length === 0) {
+      const rlsMsg = "La modification n'a pas été autorisée par la base de données. Assurez-vous d'être connecté avec un compte ayant le rôle administrateur dans la table profiles.";
+      console.error('RLS Bloquant updateUserRoleOrVip: 0 ligne mise à jour', { userId, payload });
+      return { success: false, error: rlsMsg };
+    }
+
+    // Étape 3 : Si la mise à jour concerne l'utilisateur actuellement connecté, forcer le rafraîchissement de session
     try {
       const { data: sessionData } = await client.auth.getSession();
       if (sessionData.session?.user?.id === userId) {
@@ -858,10 +876,10 @@ export const updateUserRoleOrVip = async (
       console.warn('refreshSession notice:', refreshErr);
     }
 
-    return { success: true };
+    return { success: true, data: data[0] };
   } catch (err: any) {
-    console.error('Erreur updateUserRoleOrVip:', err);
-    return { success: false, error: err.message };
+    console.error('Exception updateUserRoleOrVip:', err);
+    return { success: false, error: err.message || 'Erreur inattendue lors de la mise à jour' };
   }
 };
 
