@@ -272,6 +272,19 @@ export default function App() {
     });
   }, []);
 
+  // Détection et ouverture automatique d'un événement partagé par lien WhatsApp (?event=ID ou ?id=ID)
+  useEffect(() => {
+    if (typeof window === 'undefined' || events.length === 0) return;
+    const searchParams = new URLSearchParams(window.location.search);
+    const targetId = searchParams.get('event') || searchParams.get('id');
+    if (targetId) {
+      const matched = events.find((e) => e.id === targetId);
+      if (matched) {
+        setSelectedEventForDetail(matched);
+      }
+    }
+  }, [events]);
+
   // Synchronisation avec la session Supabase Auth réelle
   useEffect(() => {
     const client = getSupabaseClient();

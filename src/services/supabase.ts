@@ -1,6 +1,7 @@
 import { createClient, SupabaseClient, User } from '@supabase/supabase-js';
 import {
   EventItem,
+  EventStatus,
   UserTicket,
   UserProfile,
   TicketTier,

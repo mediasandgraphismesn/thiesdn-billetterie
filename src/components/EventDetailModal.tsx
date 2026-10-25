@@ -135,6 +135,11 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
     setPromoError(null);
   };
 
+  // Lien officiel de prévisualisation WhatsApp (OG Dynamic Card)
+  const eventPreviewUrl = `https://billetterie.thiesdn.site/api/preview?id=${encodeURIComponent(event.id)}`;
+  const eventShareMessage = `🎟️ *${event.title}*\n📅 ${event.date} à ${event.time}\n📍 ${event.venue || event.city}\n\nDécouvrez l'affiche officielle et réservez vos places sur Thièsdn Billetterie :\n${eventPreviewUrl}`;
+  const whatsappShareEventUrl = `https://wa.me/?text=${encodeURIComponent(eventShareMessage)}`;
+
   // Génération du lien WhatsApp officiel avec récapitulatif complet de commande
   const generateWhatsAppConfirmationUrl = (order: OrderRecord) => {
     const promoLine = order.promoCodeApplied
@@ -156,7 +161,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
       `━━━━━━━━━━━━━━━━━━━━\n` +
       `⏳ *Statut :* Paiement Wave en cours de vérification administrative.\n` +
       `Votre pass numérique officiel avec QR Code unique sera accessible dans l'onglet *Mes Billets* dès validation de l'équipe.\n\n` +
-      `🔗 https://thiesdn.mgartswork.site/`;
+      `🔗 ${eventPreviewUrl}`;
 
     return `https://wa.me/?text=${encodeURIComponent(message)}`;
   };
@@ -268,6 +273,15 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
             </div>
 
             <div className="flex items-center gap-2">
+              <a
+                href={whatsappShareEventUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-9 h-9 rounded-full bg-emerald-600/80 hover:bg-emerald-500 backdrop-blur-md text-white flex items-center justify-center border border-emerald-400/30 transition-all hover:scale-105 shadow-lg"
+                title="Partager cet événement sur WhatsApp (avec affiche)"
+              >
+                <Share2 className="w-4 h-4" />
+              </a>
               <button
                 onClick={() => setIsLiked(!isLiked)}
                 className="w-9 h-9 rounded-full bg-black/60 backdrop-blur-md text-white hover:text-red-400 flex items-center justify-center border border-white/10 transition-colors"
@@ -445,6 +459,28 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                   )}
                 </div>
               )}
+
+              {/* Partage WhatsApp avec Aperçu Visuel Dynamique */}
+              <div className="bg-gradient-to-r from-emerald-950/40 via-emerald-900/20 to-black/40 p-3.5 rounded-2xl border border-emerald-500/25 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/30">
+                    <Share2 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-white">Partager cet événement sur WhatsApp</p>
+                    <p className="text-[10px] text-gray-300">Générez un aperçu automatique avec l'affiche officielle</p>
+                  </div>
+                </div>
+                <a
+                  href={whatsappShareEventUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full sm:w-auto px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md shrink-0"
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                  <span>Partager sur WhatsApp</span>
+                </a>
+              </div>
 
               {/* Sélection de la formule */}
               <div>
