@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   Smartphone,
   PlusCircle,
+  Ticket,
 } from 'lucide-react';
 import { UserProfile } from '../../types';
 
@@ -19,6 +20,7 @@ interface AdminSidebarProps {
   onTabChange: (tab: string) => void;
   pendingModerationCount: number;
   pendingOrdersCount: number;
+  totalEventsCount?: number;
   onToggleAdminPreview?: () => void;
   isAdminPreview?: boolean;
 }
@@ -29,6 +31,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
   onTabChange,
   pendingModerationCount,
   pendingOrdersCount,
+  totalEventsCount,
   onToggleAdminPreview,
   isAdminPreview = false,
 }) => {
@@ -37,6 +40,13 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       id: 'dashboard',
       label: 'Tableau de bord',
       icon: LayoutDashboard,
+    },
+    {
+      id: 'events_mgmt',
+      label: 'Gestion des Événements',
+      icon: Ticket,
+      badge: totalEventsCount !== undefined && totalEventsCount > 0 ? `${totalEventsCount}` : undefined,
+      badgeStyle: 'bg-[#8A2BE2]/20 text-[#DCB8FF] font-bold border border-[#8A2BE2]/30',
     },
     {
       id: 'moderation',

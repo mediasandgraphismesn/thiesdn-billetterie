@@ -5006,7 +5006,7 @@ export const createEventInSupabase = async (
 
 export const updateEventStatusInSupabase = async (
   eventId: string,
-  newStatus: 'approved' | 'rejected',
+  newStatus: EventStatus,
   rejectionReason?: string
 ): Promise<{ success: boolean; error?: string }> => {
   const client = getSupabaseClient();
@@ -5023,6 +5023,73 @@ export const updateEventStatusInSupabase = async (
 
     if (error) return { success: false, error: error.message };
     return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+};
+
+export const deleteEventFromSupabase = async (
+  eventId: string
+): Promise<{ success: boolean; error?: string }> => {
+  const client = getSupabaseClient();
+  if (!client) return { success: false, error: 'Supabase non connecté.' };
+
+  try {
+    const { error } = await client.from('events').delete().eq('id', eventId);
+    if (error) return { success: false, error: error.message };
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+};
+
+export const updateEventInSupabase = async (
+  eventId: string,
+  updates: Partial<EventItem>
+): Promise<{ success: boolean; event?: EventItem; error?: string }> => {
+  const client = getSupabaseClient();
+  if (!client) return { success: false, error: 'Supabase non connecté.' };
+
+  try {
+    const dbPayload: any = {};
+    if (updates.title !== undefined) dbPayload.title = updates.title.trim();
+    if (updates.category !== undefined) dbPayload.category = updates.category;
+    if (updates.description !== undefined) dbPayload.description = updates.description.trim();
+    if (updates.longDescription !== undefined) dbPayload.long_description = updates.longDescription.trim();
+    if (updates.date !== undefined) dbPayload.event_date = updates.date;
+    if (updates.time !== undefined) dbPayload.event_time = updates.time;
+    if (updates.datetimeIso !== undefined) dbPayload.datetime_iso = updates.datetimeIso;
+    if (updates.venue !== undefined) dbPayload.venue = updates.venue.trim();
+    if (updates.city !== undefined) dbPayload.city = updates.city;
+    if (updates.quartier !== undefined) dbPayload.quartier = updates.quartier.trim();
+    if (updates.price !== undefined) dbPayload.price = updates.price;
+    if (updates.posterUrl !== undefined) dbPayload.affiche_url = updates.posterUrl;
+    if (updates.status !== undefined) dbPayload.status = updates.status;
+    if (updates.waveLinkPrevente !== undefined) dbPayload.wave_link_prevente = updates.waveLinkPrevente.trim();
+    if (updates.waveLinkJourJ !== undefined) dbPayload.wave_link_jour_j = updates.waveLinkJourJ.trim();
+    if (updates.waveLinkVip !== undefined) dbPayload.wave_link_vip = updates.waveLinkVip.trim();
+
+    let { data, error } = await client
+      .from('events')
+      .update(dbPayload)
+      .eq('id', eventId)
+      .select()
+      .single();
+
+    if (error && (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('does not exist'))) {
+      const minimalPayload = { ...dbPayload };
+      delete minimalPayload.wave_link_prevente;
+      delete minimalPayload.wave_link_jour_j;
+      delete minimalPayload.wave_link_vip;
+      delete minimalPayload.long_description;
+      delete minimalPayload.quartier;
+      const fb = await client.from('events').update(minimalPayload).eq('id', eventId).select().single();
+      data = fb.data;
+      error = fb.error;
+    }
+
+    if (error) return { success: false, error: error.message };
+    return { success: true, event: mapDbEventToItem(data) };
   } catch (err: any) {
     return { success: false, error: err.message };
   }

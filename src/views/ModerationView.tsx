@@ -33,6 +33,7 @@ interface ModerationViewProps {
   onPreviewEvent: (event: EventItem) => void;
   onTicketsCreated?: (tickets: UserTicket[]) => void;
   initialTab?: 'events' | 'orders';
+  onNavigateTab?: (tab: string) => void;
 }
 
 export const ModerationView: React.FC<ModerationViewProps> = ({
@@ -42,6 +43,7 @@ export const ModerationView: React.FC<ModerationViewProps> = ({
   onPreviewEvent,
   onTicketsCreated,
   initialTab = 'events',
+  onNavigateTab,
 }) => {
   const [activeTab, setActiveTab] = useState<'events' | 'orders'>(initialTab);
 
@@ -453,9 +455,17 @@ export const ModerationView: React.FC<ModerationViewProps> = ({
                 <h3 className="font-heading text-lg font-bold text-white">
                   File de modération vide
                 </h3>
-                <p className="text-xs text-gray-400 mt-1 max-w-sm mx-auto">
-                  Tous les événements soumis par les promoteurs de Thiès et Saly ont été examinés et approuvés.
+                <p className="text-xs text-gray-300 mt-2 max-w-md mx-auto leading-relaxed">
+                  Aucun événement en attente de validation. Tous vos événements sont visibles dans <span className="text-[#E9C349] font-bold">"Gestion des Événements"</span>.
                 </p>
+                {onNavigateTab && (
+                  <button
+                    onClick={() => onNavigateTab('events_mgmt')}
+                    className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#8A2BE2] to-[#B8860B] hover:opacity-90 text-white font-bold text-xs shadow-lg transition-all"
+                  >
+                    <span>Accéder à la Gestion des Événements</span>
+                  </button>
+                )}
               </div>
             </div>
           ) : (

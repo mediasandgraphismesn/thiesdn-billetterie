@@ -34,6 +34,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     if (userRole === 'admin' && !isAdminPreview) {
       return [
         { id: 'dashboard', label: 'Dashboard', icon: Home },
+        { id: 'events_mgmt', label: 'Événements', icon: Ticket },
         {
           id: 'moderation',
           label: 'Modération',
@@ -42,7 +43,6 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           badgeColor: 'bg-rose-500 text-white font-bold',
         },
         { id: 'orders', label: 'Paiements', icon: Wallet },
-        { id: 'checkin', label: 'Scanner', icon: QrCode },
         { id: 'settings', label: 'Paramètres', icon: User },
       ];
     }

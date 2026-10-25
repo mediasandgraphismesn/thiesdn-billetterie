@@ -51,6 +51,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       return [
         { id: 'dashboard', label: 'Tableau de bord', icon: LayoutDashboard },
         {
+          id: 'events_mgmt',
+          label: 'Gestion des Événements',
+          icon: Ticket,
+          badge: totalEventsCount > 0 ? `${totalEventsCount}` : undefined,
+          badgeStyle: 'bg-[#8A2BE2]/20 text-[#DCB8FF] font-bold border border-[#8A2BE2]/30',
+        },
+        {
           id: 'moderation',
           label: 'Modération des Événements',
           icon: ShieldCheck,

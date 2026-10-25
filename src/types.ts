@@ -8,7 +8,7 @@ export type EventCategory =
   | 'Festival'
   | 'Culture';
 
-export type EventStatus = 'approved' | 'pending' | 'rejected';
+export type EventStatus = 'approved' | 'pending' | 'rejected' | 'archived';
 
 export type OrderStatus =
   | 'pending'            // Attente de paiement

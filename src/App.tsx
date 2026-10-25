@@ -11,6 +11,7 @@ import { ShieldAlert, Eye, ArrowRight } from 'lucide-react';
 import { HomeView } from './views/HomeView';
 import { ExploreView } from './views/ExploreView';
 import { CreateEventView } from './views/CreateEventView';
+import { EventsManagementView } from './views/EventsManagementView';
 import { ModerationView } from './views/ModerationView';
 import { ProfileView } from './views/ProfileView';
 import { AuthView } from './views/AuthView';
@@ -197,7 +198,7 @@ export default function App() {
     }
 
     // Si la route est de type admin et que le rôle effectif n'est pas admin : REFUS STRICT
-    const adminOnlyTabs = ['dashboard', 'moderation', 'orders', 'payments', 'users', 'checkin', 'settings', 'admin'];
+    const adminOnlyTabs = ['dashboard', 'events_mgmt', 'moderation', 'orders', 'payments', 'users', 'checkin', 'settings', 'admin'];
     if (adminOnlyTabs.includes(tab) && role !== 'admin') {
       return false;
     }
@@ -499,6 +500,7 @@ export default function App() {
 
   const requiresAuth = [
     'dashboard',
+    'events_mgmt',
     'moderation',
     'orders',
     'payments',
@@ -613,6 +615,7 @@ export default function App() {
               onTabChange={handleTabChange}
               pendingModerationCount={pendingModerationCount}
               pendingOrdersCount={pendingOrdersCount}
+              totalEventsCount={events.length}
               onToggleAdminPreview={currentRole === 'admin' ? () => setIsAdminPreview(!isAdminPreview) : undefined}
               isAdminPreview={isAdminPreview}
             />
@@ -763,6 +766,16 @@ export default function App() {
                 />
               )}
 
+              {/* GESTION COMPLÈTE DES ÉVÉNEMENTS (ADMIN) */}
+              {activeTab === 'events_mgmt' && effectiveRole === 'admin' && (
+                <EventsManagementView
+                  events={events}
+                  onRefreshEvents={refreshEvents}
+                  onNavigateCreate={() => handleTabChange('create')}
+                  onPreviewEvent={(evt) => setSelectedEventForDetail(evt)}
+                />
+              )}
+
               {/* MODÉRATION DES ÉVÉNEMENTS */}
               {activeTab === 'moderation' && effectiveRole === 'admin' && (
                 <ModerationView
@@ -771,6 +784,7 @@ export default function App() {
                   onRejectEvent={handleRejectEvent}
                   onPreviewEvent={(evt) => setSelectedEventForDetail(evt)}
                   initialTab="events"
+                  onNavigateTab={handleTabChange}
                   onTicketsCreated={(newTickets) => {
                     setTickets((prev) => [...newTickets, ...prev]);
                     const notif: NotificationItem = {

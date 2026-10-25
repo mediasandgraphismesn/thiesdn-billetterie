@@ -252,7 +252,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           subtitle={`${approvedEventsCount} approuvés • ${pendingEventsCount} en attente`}
           icon={Calendar}
           glowColor="purple"
-          onClick={() => onNavigateTab('moderation')}
+          onClick={() => onNavigateTab('events_mgmt')}
         />
 
         <StatsCard
@@ -291,7 +291,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <span>Accès Direct aux Modules de Gestion</span>
         </h2>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
+          <button
+            onClick={() => onNavigateTab('events_mgmt')}
+            className="p-4 rounded-2xl bg-[#1C1B1B] hover:bg-[#252427] border border-white/5 hover:border-[#8A2BE2]/50 transition-all flex flex-col items-center text-center gap-2 group"
+          >
+            <div className="w-10 h-10 rounded-xl bg-[#8A2BE2]/20 text-[#DCB8FF] flex items-center justify-center group-hover:scale-110 transition-transform relative">
+              <Ticket className="w-5 h-5" />
+              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#E9C349] text-black text-[9px] font-black flex items-center justify-center">
+                {events.length}
+              </span>
+            </div>
+            <span className="text-xs font-bold text-white">Tous les Événements</span>
+            <span className="text-[10px] text-gray-400">{events.length} au total</span>
+          </button>
+
           <button
             onClick={() => onNavigateTab('moderation')}
             className="p-4 rounded-2xl bg-[#1C1B1B] hover:bg-[#252427] border border-white/5 hover:border-[#8A2BE2]/50 transition-all flex flex-col items-center text-center gap-2 group"
