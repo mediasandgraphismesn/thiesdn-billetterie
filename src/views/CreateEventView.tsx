@@ -81,7 +81,11 @@ const PRESET_POSTERS = [
   },
 ];
 
-const DRAFT_STORAGE_KEY = 'thiesdn_event_draft';
+// Clé dynamique de stockage du brouillon liée à l'utilisateur connecté
+const getDraftStorageKey = (userId?: string | null): string | null => {
+  if (!userId) return null;
+  return `thiesdn_event_draft_${userId}`;
+};
 
 interface EventFormData {
   title: string;
@@ -175,28 +179,101 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
 }) => {
   const { userRole, user: authUser, isAuthenticated } = useAuth();
   const effectiveUser = currentUser || authUser;
+  const currentUserId = effectiveUser?.id;
   const isAllowedToCreate = userRole === 'promoter' || userRole === 'admin' || userRole === 'artist';
 
-  // Initialisation du state avec les données du localStorage si présentes
+  // Initialisation du state avec les données du localStorage si un utilisateur connecté a un brouillon
   const [formData, setFormData] = useState<EventFormData>(() => {
     if (typeof window === 'undefined') return INITIAL_FORM_STATE;
+    const key = getDraftStorageKey(currentUserId);
+    if (!key) return INITIAL_FORM_STATE;
     try {
-      const saved = localStorage.getItem(DRAFT_STORAGE_KEY) || localStorage.getItem('thiesdn_create_event_draft');
+      const saved = localStorage.getItem(key);
       return saved ? { ...INITIAL_FORM_STATE, ...JSON.parse(saved) } : INITIAL_FORM_STATE;
     } catch {
       return INITIAL_FORM_STATE;
     }
   });
 
-  // Sauvegarde automatique à chaque modification
+  // Nettoyage préventif des anciennes clés orphelines globales non sécurisées
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
-      localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(formData));
-    } catch (e) {
-      console.warn('Erreur sauvegarde thiesdn_event_draft:', e);
+      localStorage.removeItem('thiesdn_event_draft');
+      localStorage.removeItem('thiesdn_create_event_draft');
+    } catch {}
+  }, []);
+
+  // Synchronisation dynamique si l'utilisateur change ou se connecte/déconnecte
+  const [lastUserId, setLastUserId] = useState<string | null>(currentUserId || null);
+  useEffect(() => {
+    const newUserId = effectiveUser?.id || null;
+    if (newUserId !== lastUserId) {
+      setLastUserId(newUserId);
+      if (typeof window !== 'undefined') {
+        const key = getDraftStorageKey(newUserId);
+        if (key) {
+          try {
+            const saved = localStorage.getItem(key);
+            if (saved) {
+              setFormData({ ...INITIAL_FORM_STATE, ...JSON.parse(saved) });
+            } else {
+              setFormData(INITIAL_FORM_STATE);
+            }
+          } catch {
+            setFormData(INITIAL_FORM_STATE);
+          }
+        } else {
+          setFormData(INITIAL_FORM_STATE);
+        }
+      }
     }
-  }, [formData]);
+  }, [effectiveUser?.id, lastUserId]);
+
+  // Sauvegarde automatique à chaque modification uniquement si un utilisateur est connecté
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const key = getDraftStorageKey(effectiveUser?.id);
+    if (!key) return; // Ne pas sauvegarder de données pour un utilisateur anonyme/déconnecté
+    try {
+      localStorage.setItem(key, JSON.stringify(formData));
+    } catch (e) {
+      console.warn(`Erreur sauvegarde brouillon ${key}:`, e);
+    }
+  }, [formData, effectiveUser?.id]);
+
+  // Effacement manuel du brouillon avec confirmation de sécurité
+  const handleClearDraft = () => {
+    if (typeof window === 'undefined') return;
+    const hasData = Object.keys(formData).some((k) => {
+      const val = (formData as any)[k];
+      return typeof val === 'string' ? val.trim() !== '' : Boolean(val);
+    });
+
+    if (
+      hasData &&
+      !window.confirm(
+        'Voulez-vous vraiment effacer l’intégralité de ce brouillon ? Tous les champs saisis seront réinitialisés.'
+      )
+    ) {
+      return;
+    }
+
+    const key = getDraftStorageKey(effectiveUser?.id);
+    if (key) {
+      try {
+        localStorage.removeItem(key);
+      } catch (e) {
+        console.warn('Erreur suppression brouillon utilisateur:', e);
+      }
+    }
+    try {
+      localStorage.removeItem('thiesdn_event_draft');
+      localStorage.removeItem('thiesdn_create_event_draft');
+    } catch {}
+
+    setFormData(INITIAL_FORM_STATE);
+  };
 
   const updateField = <K extends keyof EventFormData>(field: K, value: EventFormData[K]) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -464,10 +541,14 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
 
       // Nettoyage du draft après publication réussie
       try {
-        localStorage.removeItem(DRAFT_STORAGE_KEY);
+        const key = getDraftStorageKey(effectiveUser?.id);
+        if (key) {
+          localStorage.removeItem(key);
+        }
+        localStorage.removeItem('thiesdn_event_draft');
         localStorage.removeItem('thiesdn_create_event_draft');
       } catch (e) {
-        console.warn('Erreur suppression draft:', e);
+        console.warn('Erreur suppression draft après publication:', e);
       }
 
       setIsSubmitting(false);
@@ -1553,12 +1634,22 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
           </div>
         </section>
 
-        {/* Submit Action Button */}
-        <div className="pt-4">
+        {/* Actions du Formulaire */}
+        <div className="pt-4 flex flex-col sm:flex-row items-center gap-3">
+          <button
+            type="button"
+            onClick={handleClearDraft}
+            className="w-full sm:w-auto px-5 py-4 rounded-2xl bg-white/5 hover:bg-rose-500/10 text-gray-400 hover:text-rose-400 border border-white/10 hover:border-rose-500/30 text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2"
+            title="Réinitialiser tous les champs et effacer le brouillon sauvegardé"
+          >
+            <Trash2 className="w-4 h-4" />
+            <span>Effacer le brouillon</span>
+          </button>
+
           <button
             type="submit"
             disabled={isSubmitting || !isEmailConfirmed}
-            className="w-full btn-gold-glow py-4 px-6 rounded-2xl font-heading font-extrabold text-sm tracking-wider uppercase flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+            className="w-full flex-1 btn-gold-glow py-4 px-6 rounded-2xl font-heading font-extrabold text-sm tracking-wider uppercase flex items-center justify-center gap-2 transition-all disabled:opacity-50"
           >
             {isSubmitting ? (
               <div className="flex items-center gap-2">
