@@ -36,6 +36,13 @@ const DEFAULT_COORDS_BY_CITY: Record<string, [number, number]> = {
   Autre: [14.7910, -16.9359],
 };
 
+// Clé API CARTO pour les tuiles de fond de carte (Dark Matter)
+const CARTO_API_KEY =
+  (import.meta as any).env?.VITE_CARTO_API_KEY ||
+  'cb1_4uey_1_40c81e60e427983a6f222d41';
+
+const CARTO_DARK_MATTER_URL = `https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?key=${CARTO_API_KEY}`;
+
 /**
  * Création d'icônes Leaflet personnalisées (Nocturnal Elegance)
  * Pins Violets (#8A2BE2) pour les soirées standards et Dorés (#E9C349) pour les événements VIP
@@ -324,10 +331,10 @@ export const MapView: React.FC<MapViewProps> = ({
           {/* Controller de recentrage animé sur la géolocalisation utilisateur */}
           <UserLocationFlyController target={flyTarget} />
 
-          {/* CartoDB Dark Matter : Fond de carte sombre premium */}
+          {/* CartoDB Dark Matter : Fond de carte sombre premium avec clé API CARTO */}
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
-            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+            url={CARTO_DARK_MATTER_URL}
             subdomains="abcd"
             maxZoom={19}
           />
