@@ -1,7 +1,7 @@
 import { EventItem, UserProfile, UserTicket, NotificationItem } from '../types';
 
 export const INITIAL_USER: UserProfile = {
-  id: '',
+  id: '86109a57-1802-4255-b917-1a293f31af51',
   name: 'Mbaye Gueye',
   username: 'mbaye.gueye',
   email: 'mediasandgraphisme.sn@gmail.com',
