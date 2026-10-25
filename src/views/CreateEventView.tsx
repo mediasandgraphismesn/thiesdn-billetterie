@@ -33,7 +33,7 @@ import {
   X,
 } from 'lucide-react';
 import { EventItem, EventCategory, EventCoproducer, CoproducerRole, UserProfile, CURRENT_TERMS_VERSION } from '../types';
-import { createEventInSupabase, createCoproducer, acceptTermsOfServiceInSupabase } from '../services/supabase';
+import { createEventInSupabase, createCoproducer, acceptTermsOfServiceInSupabase, getSupabaseClient } from '../services/supabase';
 import { THIES_33_QUARTIERS, THIES_QUARTIERS_BY_ZONE } from '../data/thiesQuartiers';
 import { TermsOfServiceModal } from '../components/TermsOfServiceModal';
 import { useAuth } from '../contexts/AuthContext';
@@ -375,6 +375,33 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
       },
     ];
 
+    // Validation stricte de l'UUID du promoteur (obligatoire pour PostgreSQL)
+    const isValidUUID = (id?: string) =>
+      !!id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
+    let activePromoterId: string | null = isValidUUID(effectiveUser?.id) ? effectiveUser!.id : null;
+
+    if (!activePromoterId) {
+      const client = getSupabaseClient();
+      if (client) {
+        try {
+          const { data: sessionData } = await client.auth.getSession();
+          const sessionUid = sessionData?.session?.user?.id;
+          if (isValidUUID(sessionUid)) {
+            activePromoterId = sessionUid;
+          }
+        } catch {
+          // ignore
+        }
+      }
+    }
+
+    if (!activePromoterId) {
+      setIsSubmitting(false);
+      setSubmitError('Vous devez être connecté avec un compte valide pour créer un événement.');
+      return;
+    }
+
     try {
       const result = await createEventInSupabase(
         {
@@ -403,8 +430,8 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
           promoDiscountPercent: promoDiscountPercent ? Number(promoDiscountPercent) : undefined,
         },
         {
-          id: 'prom-thiesdn',
-          name: promoterName || 'Médias Graphisme & ThièsDN',
+          id: activePromoterId,
+          name: promoterName || effectiveUser?.name || 'Médias Graphisme & ThièsDN',
         }
       );
 
@@ -420,7 +447,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
           await createCoproducer({
             eventId: result.event.id,
             eventTitle: result.event.title,
-            promoterId: 'prom-thiesdn',
+            promoterId: activePromoterId,
             name: c.name,
             phone: c.phone,
             roleType: c.roleType,

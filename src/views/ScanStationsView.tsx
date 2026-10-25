@@ -40,7 +40,7 @@ interface ScanStationsViewProps {
 export const ScanStationsView: React.FC<ScanStationsViewProps> = ({
   events = [],
   defaultEventId,
-  promoterId = 'prom-thiesdn',
+  promoterId = '',
   promoterName = 'Lat Dior Productions',
 }) => {
   const [stations, setStations] = useState<ScanStation[]>(getStoredScanStations());

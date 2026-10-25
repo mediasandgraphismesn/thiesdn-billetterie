@@ -265,9 +265,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
     if (!events || events.length === 0) return [];
     if (!promoterName) return events;
     const filtered = events.filter((e) =>
-      e.promoter.name.toLowerCase().includes(promoterName.toLowerCase()) ||
-      e.promoter.id === 'prom-thiesdn' ||
-      e.promoter.id === 'usr-promoter-1'
+      e.promoter.name.toLowerCase().includes(promoterName.toLowerCase())
     );
     return filtered.length > 0 ? filtered : events;
   }, [events, promoterName]);
@@ -2341,7 +2339,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                       const res = await createCoproducer({
                         eventId: activeEvent.id,
                         eventTitle: activeEvent.title,
-                        promoterId: activeEvent.promoter.id || 'prom-thiesdn',
+                        promoterId: activeEvent.promoter.id || '',
                         name: newCoprodName.trim(),
                         phone: newCoprodPhone.trim(),
                         roleType: newCoprodRole,
@@ -2512,7 +2510,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
           <ScanStationsView
             events={promoterEvents}
             defaultEventId={activeEvent?.id}
-            promoterId={activeEvent?.promoter?.id || 'prom-thiesdn'}
+            promoterId={activeEvent?.promoter?.id || ''}
             promoterName={promoterName || activeEvent?.promoter?.name || 'Lat Dior Productions'}
           />
         )}

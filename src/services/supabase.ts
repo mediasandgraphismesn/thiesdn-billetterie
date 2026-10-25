@@ -18,6 +18,10 @@ import {
 } from '../types';
 import { INITIAL_TICKETS } from '../data/mockEvents';
 
+// Validation stricte UUID pour PostgreSQL Supabase
+export const isValidUUID = (val?: string): boolean =>
+  !!val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+
 // Environment variables or localStorage config
 export const normalizeSupabaseUrl = (url: string): string => {
   let cleaned = (url || '').trim();
@@ -2170,7 +2174,7 @@ export const fetchCoproducersFromSupabase = async (
         id: d.id,
         eventId: d.event_id,
         eventTitle: d.event_title || 'Événement Thièsdn',
-        promoterId: d.promoter_id || 'prom-thiesdn',
+        promoterId: d.promoter_id || '',
         userId: d.user_id,
         name: d.name,
         phone: d.phone,
@@ -2199,12 +2203,17 @@ export const fetchCoproducersFromSupabase = async (
 export const createCoproducer = async (
   coproducerData: Partial<EventCoproducer>
 ): Promise<{ success: boolean; coproducer?: EventCoproducer; error?: string }> => {
+  const isValidUUID = (val?: string): boolean =>
+    !!val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+
+  const resolvedPromoterId = isValidUUID(coproducerData.promoterId) ? coproducerData.promoterId! : '';
+
   const newCoprod: EventCoproducer = {
     id: `coprod-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`,
     eventId: coproducerData.eventId || 'evt-soiree-prestige',
     eventTitle: coproducerData.eventTitle || 'Événement Thièsdn',
-    promoterId: coproducerData.promoterId || 'prom-thiesdn',
-    userId: coproducerData.userId,
+    promoterId: resolvedPromoterId,
+    userId: isValidUUID(coproducerData.userId) ? coproducerData.userId : undefined,
     name: coproducerData.name?.trim() || 'Co-Producteur',
     phone: coproducerData.phone?.trim() || '+221 77 000 00 00',
     email: coproducerData.email?.trim(),
@@ -2227,7 +2236,7 @@ export const createCoproducer = async (
       await client.from('event_coproducers').insert({
         id: newCoprod.id,
         event_id: newCoprod.eventId,
-        promoter_id: newCoprod.promoterId,
+        promoter_id: isValidUUID(newCoprod.promoterId) ? newCoprod.promoterId : null,
         user_id: newCoprod.userId,
         name: newCoprod.name,
         phone: newCoprod.phone,
@@ -2568,7 +2577,7 @@ export const createAccreditation = async (
     organization: data.organization?.trim(),
     qrCode,
     status: 'validated',
-    createdBy: data.createdBy || 'prom-thiesdn',
+    createdBy: isValidUUID(data.createdBy) ? data.createdBy! : '',
     createdByName: data.createdByName || 'Lat Dior Productions',
     createdByRole: data.createdByRole || 'promoter',
     createdAt: new Date().toISOString(),
@@ -2592,7 +2601,7 @@ export const createAccreditation = async (
         organization: newAccred.organization,
         qr_code: newAccred.qrCode,
         status: newAccred.status,
-        created_by: newAccred.createdBy,
+        created_by: isValidUUID(newAccred.createdBy) ? newAccred.createdBy : null,
         created_by_name: newAccred.createdByName,
         created_by_role: newAccred.createdByRole,
       });
@@ -2808,7 +2817,7 @@ export const createScanStation = async (
     eventTitle: data.eventTitle || 'Nuit du Baobab Prestige',
     name,
     accessCode,
-    createdBy: data.createdBy || 'prom-thiesdn',
+    createdBy: isValidUUID(data.createdBy) ? data.createdBy! : '',
     createdByName: data.createdByName || 'Lat Dior Productions',
     isActive: true,
     scansCount: 0,
@@ -2829,7 +2838,7 @@ export const createScanStation = async (
         event_title: newStation.eventTitle,
         name: newStation.name,
         access_code: newStation.accessCode,
-        created_by: newStation.createdBy,
+        created_by: isValidUUID(newStation.createdBy) ? newStation.createdBy : null,
         created_by_name: newStation.createdByName,
         is_active: newStation.isActive,
         scans_count: newStation.scansCount,
@@ -4753,7 +4762,7 @@ export const mapDbEventToItem = (db: any): EventItem => {
     waveLinkJourJ,
     waveLinkVip,
     promoter: {
-      id: db.promoter_id || 'prom-thiesdn',
+      id: db.promoter_id || '',
       name: db.promoter_name || 'Médias Graphisme & ThièsDN',
       avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=200&auto=format&fit=crop',
       verified: true,
@@ -4852,6 +4861,31 @@ export const createEventInSupabase = async (
     return { ...t, wavePaymentUrl: waveUrl };
   });
 
+  // Validation stricte UUID pour PostgreSQL Supabase
+  const isValidUUID = (val?: string): boolean =>
+    !!val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+
+  let targetPromoterId = isValidUUID(promoter?.id) ? promoter.id : null;
+
+  if (!targetPromoterId) {
+    try {
+      const { data: authSession } = await client.auth.getSession();
+      const authUid = authSession?.session?.user?.id;
+      if (isValidUUID(authUid)) {
+        targetPromoterId = authUid;
+      }
+    } catch (e) {
+      console.warn('Erreur résolution session promoter_id:', e);
+    }
+  }
+
+  if (!targetPromoterId) {
+    return {
+      success: false,
+      error: "Vous devez être connecté avec un compte valide pour créer un événement.",
+    };
+  }
+
   const baseInsert: any = {
     title: eventData.title.trim(),
     category: eventData.category,
@@ -4862,8 +4896,8 @@ export const createEventInSupabase = async (
     city: eventData.city,
     price: eventData.price,
     affiche_url: eventData.posterUrl,
-    promoter_id: promoter.id,
-    promoter_name: promoter.name,
+    promoter_id: targetPromoterId,
+    promoter_name: promoter.name || 'Promoteur ThièsDN',
     whatsapp_contact: eventData.whatsappContact?.trim() || null,
     status: 'approved',
     ticket_tiers: enrichedTiers,

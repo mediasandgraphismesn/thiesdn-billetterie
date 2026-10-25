@@ -236,7 +236,7 @@ export const AccreditationsView: React.FC<AccreditationsViewProps> = ({
       holderPhone: newHolderPhone.trim(),
       holderEmail: newHolderEmail.trim() || undefined,
       organization: newOrganization.trim() || undefined,
-      createdBy: userProfile?.id || 'prom-thiesdn',
+      createdBy: userProfile?.id || '',
       createdByName: userProfile?.name || 'Production Thièsdn',
       createdByRole: currentRole === 'artist' ? 'artist' : 'promoter',
     });
@@ -301,7 +301,7 @@ export const AccreditationsView: React.FC<AccreditationsViewProps> = ({
             holderName,
             holderPhone,
             organization,
-            createdBy: userProfile?.id || 'prom-thiesdn',
+            createdBy: userProfile?.id || '',
             createdByName: userProfile?.name || 'Production',
             createdByRole: currentRole === 'artist' ? 'artist' : 'promoter',
           });
