@@ -7,8 +7,6 @@ import {
   Crown,
   Plus,
   Compass,
-  Eye,
-  Store,
 } from 'lucide-react';
 import { NotificationItem, UserProfile } from '../types';
 
@@ -81,51 +79,6 @@ export const Header: React.FC<HeaderProps> = ({
             <Compass className="w-4 h-4 text-[#E9C349]" />
             <span>Explorer les Événements</span>
           </button>
-        )}
-
-        {/* Badge de Rôle Officiel - Affichage Strict et Non Modifiable */}
-        {isAuthenticated ? (
-          <div className="flex items-center gap-2 bg-[#1C1B1B]/80 px-3.5 py-1.5 rounded-full border border-white/5">
-            {isAdminPreview ? (
-              <span className="flex items-center gap-1.5 text-xs font-bold text-amber-300 bg-amber-500/20 px-2.5 py-0.5 rounded-full border border-amber-500/40">
-                <Eye className="w-3.5 h-3.5 text-amber-400" />
-                Mode Aperçu Visiteur
-              </span>
-            ) : currentRole === 'admin' ? (
-              <span className="flex items-center gap-1.5 text-xs font-semibold text-[#DCB8FF] bg-[#8A2BE2]/20 px-2.5 py-0.5 rounded-full border border-[#8A2BE2]/40">
-                <Shield className="w-3.5 h-3.5 text-[#DCB8FF]" />
-                Superviseur Administrateur
-                {pendingModerationCount > 0 && (
-                  <span className="w-2 h-2 rounded-full bg-[#E9C349] animate-pulse ml-1" />
-                )}
-              </span>
-            ) : currentRole === 'promoter' ? (
-              <span className="flex items-center gap-1.5 text-xs font-semibold text-[#E9C349] bg-[#E9C349]/20 px-2.5 py-0.5 rounded-full border border-[#E9C349]/40">
-                <Crown className="w-3.5 h-3.5 text-[#E9C349]" />
-                Espace Promoteur Certifié
-              </span>
-            ) : currentRole === 'artist' ? (
-              <span className="flex items-center gap-1.5 text-xs font-semibold text-[#E9C349] bg-[#E9C349]/20 px-2.5 py-0.5 rounded-full border border-[#E9C349]/40">
-                <Crown className="w-3.5 h-3.5 text-[#E9C349]" />
-                Espace Artiste Co-Production
-              </span>
-            ) : currentRole === 'sales_agent' ? (
-              <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-400 bg-emerald-500/20 px-2.5 py-0.5 rounded-full border border-emerald-500/40">
-                <Store className="w-3.5 h-3.5 text-emerald-400" />
-                Guichet Point de Vente
-              </span>
-            ) : (
-              <span className="flex items-center gap-1.5 text-xs font-semibold text-gray-300">
-                <User className="w-3.5 h-3.5 text-[#DCB8FF]" />
-                Espace Client
-              </span>
-            )}
-          </div>
-        ) : (
-          <div className="flex items-center gap-1.5 text-xs font-medium text-gray-400 bg-white/5 px-3 py-1 rounded-full border border-white/5">
-            <span className="w-2 h-2 rounded-full bg-emerald-400" />
-            <span>Billetterie Ouverte</span>
-          </div>
         )}
       </div>
 

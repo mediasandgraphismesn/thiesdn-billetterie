@@ -8,8 +8,7 @@ import {
   Compass,
   Layers,
 } from 'lucide-react';
-import { EventItem } from '../types';
-import { CATEGORIES, SENEGAL_CITIES } from '../data/mockEvents';
+import { EventItem, CATEGORIES, SENEGAL_CITIES } from '../types';
 import { THIES_QUARTIERS_BY_ZONE } from '../data/thiesQuartiers';
 import { EventCard } from '../components/EventCard';
 import { MapView } from '../components/MapView';

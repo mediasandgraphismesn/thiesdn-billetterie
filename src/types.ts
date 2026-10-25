@@ -295,3 +295,16 @@ export interface ScanStation {
 }
 
 export const CURRENT_TERMS_VERSION = 'v1.0';
+
+export const CATEGORIES: { label: string; value: string; icon: string }[] = [
+  { label: 'Tous', value: 'All', icon: 'auto_awesome' },
+  { label: 'Galas & Prestige', value: 'Gala', icon: 'celebration' },
+  { label: 'Concerts & Mbalax', value: 'Concert', icon: 'music_note' },
+  { label: 'Festivals Plage', value: 'Festival', icon: 'festival' },
+  { label: 'Nightlife & Clubs', value: 'Boîte de nuit', icon: 'nightlife' },
+  { label: 'VIP Lounge', value: 'VIP Lounge', icon: 'local_bar' },
+  { label: 'Culture & After-work', value: 'Culture', icon: 'groups' },
+];
+
+export const SENEGAL_CITIES = ['All', 'Thiès', 'Mbour', 'Saly', 'Dakar'];
+

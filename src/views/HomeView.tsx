@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Search, SlidersHorizontal, TrendingUp, ChevronRight, Calendar, MapPin } from 'lucide-react';
-import { EventItem } from '../types';
-import { CATEGORIES } from '../data/mockEvents';
+import { EventItem, CATEGORIES } from '../types';
 import { EventCard } from '../components/EventCard';
 
 interface HomeViewProps {
