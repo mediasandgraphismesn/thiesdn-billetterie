@@ -334,16 +334,20 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
     setIsSubmitting(true);
     setSubmitError(null);
 
-    const dateObj = new Date(startDatetime);
-    const formattedDate = dateObj.toLocaleDateString('fr-FR', {
+    const parsedDate = startDatetime ? new Date(startDatetime) : new Date();
+    const isDateValid = !isNaN(parsedDate.getTime());
+    const validDate = isDateValid ? parsedDate : new Date();
+
+    const formattedDate = validDate.toLocaleDateString('fr-FR', {
       day: 'numeric',
       month: 'long',
       year: 'numeric',
     });
-    const formattedTime = dateObj.toLocaleTimeString('fr-FR', {
+    const formattedTime = validDate.toLocaleTimeString('fr-FR', {
       hour: '2-digit',
       minute: '2-digit',
     });
+    const eventIsoString = validDate.toISOString();
 
     const standardTiers = [
       {
@@ -411,6 +415,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
           longDescription: longDescription.trim() || undefined,
           date: formattedDate || '25 Décembre 2026',
           time: formattedTime || '20:00',
+          datetimeIso: eventIsoString,
           venue: venue || `Salle Prestige, ${city}`,
           city: city || 'Thiès',
           quartier: city === 'Thiès' ? quartier : undefined,

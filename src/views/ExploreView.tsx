@@ -50,7 +50,9 @@ export const ExploreView: React.FC<ExploreViewProps> = ({
     .sort((a, b) => {
       if (selectedSort === 'price-asc') return a.price - b.price;
       if (selectedSort === 'price-desc') return b.price - a.price;
-      return new Date(a.datetimeIso).getTime() - new Date(b.datetimeIso).getTime();
+      const timeA = a.datetimeIso ? new Date(a.datetimeIso).getTime() : 0;
+      const timeB = b.datetimeIso ? new Date(b.datetimeIso).getTime() : 0;
+      return (isNaN(timeA) ? 0 : timeA) - (isNaN(timeB) ? 0 : timeB);
     });
 
   return (

@@ -17,10 +17,34 @@ import {
   ScanStation,
 } from '../types';
 import { INITIAL_TICKETS } from '../data/mockEvents';
+import { parseEventDates } from './calendar';
 
 // Validation stricte UUID pour PostgreSQL Supabase
 export const isValidUUID = (val?: string): boolean =>
   !!val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+
+// Parsing ISO 8601 infaillible et résilient aux chaînes de date en français
+export const parseSafeIsoDate = (isoCandidate?: any, textDate?: any, timeStr?: string): string => {
+  if (isoCandidate && typeof isoCandidate === 'string') {
+    try {
+      const d = new Date(isoCandidate);
+      if (!isNaN(d.getTime())) return d.toISOString();
+    } catch {}
+  }
+  if (textDate && typeof textDate === 'string') {
+    if (/^\d{4}-\d{2}-\d{2}/.test(textDate)) {
+      try {
+        const d = new Date(textDate);
+        if (!isNaN(d.getTime())) return d.toISOString();
+      } catch {}
+    }
+    try {
+      const { startDate } = parseEventDates(textDate, timeStr || '20:00');
+      if (!isNaN(startDate.getTime())) return startDate.toISOString();
+    } catch {}
+  }
+  return new Date().toISOString();
+};
 
 // Environment variables or localStorage config
 export const normalizeSupabaseUrl = (url: string): string => {
@@ -4751,7 +4775,7 @@ export const mapDbEventToItem = (db: any): EventItem => {
     category: db.category || 'Gala',
     date: db.event_date || db.date || '25 Décembre 2026',
     time: db.event_time || db.time || '20:00',
-    datetimeIso: db.datetime_iso || (db.event_date ? new Date(db.event_date).toISOString() : new Date().toISOString()),
+    datetimeIso: parseSafeIsoDate(db.datetime_iso, db.event_date || db.date, db.event_time || db.time),
     venue: db.venue || 'Grand Théâtre de Thiès',
     city: db.city || 'Thiès',
     quartier: db.quartier || '',
@@ -4819,6 +4843,7 @@ export const createEventInSupabase = async (
     longDescription?: string;
     date: string;
     time: string;
+    datetimeIso?: string;
     venue: string;
     city: string;
     quartier?: string;
@@ -4886,12 +4911,15 @@ export const createEventInSupabase = async (
     };
   }
 
+  const resolvedDatetimeIso = eventData.datetimeIso || parseSafeIsoDate(null, eventData.date, eventData.time);
+
   const baseInsert: any = {
     title: eventData.title.trim(),
     category: eventData.category,
     description: eventData.description.trim(),
     event_date: eventData.date,
     event_time: eventData.time,
+    datetime_iso: resolvedDatetimeIso,
     venue: eventData.venue.trim(),
     city: eventData.city,
     price: eventData.price,
@@ -4907,6 +4935,7 @@ export const createEventInSupabase = async (
     // 1. Tenter avec toutes les colonnes étendues (liens Wave + réseaux sociaux + long_description)
     const fullInsert = {
       ...baseInsert,
+      datetime_iso: resolvedDatetimeIso,
       wave_link_prevente: eventData.waveLinkPrevente?.trim() || null,
       wave_link_jour_j: eventData.waveLinkJourJ?.trim() || null,
       wave_link_vip: eventData.waveLinkVip?.trim() || null,
@@ -4937,6 +4966,20 @@ export const createEventInSupabase = async (
         .single();
       data = fallbackResult.data;
       error = fallbackResult.error;
+
+      // 3. Repli ultime si datetime_iso n'existe pas non plus dans la table
+      if (error && (error.code === 'PGRST204' || error.message?.includes('does not exist') || error.message?.includes('column'))) {
+        console.warn('datetime_iso non trouvé dans table Supabase events, insertion minimale sans datetime_iso');
+        const minimalInsert = { ...baseInsert };
+        delete minimalInsert.datetime_iso;
+        const minimalResult = await client
+          .from('events')
+          .insert(minimalInsert)
+          .select()
+          .single();
+        data = minimalResult.data;
+        error = minimalResult.error;
+      }
     }
 
     if (error) {
