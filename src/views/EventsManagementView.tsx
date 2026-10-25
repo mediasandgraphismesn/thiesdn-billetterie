@@ -317,17 +317,17 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
           </div>
 
           <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
-            {['All', ...CATEGORIES].map((cat) => (
+            {CATEGORIES.map((cat) => (
               <button
-                key={cat}
-                onClick={() => setSelectedCategory(cat)}
+                key={cat.value}
+                onClick={() => setSelectedCategory(cat.value)}
                 className={`px-3 py-1.5 rounded-xl text-[11px] font-semibold whitespace-nowrap transition-colors ${
-                  selectedCategory === cat
-                    ? 'bg-[#8A2BE2] text-white'
+                  selectedCategory === cat.value
+                    ? 'bg-[#8A2BE2] text-white shadow-sm'
                     : 'bg-[#111111] text-gray-400 hover:text-white border border-white/5'
                 }`}
               >
-                {cat === 'All' ? 'Toutes catégories' : cat}
+                {cat.label}
               </button>
             ))}
           </div>
@@ -563,9 +563,9 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                     onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
                     className="w-full bg-[#111111] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#8A2BE2]"
                   >
-                    {CATEGORIES.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
+                    {CATEGORIES.filter((c) => c.value !== 'All').map((c) => (
+                      <option key={c.value} value={c.value}>
+                        {c.label}
                       </option>
                     ))}
                   </select>
