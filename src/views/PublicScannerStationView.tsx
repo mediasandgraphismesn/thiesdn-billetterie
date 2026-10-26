@@ -31,6 +31,7 @@ import {
   getStoredTickets,
   getStoredAccreditations,
   verifyAndLockVigileSession,
+  getSupabaseClient,
 } from '../services/supabase';
 
 interface PublicScannerStationViewProps {
@@ -117,7 +118,39 @@ export const PublicScannerStationView: React.FC<PublicScannerStationViewProps> =
     setSessionLockError(null);
     const res = await verifyScanStationAccess(accessCode);
     if (res.success && res.station) {
-      // Vérification & verrouillage de session vigile (anti-partage de poste)
+      // 1. Appel direct de l'Edge Function log-vigile-session
+      const supabase = getSupabaseClient();
+      if (supabase) {
+        try {
+          const { data: edgeData, error: edgeErr } = await supabase.functions.invoke('log-vigile-session', {
+            body: {
+              station_code: accessCode,
+              event_id: res.station.eventId,
+              station_name: res.station.name,
+              event_title: res.station.eventTitle,
+            },
+          });
+
+          const is403 = (edgeErr as any)?.status === 403 || (edgeErr as any)?.statusCode === 403;
+          if (is403 || (edgeData && edgeData.success === false && edgeData.status === 'session_conflict')) {
+            setSessionLockError(
+              edgeData?.message ||
+                'Accès refusé : Ce lien est déjà utilisé sur un autre appareil.'
+            );
+            setIsLoading(false);
+            return;
+          }
+        } catch (err: any) {
+          if (err?.status === 403 || err?.statusCode === 403) {
+            setSessionLockError('Accès refusé : Ce lien est déjà utilisé sur un autre appareil.');
+            setIsLoading(false);
+            return;
+          }
+          console.warn('Fallback invocation log-vigile-session edge function:', err);
+        }
+      }
+
+      // 2. Vérification & verrouillage de session vigile (anti-partage de poste)
       const lockRes = await verifyAndLockVigileSession(
         accessCode,
         res.station.eventId,
@@ -128,7 +161,7 @@ export const PublicScannerStationView: React.FC<PublicScannerStationViewProps> =
       if (!lockRes.allowed) {
         setSessionLockError(
           lockRes.message ||
-            'Ce poste de contrôle est déjà actif sur un autre appareil. Pour garantir la sécurité, le partage de ce lien est interdit.'
+            'Accès refusé : Ce lien est déjà utilisé sur un autre appareil.'
         );
         setIsLoading(false);
         return;

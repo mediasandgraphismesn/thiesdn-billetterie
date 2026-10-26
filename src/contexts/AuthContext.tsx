@@ -143,7 +143,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { data: authListener } = client.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN') {
         if (session?.user) {
-          recordLoginHistory(session.user.email || '', session.user.id, 'login').catch(() => {});
+          // Appel direct de l'Edge Function log-login dans setTimeout(..., 0) pour découpler la session
+          setTimeout(() => {
+            const supabase = getSupabaseClient();
+            if (supabase) {
+              supabase.functions
+                .invoke('log-login', {
+                  body: {
+                    user_id: session.user.id,
+                    email: session.user.email,
+                    action: 'login',
+                  },
+                })
+                .catch((err) => {
+                  console.warn('Silent fallback log-login edge function:', err);
+                });
+            }
+            recordLoginHistory(session.user.email || '', session.user.id, 'login').catch(() => {});
+          }, 0);
+
           await loadProfile(session.user.id, session.user);
         }
       } else if (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
