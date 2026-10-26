@@ -35,7 +35,7 @@ DROP POLICY IF EXISTS "Gestion des postes par promoteur ou admin" ON public.scan
 CREATE POLICY "Gestion des postes par promoteur ou admin" ON public.scan_stations
   FOR ALL
   USING (
-    EXISTS (SELECT 1 FROM public.events e WHERE e.id = scan_stations.event_id AND e.promoter_id = auth.uid())
+    EXISTS (SELECT 1 FROM public.events e WHERE e.id = scan_stations.event_id AND e.promoter_id::text = auth.uid()::text)
     OR public.is_admin()
   );
 
@@ -91,7 +91,7 @@ BEGIN
     END IF;
   ELSE
     -- Si le poste existe mais est dédié à un autre événement
-    IF v_station.event_id IS NOT NULL AND p_event_id IS NOT NULL AND v_station.event_id <> p_event_id THEN
+    IF v_station.event_id IS NOT NULL AND p_event_id IS NOT NULL AND v_station.event_id::text <> p_event_id::text THEN
       RETURN jsonb_build_object(
         'success', false,
         'reason', 'station_event_mismatch',
@@ -115,7 +115,7 @@ BEGIN
   END IF;
 
   -- ÉTAPE C : Contrôle d'appartenance strict à l'événement
-  IF p_event_id IS NOT NULL AND (v_ticket.event_id IS NULL OR v_ticket.event_id <> p_event_id) THEN
+  IF p_event_id IS NOT NULL AND (v_ticket.event_id IS NULL OR v_ticket.event_id::text <> p_event_id::text) THEN
     RETURN jsonb_build_object(
       'success', false,
       'reason', 'wrong_event',

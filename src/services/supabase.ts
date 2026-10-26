@@ -4621,9 +4621,9 @@ ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Profiles select policy" ON public.profiles;
 CREATE POLICY "Profiles select policy" ON public.profiles FOR SELECT 
 USING (
-  auth.uid() = id 
+  auth.uid()::text = id::text 
   OR public.is_admin() 
-  OR EXISTS (SELECT 1 FROM public.event_coproducers WHERE user_id = auth.uid() AND promoter_id = profiles.id::text)
+  OR EXISTS (SELECT 1 FROM public.event_coproducers WHERE user_id::text = auth.uid()::text AND promoter_id::text = profiles.id::text)
 );
 
 -- Vue publique sanitisée pour les visiteurs non connectés (sans email ni téléphone)
