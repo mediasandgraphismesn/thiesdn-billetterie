@@ -19,13 +19,69 @@ import {
   ExternalLink,
   Layers,
   Sparkles,
+  FileText,
+  Users,
+  BarChart3,
+  Settings,
+  Plus,
+  Phone,
+  Globe,
+  Facebook,
+  Instagram,
+  Youtube,
+  Share2,
+  DollarSign,
+  Ticket,
+  QrCode,
+  TrendingUp,
+  Check,
+  ShieldCheck,
+  Star,
+  Copy,
 } from 'lucide-react';
-import { EventItem, EventStatus, CATEGORIES, SENEGAL_CITIES } from '../types';
+import {
+  EventItem,
+  EventStatus,
+  CATEGORIES,
+  SENEGAL_CITIES,
+  EventCoproducer,
+  CoproducerRole,
+} from '../types';
 import {
   deleteEventFromSupabase,
   updateEventStatusInSupabase,
   updateEventInSupabase,
+  fetchCoproducersFromSupabase,
+  createCoproducer,
+  deleteCoproducer,
+  fetchOrdersFromSupabase,
+  fetchAllTicketsForEvent,
 } from '../services/supabase';
+
+const TikTokIcon = ({ className = 'w-4 h-4' }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+    <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64c.29 0 .58.04.86.12V9.42a6.34 6.34 0 0 0-.86-.06 6.34 6.34 0 1 0 6.34 6.34V9.05a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.48z" />
+  </svg>
+);
+
+const THIES_QUARTIERS = [
+  'Escale',
+  'Dixième',
+  'Grand Standing',
+  'Randoulène',
+  'Cité Lamy',
+  'Mbour 1',
+  'Mbour 2',
+  'Mbour 3',
+  'Médina Fall',
+  'Sampathé',
+  'Fahu',
+  'Diamaguène',
+  'Nguinth',
+  'Silmang',
+  'Thialy',
+  'Peycouck',
+];
 
 interface EventsManagementViewProps {
   events: EventItem[];
@@ -44,8 +100,9 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
   const [selectedStatus, setSelectedStatus] = useState<'all' | EventStatus>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
 
-  // Modal d'édition
+  // Modal d'édition avancée (4 Onglets)
   const [editingEvent, setEditingEvent] = useState<EventItem | null>(null);
+  const [activeModalTab, setActiveModalTab] = useState<'details' | 'coproducers' | 'stats' | 'settings'>('details');
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
@@ -63,10 +120,42 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
     status: 'approved' as EventStatus,
     description: '',
     longDescription: '',
+    promoterName: '',
+    whatsappContact: '',
+    socialFacebook: '',
+    socialInstagram: '',
+    socialTiktok: '',
+    socialYoutube: '',
+    websiteUrl: '',
+    salesActive: true,
+    featured: false,
     waveLinkPrevente: '',
     waveLinkJourJ: '',
     waveLinkVip: '',
   });
+
+  // État des co-producteurs (Onglet Co-organisateurs)
+  const [modalCoproducers, setModalCoproducers] = useState<EventCoproducer[]>([]);
+  const [isLoadingCoproducers, setIsLoadingCoproducers] = useState(false);
+  const [newCoprod, setNewCoprod] = useState({
+    name: '',
+    roleType: 'artiste' as CoproducerRole,
+    phone: '',
+    revenueShare: 30,
+    guestQuota: 10,
+  });
+  const [isAddingCoprod, setIsAddingCoprod] = useState(false);
+
+  // État des statistiques en temps réel (Onglet Statistiques)
+  const [modalStats, setModalStats] = useState({
+    soldTickets: 0,
+    grossCA: 0,
+    scannedTickets: 0,
+    scanRate: 0,
+    ordersCount: 0,
+    orders: [] as any[],
+  });
+  const [isLoadingStats, setIsLoadingStats] = useState(false);
 
   // Modal de suppression
   const [deletingEvent, setDeletingEvent] = useState<EventItem | null>(null);
@@ -78,6 +167,57 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
   const showToast = (text: string, type: 'success' | 'error' = 'success') => {
     setToastMessage({ text, type });
     setTimeout(() => setToastMessage(null), 4000);
+  };
+
+  // Chargement des co-organisateurs pour l'événement sélectionné
+  const loadEventCoproducers = async (eventId: string) => {
+    setIsLoadingCoproducers(true);
+    try {
+      const res = await fetchCoproducersFromSupabase(eventId);
+      setModalCoproducers(res.coproducers || []);
+    } catch (err) {
+      console.warn('Erreur chargement co-producteurs:', err);
+    } finally {
+      setIsLoadingCoproducers(false);
+    }
+  };
+
+  // Chargement des statistiques en direct (orders + tickets)
+  const loadEventStats = async (eventId: string) => {
+    setIsLoadingStats(true);
+    try {
+      const [ordersRes, ticketsRes] = await Promise.all([
+        fetchOrdersFromSupabase(),
+        fetchAllTicketsForEvent(eventId),
+      ]);
+
+      const eventOrders = (ordersRes.orders || []).filter((o) => o.eventId === eventId);
+      const paidOrders = eventOrders.filter((o) => o.status === 'confirmed');
+
+      const soldTickets = paidOrders.reduce((sum, o) => sum + (Number(o.quantity) || 1), 0);
+      const grossCA = paidOrders.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
+
+      const eventTickets = ticketsRes.tickets || [];
+      const scannedTickets = eventTickets.filter(
+        (t) => t.status === 'scanned' || t.status === 'used' || Boolean(t.scanned_at)
+      ).length;
+
+      const totalToCheck = Math.max(soldTickets, eventTickets.length);
+      const scanRate = totalToCheck > 0 ? Math.round((scannedTickets / totalToCheck) * 100) : 0;
+
+      setModalStats({
+        soldTickets,
+        grossCA,
+        scannedTickets,
+        scanRate,
+        ordersCount: eventOrders.length,
+        orders: eventOrders.slice(0, 10),
+      });
+    } catch (err) {
+      console.warn('Erreur chargement stats événement:', err);
+    } finally {
+      setIsLoadingStats(false);
+    }
   };
 
   // Filtrage des événements
@@ -105,6 +245,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
   // Ouvrir la modale d'édition pré-remplie
   const handleOpenEdit = (event: EventItem) => {
     setEditingEvent(event);
+    setActiveModalTab('details');
     setEditError(null);
     setEditForm({
       title: event.title,
@@ -119,10 +260,23 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
       status: event.status,
       description: event.description || '',
       longDescription: event.longDescription || '',
+      promoterName: event.promoter?.name || '',
+      whatsappContact: event.whatsappContact || '',
+      socialFacebook: event.socialFacebook || '',
+      socialInstagram: event.socialInstagram || '',
+      socialTiktok: event.socialTiktok || '',
+      socialYoutube: event.socialYoutube || event.youtubeUrl || '',
+      websiteUrl: event.websiteUrl || '',
+      salesActive: event.salesActive !== undefined ? event.salesActive : true,
+      featured: Boolean(event.featured),
       waveLinkPrevente: event.waveLinkPrevente || '',
       waveLinkJourJ: event.waveLinkJourJ || '',
       waveLinkVip: event.waveLinkVip || '',
     });
+
+    // Chargement dynamique des co-producteurs et statistiques
+    loadEventCoproducers(event.id);
+    loadEventStats(event.id);
   };
 
   // Sauvegarder la modification
@@ -146,6 +300,18 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
       status: editForm.status,
       description: editForm.description,
       longDescription: editForm.longDescription,
+      whatsappContact: editForm.whatsappContact,
+      socialFacebook: editForm.socialFacebook,
+      socialInstagram: editForm.socialInstagram,
+      socialTiktok: editForm.socialTiktok,
+      socialYoutube: editForm.socialYoutube,
+      websiteUrl: editForm.websiteUrl,
+      salesActive: editForm.salesActive,
+      featured: editForm.featured,
+      promoter: {
+        ...editingEvent.promoter,
+        name: editForm.promoterName || editingEvent.promoter?.name || 'Organisateur',
+      },
       waveLinkPrevente: editForm.waveLinkPrevente,
       waveLinkJourJ: editForm.waveLinkJourJ,
       waveLinkVip: editForm.waveLinkVip,
@@ -161,6 +327,54 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
     setEditingEvent(null);
     await onRefreshEvents();
     showToast(`Événement "${editForm.title}" mis à jour avec succès !`);
+  };
+
+  // Ajouter un ayant-droit / co-organisateur
+  const handleAddCoproducer = async () => {
+    if (!editingEvent) return;
+    if (!newCoprod.name.trim()) {
+      alert('Veuillez renseigner le nom de l’ayant-droit.');
+      return;
+    }
+    setIsAddingCoprod(true);
+    const res = await createCoproducer({
+      eventId: editingEvent.id,
+      eventTitle: editingEvent.title,
+      name: newCoprod.name.trim(),
+      roleType: newCoprod.roleType,
+      phone: newCoprod.phone.trim() || '+221 77 000 00 00',
+      revenueShare: Number(newCoprod.revenueShare) || 0,
+      guestTicketsAllocated: Number(newCoprod.guestQuota) || 0,
+    });
+    setIsAddingCoprod(false);
+
+    if (res.success && res.coproducer) {
+      setModalCoproducers((prev) => [res.coproducer!, ...prev]);
+      setNewCoprod({
+        name: '',
+        roleType: 'artiste',
+        phone: '',
+        revenueShare: 30,
+        guestQuota: 10,
+      });
+      showToast(`Co-organisateur "${res.coproducer.name}" ajouté avec succès !`);
+    } else {
+      showToast(res.error || 'Erreur lors de l’ajout.', 'error');
+    }
+  };
+
+  // Supprimer un ayant-droit / co-organisateur
+  const handleDeleteCoproducer = async (coprodId: string, coprodName: string) => {
+    if (!window.confirm(`Confirmez-vous le retrait de "${coprodName}" de la liste des co-producteurs ?`)) {
+      return;
+    }
+    const res = await deleteCoproducer(coprodId);
+    if (res.success) {
+      setModalCoproducers((prev) => prev.filter((c) => c.id !== coprodId));
+      showToast(`Ayant-droit "${coprodName}" retiré.`);
+    } else {
+      showToast(res.error || 'Erreur lors de la suppression.', 'error');
+    }
   };
 
   // Archiver / Désarchiver un événement
@@ -504,255 +718,874 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
         </div>
       )}
 
-      {/* MODALE D'ÉDITION PRÉ-REMPLIE */}
+      {/* MODALE D'ÉDITION AVANCÉE (4 ONGLETS) */}
       {editingEvent && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
-          <div className="relative w-full max-w-2xl bg-[#161616] border border-white/20 rounded-3xl p-6 sm:p-8 space-y-6 shadow-2xl my-8">
-            <div className="flex items-center justify-between border-b border-white/10 pb-4">
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
+          <div className="relative w-full max-w-3xl bg-[#161616] border border-white/20 rounded-3xl p-5 sm:p-7 space-y-5 shadow-2xl my-6 max-h-[92vh] flex flex-col">
+            {/* Header Fixe */}
+            <div className="flex items-center justify-between border-b border-white/10 pb-4 shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-[#8A2BE2]/20 border border-[#8A2BE2]/40 flex items-center justify-center text-[#DCB8FF]">
+                <div className="w-10 h-10 rounded-2xl bg-[#8A2BE2]/20 border border-[#8A2BE2]/40 flex items-center justify-center text-[#DCB8FF] shrink-0">
                   <Edit3 className="w-5 h-5" />
                 </div>
                 <div>
-                  <h2 className="font-heading text-xl font-black text-white">
-                    Modifier l'Événement
+                  <h2 className="font-heading text-lg sm:text-xl font-black text-white leading-tight">
+                    Gestion Avancée de l'Événement
                   </h2>
-                  <p className="text-xs text-gray-400">
-                    ID: <span className="font-mono text-[10px] text-gray-300">{editingEvent.id}</span>
+                  <p className="text-xs text-gray-400 truncate max-w-xs sm:max-w-md">
+                    {editingEvent.title} • <span className="font-mono text-[10px] text-gray-300">{editingEvent.id}</span>
                   </p>
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => setEditingEvent(null)}
-                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
+                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-colors shrink-0"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
+            {/* Barre de 4 Onglets */}
+            <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-black/40 border border-white/10 overflow-x-auto shrink-0 scrollbar-none">
+              <button
+                type="button"
+                onClick={() => setActiveModalTab('details')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 ${
+                  activeModalTab === 'details'
+                    ? 'bg-[#8A2BE2] text-white shadow-lg shadow-[#8A2BE2]/30'
+                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>Détails & Contenu</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveModalTab('coproducers')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 ${
+                  activeModalTab === 'coproducers'
+                    ? 'bg-[#8A2BE2] text-white shadow-lg shadow-[#8A2BE2]/30'
+                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>Co-organisateurs</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/15 font-mono">
+                  {modalCoproducers.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveModalTab('stats')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 ${
+                  activeModalTab === 'stats'
+                    ? 'bg-[#8A2BE2] text-white shadow-lg shadow-[#8A2BE2]/30'
+                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <BarChart3 className="w-3.5 h-3.5" />
+                <span>Statistiques</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveModalTab('settings')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 ${
+                  activeModalTab === 'settings'
+                    ? 'bg-[#8A2BE2] text-white shadow-lg shadow-[#8A2BE2]/30'
+                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <Settings className="w-3.5 h-3.5" />
+                <span>Paramètres</span>
+              </button>
+            </div>
+
             {editError && (
-              <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+              <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2 shrink-0">
                 <AlertTriangle className="w-4 h-4 shrink-0" />
                 <span>{editError}</span>
               </div>
             )}
 
-            <form onSubmit={handleSaveEdit} className="space-y-4">
-              {/* Titre */}
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold uppercase tracking-wider text-gray-300">
-                  Titre de l'Événement *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={editForm.title}
-                  onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
-                  className="w-full bg-[#111111] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#8A2BE2]"
-                />
-              </div>
+            {/* Corps Scrollable du Formulaire */}
+            <form onSubmit={handleSaveEdit} className="flex-1 overflow-y-auto pr-1 space-y-5">
+              {/* ONGLET 1 : DÉTAILS */}
+              {activeModalTab === 'details' && (
+                <div className="space-y-4 animate-in fade-in duration-150">
+                  {/* Titre & Catégorie & Promoteur */}
+                  <div className="space-y-3">
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-gray-300">
+                        Titre de l'Événement *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={editForm.title}
+                        onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                        className="w-full bg-[#111111] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#8A2BE2]"
+                      />
+                    </div>
 
-              {/* Catégorie & Statut */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-gray-300">
-                    Catégorie
-                  </label>
-                  <select
-                    value={editForm.category}
-                    onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
-                    className="w-full bg-[#111111] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#8A2BE2]"
-                  >
-                    {CATEGORIES.filter((c) => c.value !== 'All').map((c) => (
-                      <option key={c.value} value={c.value}>
-                        {c.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] font-bold uppercase tracking-wider text-gray-300">
+                          Catégorie
+                        </label>
+                        <select
+                          value={editForm.category}
+                          onChange={(e) => setEditForm({ ...editForm, category: e.target.value as any })}
+                          className="w-full bg-[#111111] border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
+                        >
+                          {CATEGORIES.filter((c) => c.value !== 'All').map((c) => (
+                            <option key={c.value} value={c.value}>
+                              {c.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-gray-300">
-                    Statut en Base
-                  </label>
-                  <select
-                    value={editForm.status}
-                    onChange={(e) => setEditForm({ ...editForm, status: e.target.value as EventStatus })}
-                    className="w-full bg-[#111111] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#8A2BE2]"
-                  >
-                    <option value="approved">Approuvé (Public)</option>
-                    <option value="pending">En attente de modération</option>
-                    <option value="rejected">Rejeté</option>
-                    <option value="archived">Archivé (Masqué du public)</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Date & Heure */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-gray-300">
-                    Date de l'Événement *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={editForm.date}
-                    onChange={(e) => setEditForm({ ...editForm, date: e.target.value })}
-                    placeholder="ex: 25 Décembre 2026"
-                    className="w-full bg-[#111111] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#8A2BE2]"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-gray-300">
-                    Heure *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={editForm.time}
-                    onChange={(e) => setEditForm({ ...editForm, time: e.target.value })}
-                    placeholder="ex: 20:00"
-                    className="w-full bg-[#111111] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#8A2BE2]"
-                  />
-                </div>
-              </div>
-
-              {/* Lieu & Ville */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-gray-300">
-                    Lieu / Salle *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={editForm.venue}
-                    onChange={(e) => setEditForm({ ...editForm, venue: e.target.value })}
-                    className="w-full bg-[#111111] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#8A2BE2]"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-gray-300">
-                    Ville *
-                  </label>
-                  <select
-                    value={editForm.city}
-                    onChange={(e) => setEditForm({ ...editForm, city: e.target.value })}
-                    className="w-full bg-[#111111] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#8A2BE2]"
-                  >
-                    {SENEGAL_CITIES.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Prix & Affiche URL */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-gray-300">
-                    Prix Standard (FCFA) *
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    min={0}
-                    value={editForm.price}
-                    onChange={(e) => setEditForm({ ...editForm, price: Number(e.target.value) })}
-                    className="w-full bg-[#111111] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#8A2BE2]"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-gray-300">
-                    URL de l'Affiche
-                  </label>
-                  <input
-                    type="url"
-                    value={editForm.posterUrl}
-                    onChange={(e) => setEditForm({ ...editForm, posterUrl: e.target.value })}
-                    className="w-full bg-[#111111] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#8A2BE2]"
-                  />
-                </div>
-              </div>
-
-              {/* Liens de Paiement Wave */}
-              <div className="pt-2 border-t border-white/10 space-y-3">
-                <p className="text-[11px] font-bold uppercase tracking-wider text-[#E9C349]">
-                  Liens de Paiement Mobile Money Wave
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="text-[10px] text-gray-400 block mb-1">Prévente</label>
-                    <input
-                      type="url"
-                      placeholder="https://pay.wave.com/..."
-                      value={editForm.waveLinkPrevente}
-                      onChange={(e) => setEditForm({ ...editForm, waveLinkPrevente: e.target.value })}
-                      className="w-full bg-[#111111] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
-                    />
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] font-bold uppercase tracking-wider text-gray-300">
+                          Nom du Promoteur / Organisateur
+                        </label>
+                        <input
+                          type="text"
+                          value={editForm.promoterName}
+                          onChange={(e) => setEditForm({ ...editForm, promoterName: e.target.value })}
+                          placeholder="Ex: Médias Graphisme, Lat Dior..."
+                          className="w-full bg-[#111111] border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-[10px] text-gray-400 block mb-1">Jour J</label>
-                    <input
-                      type="url"
-                      placeholder="https://pay.wave.com/..."
-                      value={editForm.waveLinkJourJ}
-                      onChange={(e) => setEditForm({ ...editForm, waveLinkJourJ: e.target.value })}
-                      className="w-full bg-[#111111] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
-                    />
+
+                  {/* Date, Heure & Lieu */}
+                  <div className="p-4 rounded-2xl bg-black/30 border border-white/5 space-y-3">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-[#DCB8FF]">
+                      Date, Horaires & Emplacement
+                    </p>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-gray-400">Date textuelle</label>
+                        <input
+                          type="text"
+                          required
+                          value={editForm.date}
+                          onChange={(e) => setEditForm({ ...editForm, date: e.target.value })}
+                          placeholder="ex: 25 Décembre 2026"
+                          className="w-full bg-[#111111] border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-gray-400">Heure de début</label>
+                        <input
+                          type="text"
+                          required
+                          value={editForm.time}
+                          onChange={(e) => setEditForm({ ...editForm, time: e.target.value })}
+                          placeholder="ex: 20:00"
+                          className="w-full bg-[#111111] border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-gray-400">Lieu / Salle *</label>
+                        <input
+                          type="text"
+                          required
+                          value={editForm.venue}
+                          onChange={(e) => setEditForm({ ...editForm, venue: e.target.value })}
+                          placeholder="Ex: Place de France..."
+                          className="w-full bg-[#111111] border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-gray-400">Ville *</label>
+                        <select
+                          value={editForm.city}
+                          onChange={(e) => setEditForm({ ...editForm, city: e.target.value })}
+                          className="w-full bg-[#111111] border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
+                        >
+                          {SENEGAL_CITIES.map((c) => (
+                            <option key={c} value={c}>
+                              {c}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-gray-400">Quartier (si Thiès)</label>
+                        {editForm.city === 'Thiès' ? (
+                          <select
+                            value={editForm.quartier}
+                            onChange={(e) => setEditForm({ ...editForm, quartier: e.target.value })}
+                            className="w-full bg-[#111111] border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
+                          >
+                            <option value="">Sélectionner le quartier...</option>
+                            {THIES_QUARTIERS.map((q) => (
+                              <option key={q} value={q}>
+                                {q}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input
+                            type="text"
+                            value={editForm.quartier}
+                            onChange={(e) => setEditForm({ ...editForm, quartier: e.target.value })}
+                            placeholder="Quartier..."
+                            className="w-full bg-[#111111] border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
+                          />
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-[10px] text-gray-400 block mb-1">VIP Prestige</label>
-                    <input
-                      type="url"
-                      placeholder="https://pay.wave.com/..."
-                      value={editForm.waveLinkVip}
-                      onChange={(e) => setEditForm({ ...editForm, waveLinkVip: e.target.value })}
-                      className="w-full bg-[#111111] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
-                    />
+
+                  {/* Prix & Affiche avec aperçu */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-center">
+                    <div className="space-y-1.5 sm:col-span-1">
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-gray-300">
+                        Prix Standard (FCFA) *
+                      </label>
+                      <input
+                        type="number"
+                        required
+                        min={0}
+                        value={editForm.price}
+                        onChange={(e) => setEditForm({ ...editForm, price: Number(e.target.value) })}
+                        className="w-full bg-[#111111] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#8A2BE2]"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5 sm:col-span-2">
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-gray-300">
+                        URL de l'Affiche (HD)
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="url"
+                          value={editForm.posterUrl}
+                          onChange={(e) => setEditForm({ ...editForm, posterUrl: e.target.value })}
+                          placeholder="https://..."
+                          className="flex-1 bg-[#111111] border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
+                        />
+                        {editForm.posterUrl && (
+                          <div className="w-10 h-10 rounded-lg overflow-hidden border border-white/20 shrink-0">
+                            <img
+                              src={editForm.posterUrl}
+                              alt="Aperçu"
+                              className="w-full h-full object-cover"
+                              onError={(e) => ((e.target as any).style.display = 'none')}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Descriptions */}
+                  <div className="space-y-3">
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-gray-300">
+                        Accroche / Description Courte
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={editForm.description}
+                        onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                        placeholder="Une phrase percutante pour captiver les festivaliers..."
+                        className="w-full bg-[#111111] border border-white/10 rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-gray-300">
+                        Description Détaillée (Ambiance, Artistes, Programme, Dress Code)
+                      </label>
+                      <textarea
+                        rows={4}
+                        value={editForm.longDescription}
+                        onChange={(e) => setEditForm({ ...editForm, longDescription: e.target.value })}
+                        placeholder="Détaillez le déroulement, les têtes d'affiche, l'ambiance et les consignes d'accès..."
+                        className="w-full bg-[#111111] border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Réseaux Sociaux & Contact Organisateur */}
+                  <div className="p-4 rounded-2xl bg-black/30 border border-white/5 space-y-3">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-[#E9C349] flex items-center gap-1.5">
+                      <Globe className="w-3.5 h-3.5" />
+                      <span>Réseaux Sociaux & Contact Officiel</span>
+                    </p>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] text-gray-400 flex items-center gap-1 mb-1">
+                          <Phone className="w-3 h-3 text-emerald-400" /> WhatsApp Organisateur
+                        </label>
+                        <input
+                          type="tel"
+                          value={editForm.whatsappContact}
+                          onChange={(e) => setEditForm({ ...editForm, whatsappContact: e.target.value })}
+                          placeholder="+221 77 XXX XX XX"
+                          className="w-full bg-[#111111] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] text-gray-400 flex items-center gap-1 mb-1">
+                          <Facebook className="w-3 h-3 text-blue-400" /> Page Facebook
+                        </label>
+                        <input
+                          type="url"
+                          value={editForm.socialFacebook}
+                          onChange={(e) => setEditForm({ ...editForm, socialFacebook: e.target.value })}
+                          placeholder="https://facebook.com/..."
+                          className="w-full bg-[#111111] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] text-gray-400 flex items-center gap-1 mb-1">
+                          <Instagram className="w-3 h-3 text-pink-400" /> Profil Instagram
+                        </label>
+                        <input
+                          type="url"
+                          value={editForm.socialInstagram}
+                          onChange={(e) => setEditForm({ ...editForm, socialInstagram: e.target.value })}
+                          placeholder="https://instagram.com/..."
+                          className="w-full bg-[#111111] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] text-gray-400 flex items-center gap-1 mb-1">
+                          <TikTokIcon className="w-3 h-3 text-cyan-300" /> Compte TikTok
+                        </label>
+                        <input
+                          type="url"
+                          value={editForm.socialTiktok}
+                          onChange={(e) => setEditForm({ ...editForm, socialTiktok: e.target.value })}
+                          placeholder="https://tiktok.com/@..."
+                          className="w-full bg-[#111111] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] text-gray-400 flex items-center gap-1 mb-1">
+                          <Youtube className="w-3 h-3 text-red-500" /> Vidéo Teaser / YouTube
+                        </label>
+                        <input
+                          type="url"
+                          value={editForm.socialYoutube}
+                          onChange={(e) => setEditForm({ ...editForm, socialYoutube: e.target.value })}
+                          placeholder="https://youtube.com/watch?v=..."
+                          className="w-full bg-[#111111] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] text-gray-400 flex items-center gap-1 mb-1">
+                          <Globe className="w-3 h-3 text-[#E9C349]" /> Site Web Officiel
+                        </label>
+                        <input
+                          type="url"
+                          value={editForm.websiteUrl}
+                          onChange={(e) => setEditForm({ ...editForm, websiteUrl: e.target.value })}
+                          placeholder="https://mon-festival.sn"
+                          className="w-full bg-[#111111] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Liens Mobile Money Wave */}
+                  <div className="p-4 rounded-2xl bg-black/30 border border-white/5 space-y-3">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-[#E9C349]">
+                      Liens de Paiement Mobile Money Wave
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="text-[10px] text-gray-400 block mb-1">Pass Prévente</label>
+                        <input
+                          type="url"
+                          placeholder="https://pay.wave.com/..."
+                          value={editForm.waveLinkPrevente}
+                          onChange={(e) => setEditForm({ ...editForm, waveLinkPrevente: e.target.value })}
+                          className="w-full bg-[#111111] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-gray-400 block mb-1">Pass Jour J</label>
+                        <input
+                          type="url"
+                          placeholder="https://pay.wave.com/..."
+                          value={editForm.waveLinkJourJ}
+                          onChange={(e) => setEditForm({ ...editForm, waveLinkJourJ: e.target.value })}
+                          className="w-full bg-[#111111] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-gray-400 block mb-1">Pass VIP Prestige</label>
+                        <input
+                          type="url"
+                          placeholder="https://pay.wave.com/..."
+                          value={editForm.waveLinkVip}
+                          onChange={(e) => setEditForm({ ...editForm, waveLinkVip: e.target.value })}
+                          className="w-full bg-[#111111] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
-              {/* Description */}
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold uppercase tracking-wider text-gray-300">
-                  Description Courte
-                </label>
-                <textarea
-                  rows={2}
-                  value={editForm.description}
-                  onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                  className="w-full bg-[#111111] border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
-                />
-              </div>
+              {/* ONGLET 2 : CO-ORGANISATEURS */}
+              {activeModalTab === 'coproducers' && (
+                <div className="space-y-5 animate-in fade-in duration-150">
+                  <div className="flex items-center justify-between p-3.5 rounded-2xl bg-black/40 border border-white/10">
+                    <div>
+                      <p className="text-xs font-bold text-white">Partage des Recettes Co-Production</p>
+                      <p className="text-[10px] text-gray-400">
+                        {modalCoproducers.length} ayant(s)-droit enregistré(s) • Total quotes-parts :{' '}
+                        <strong className="text-[#E9C349]">
+                          {modalCoproducers.reduce((sum, c) => sum + (c.revenueShare || 0), 0)}%
+                        </strong>
+                      </p>
+                    </div>
+                    <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-lg">
+                      Part Promoteur : {Math.max(0, 100 - modalCoproducers.reduce((sum, c) => sum + (c.revenueShare || 0), 0))}%
+                    </span>
+                  </div>
 
-              {/* Actions Footer */}
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/10">
+                  {/* Liste des Co-Producteurs */}
+                  {isLoadingCoproducers ? (
+                    <div className="p-8 text-center text-gray-400 text-xs">
+                      Chargement des co-organisateurs...
+                    </div>
+                  ) : modalCoproducers.length === 0 ? (
+                    <div className="p-6 rounded-2xl bg-white/5 border border-white/5 text-center space-y-2">
+                      <Users className="w-8 h-8 text-gray-500 mx-auto" />
+                      <p className="text-xs text-gray-300 font-semibold">Aucun co-organisateur associé</p>
+                      <p className="text-[11px] text-gray-400">
+                        Ajoutez des artistes vedettes, managers ou coproducteurs ci-dessous pour leur allouer une quote-part et des invitations.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {modalCoproducers.map((coprod) => (
+                        <div
+                          key={coprod.id}
+                          className="p-3.5 rounded-2xl bg-[#1C1B1B] border border-white/5 flex items-center justify-between gap-3 hover:border-white/15 transition-all"
+                        >
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-white truncate">{coprod.name}</span>
+                              <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-[#8A2BE2]/20 text-[#DCB8FF] border border-[#8A2BE2]/30">
+                                {coprod.roleType}
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-gray-400 mt-0.5 flex items-center gap-2">
+                              <span>📱 {coprod.phone}</span>
+                              <span>•</span>
+                              <strong className="text-[#E9C349]">{coprod.revenueShare}% du CA</strong>
+                              <span>•</span>
+                              <span>{coprod.guestTicketsAllocated} invitations ({coprod.guestTicketsUsed} utilisées)</span>
+                            </p>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteCoproducer(coprod.id, coprod.name)}
+                            className="w-8 h-8 rounded-xl bg-white/5 hover:bg-rose-500/20 text-gray-400 hover:text-rose-400 flex items-center justify-center transition-all shrink-0 border border-white/5"
+                            title="Retirer cet ayant-droit"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Formulaire d'ajout rapide */}
+                  <div className="p-4 rounded-2xl bg-[#1A1919] border border-white/10 space-y-3">
+                    <p className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <Plus className="w-4 h-4 text-[#E9C349]" />
+                      <span>Ajouter un Nouvel Ayant-Droit / Co-Organisateur</span>
+                    </p>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                      <div className="space-y-1 sm:col-span-1">
+                        <label className="text-[10px] text-gray-400">Nom / Structure *</label>
+                        <input
+                          type="text"
+                          value={newCoprod.name}
+                          onChange={(e) => setNewCoprod({ ...newCoprod, name: e.target.value })}
+                          placeholder="Ex: Waly Seck, DJ..."
+                          className="w-full bg-[#111111] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
+                        />
+                      </div>
+
+                      <div className="space-y-1 sm:col-span-1">
+                        <label className="text-[10px] text-gray-400">Rôle</label>
+                        <select
+                          value={newCoprod.roleType}
+                          onChange={(e) => setNewCoprod({ ...newCoprod, roleType: e.target.value as CoproducerRole })}
+                          className="w-full bg-[#111111] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
+                        >
+                          <option value="artiste">Artiste Vedette</option>
+                          <option value="staff_artiste">Staff / Manager Artiste</option>
+                          <option value="co_producteur">Co-Producteur Associé</option>
+                          <option value="gerant_lieu">Gérant du Lieu</option>
+                        </select>
+                      </div>
+
+                      <div className="space-y-1 sm:col-span-1">
+                        <label className="text-[10px] text-gray-400">Téléphone Wave/OM *</label>
+                        <input
+                          type="tel"
+                          value={newCoprod.phone}
+                          onChange={(e) => setNewCoprod({ ...newCoprod, phone: e.target.value })}
+                          placeholder="+221 77 XXX XX XX"
+                          className="w-full bg-[#111111] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-gray-400 flex justify-between">
+                          <span>Quote-part de recettes</span>
+                          <strong className="text-[#E9C349] font-mono">{newCoprod.revenueShare}%</strong>
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={newCoprod.revenueShare}
+                          onChange={(e) => setNewCoprod({ ...newCoprod, revenueShare: Number(e.target.value) })}
+                          className="w-full bg-[#111111] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-gray-400 flex justify-between">
+                          <span>Quota Invitations gratuites</span>
+                          <strong className="text-white font-mono">{newCoprod.guestQuota} places</strong>
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={300}
+                          value={newCoprod.guestQuota}
+                          onChange={(e) => setNewCoprod({ ...newCoprod, guestQuota: Number(e.target.value) })}
+                          className="w-full bg-[#111111] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={isAddingCoprod}
+                      onClick={handleAddCoproducer}
+                      className="w-full py-2.5 rounded-xl bg-[#8A2BE2]/25 hover:bg-[#8A2BE2]/40 text-[#DCB8FF] border border-[#8A2BE2]/40 text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+                    >
+                      {isAddingCoprod ? (
+                        <span>Enregistrement...</span>
+                      ) : (
+                        <>
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Enregistrer cet Ayant-Droit pour l'Événement</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* ONGLET 3 : STATISTIQUES */}
+              {activeModalTab === 'stats' && (
+                <div className="space-y-5 animate-in fade-in duration-150">
+                  {isLoadingStats ? (
+                    <div className="p-8 text-center text-gray-400 text-xs">
+                      Calcul des statistiques en direct...
+                    </div>
+                  ) : (
+                    <>
+                      {/* 4 Cartes KPI */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div className="p-3.5 rounded-2xl bg-black/40 border border-white/10 space-y-1">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1">
+                            <Ticket className="w-3 h-3 text-[#DCB8FF]" /> Billets Vendus
+                          </p>
+                          <p className="text-xl font-black text-white font-mono">
+                            {modalStats.soldTickets}
+                          </p>
+                          <p className="text-[9px] text-gray-400">Places validées</p>
+                        </div>
+
+                        <div className="p-3.5 rounded-2xl bg-black/40 border border-emerald-500/20 space-y-1">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1">
+                            <DollarSign className="w-3 h-3" /> Chiffre d'Affaires
+                          </p>
+                          <p className="text-lg font-black text-emerald-400 font-mono">
+                            {modalStats.grossCA.toLocaleString('fr-FR')} <span className="text-[10px]">F</span>
+                          </p>
+                          <p className="text-[9px] text-gray-400">Recettes brutes</p>
+                        </div>
+
+                        <div className="p-3.5 rounded-2xl bg-black/40 border border-white/10 space-y-1">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-cyan-300 flex items-center gap-1">
+                            <QrCode className="w-3 h-3" /> Scans Entrée
+                          </p>
+                          <p className="text-xl font-black text-cyan-300 font-mono">
+                            {modalStats.scannedTickets}
+                          </p>
+                          <p className="text-[9px] text-gray-400">Validés au portique</p>
+                        </div>
+
+                        <div className="p-3.5 rounded-2xl bg-black/40 border border-amber-500/20 space-y-1">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-amber-300 flex items-center gap-1">
+                            <TrendingUp className="w-3 h-3" /> Taux Présence
+                          </p>
+                          <p className="text-xl font-black text-amber-300 font-mono">
+                            {modalStats.scanRate}%
+                          </p>
+                          <p className="text-[9px] text-gray-400">Taux de check-in</p>
+                        </div>
+                      </div>
+
+                      {/* Dernières Transactions */}
+                      <div className="p-4 rounded-2xl bg-black/30 border border-white/10 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-bold text-white">Dernières Commandes Encaissées</p>
+                          <span className="text-[10px] text-gray-400 font-mono">
+                            {modalStats.ordersCount} commande(s) totale(s)
+                          </span>
+                        </div>
+
+                        {modalStats.orders.length === 0 ? (
+                          <p className="text-xs text-gray-400 text-center py-4">
+                            Aucune commande enregistrée pour le moment.
+                          </p>
+                        ) : (
+                          <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                            {modalStats.orders.map((ord: any) => (
+                              <div
+                                key={ord.id}
+                                className="p-2.5 rounded-xl bg-white/5 border border-white/5 flex items-center justify-between text-xs"
+                              >
+                                <div className="min-w-0">
+                                  <p className="font-bold text-white truncate">
+                                    {ord.customerName} • <span className="font-mono text-gray-400">{ord.reference}</span>
+                                  </p>
+                                  <p className="text-[10px] text-gray-400">
+                                    {ord.tierName} (x{ord.quantity}) • {ord.customerPhone}
+                                  </p>
+                                </div>
+                                <div className="text-right shrink-0 ml-2">
+                                  <span className="font-mono font-bold text-emerald-400">
+                                    {Number(ord.totalAmount).toLocaleString('fr-FR')} FCFA
+                                  </span>
+                                  <span className={`block text-[9px] font-bold uppercase ${
+                                    ord.status === 'confirmed' || ord.status === 'paid' ? 'text-emerald-400' : 'text-amber-400'
+                                  }`}>
+                                    {ord.status}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* ONGLET 4 : PARAMÈTRES & STATUT */}
+              {activeModalTab === 'settings' && (
+                <div className="space-y-5 animate-in fade-in duration-150">
+                  {/* Sélecteur Visuel de Statut */}
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-gray-300">
+                      Statut de Modération & Visibilité Publique
+                    </label>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => setEditForm({ ...editForm, status: 'approved' })}
+                        className={`p-3 rounded-2xl border text-left transition-all ${
+                          editForm.status === 'approved'
+                            ? 'bg-emerald-500/20 border-emerald-400 text-white shadow-lg shadow-emerald-950/40 ring-1 ring-emerald-400'
+                            : 'bg-black/30 border-white/10 text-gray-400 hover:text-white hover:bg-white/5'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5 font-bold text-xs text-emerald-400">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>Approuvé</span>
+                        </div>
+                        <p className="text-[10px] text-gray-400 mt-1">Visible sur la billetterie publique</p>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setEditForm({ ...editForm, status: 'pending' })}
+                        className={`p-3 rounded-2xl border text-left transition-all ${
+                          editForm.status === 'pending'
+                            ? 'bg-amber-500/20 border-amber-400 text-white shadow-lg shadow-amber-950/40 ring-1 ring-amber-400'
+                            : 'bg-black/30 border-white/10 text-gray-400 hover:text-white hover:bg-white/5'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5 font-bold text-xs text-amber-300">
+                          <Clock className="w-3.5 h-3.5" />
+                          <span>En Attente</span>
+                        </div>
+                        <p className="text-[10px] text-gray-400 mt-1">En file de modération</p>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setEditForm({ ...editForm, status: 'rejected' })}
+                        className={`p-3 rounded-2xl border text-left transition-all ${
+                          editForm.status === 'rejected'
+                            ? 'bg-rose-500/20 border-rose-400 text-white shadow-lg shadow-rose-950/40 ring-1 ring-rose-400'
+                            : 'bg-black/30 border-white/10 text-gray-400 hover:text-white hover:bg-white/5'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5 font-bold text-xs text-rose-400">
+                          <AlertTriangle className="w-3.5 h-3.5" />
+                          <span>Rejeté</span>
+                        </div>
+                        <p className="text-[10px] text-gray-400 mt-1">Refusé par l'administrateur</p>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setEditForm({ ...editForm, status: 'archived' })}
+                        className={`p-3 rounded-2xl border text-left transition-all ${
+                          editForm.status === 'archived'
+                            ? 'bg-purple-500/20 border-purple-400 text-white shadow-lg shadow-purple-950/40 ring-1 ring-purple-400'
+                            : 'bg-black/30 border-white/10 text-gray-400 hover:text-white hover:bg-white/5'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5 font-bold text-xs text-purple-300">
+                          <Archive className="w-3.5 h-3.5" />
+                          <span>Archivé</span>
+                        </div>
+                        <p className="text-[10px] text-gray-400 mt-1">Masqué, conservé en base</p>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Contrôles de Vente & Mise en Avant */}
+                  <div className="p-4 rounded-2xl bg-black/30 border border-white/10 space-y-4">
+                    <p className="text-xs font-bold text-white">Contrôles Commerciaux & Visibilité</p>
+
+                    {/* Toggle Ventes */}
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-semibold text-white">Ventes de Billetterie Ouvertes</p>
+                        <p className="text-[10px] text-gray-400">
+                          Active ou suspend immédiatement les achats de billets en ligne sans dépublier la fiche
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setEditForm({ ...editForm, salesActive: !editForm.salesActive })}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                          editForm.salesActive
+                            ? 'bg-emerald-600 text-white'
+                            : 'bg-white/10 text-gray-400 hover:text-white'
+                        }`}
+                      >
+                        {editForm.salesActive ? 'Ventes Actives' : 'Ventes Suspendues'}
+                      </button>
+                    </div>
+
+                    {/* Toggle Vedette */}
+                    <div className="flex items-center justify-between gap-3 pt-3 border-t border-white/5">
+                      <div>
+                        <p className="text-xs font-semibold text-white flex items-center gap-1.5">
+                          <Star className="w-3.5 h-3.5 text-[#E9C349]" />
+                          <span>Mettre en Une (Featured)</span>
+                        </p>
+                        <p className="text-[10px] text-gray-400">
+                          Affiche cet événement en grand dans le carrousel principal d'accueil
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setEditForm({ ...editForm, featured: !editForm.featured })}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                          editForm.featured
+                            ? 'bg-[#E9C349] text-[#241A00]'
+                            : 'bg-white/10 text-gray-400 hover:text-white'
+                        }`}
+                      >
+                        {editForm.featured ? '⭐ En Vedette' : 'Standard'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Raccourcis Rapides */}
+                  <div className="p-3.5 rounded-2xl bg-white/5 border border-white/5 flex flex-wrap items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onPreviewEvent(editingEvent)}
+                      className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-bold text-[#DCB8FF] flex items-center gap-1.5 transition-all"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>Voir la page publique du festival</span>
+                    </button>
+
+                    <a
+                      href={`https://billetterie.thiesdn.site/event/${editingEvent.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-2 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-xs font-bold flex items-center gap-1.5 transition-all"
+                    >
+                      <Share2 className="w-3.5 h-3.5" />
+                      <span>Lien officiel WhatsApp (/event/{editingEvent.id.slice(0, 8)}...)</span>
+                    </a>
+                  </div>
+                </div>
+              )}
+
+              {/* Actions Footer Fixe */}
+              <div className="flex items-center justify-between gap-3 pt-4 border-t border-white/10 shrink-0">
                 <button
                   type="button"
                   onClick={() => setEditingEvent(null)}
                   className="px-5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-bold text-gray-300 transition-colors"
                 >
-                  Annuler
+                  Fermer
                 </button>
+
                 <button
                   type="submit"
                   disabled={isSavingEdit}
-                  className="btn-primary-glow px-6 py-2.5 rounded-xl text-xs font-bold text-white flex items-center gap-2 transition-all"
+                  className="btn-primary-glow px-6 py-2.5 rounded-xl text-xs font-bold text-white flex items-center gap-2 transition-all shadow-lg shadow-[#8A2BE2]/20"
                 >
                   {isSavingEdit ? (
                     <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   ) : (
                     <>
                       <Save className="w-4 h-4" />
-                      <span>Enregistrer les Modifications</span>
+                      <span>Enregistrer toutes les modifications</span>
                     </>
                   )}
                 </button>

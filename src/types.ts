@@ -89,6 +89,7 @@ export interface EventItem {
   status: EventStatus;
   vipAvailable?: boolean;
   isExclusive?: boolean;
+  salesActive?: boolean;
   description?: string;
   longDescription?: string;
   youtubeUrl?: string;

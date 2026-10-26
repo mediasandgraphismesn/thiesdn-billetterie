@@ -2323,6 +2323,31 @@ export const updateCoproducerRevenueShare = async (
 };
 
 /**
+ * Suppression d'un co-producteur / ayant-droit
+ */
+export const deleteCoproducer = async (
+  coproducerId: string
+): Promise<{ success: boolean; error?: string }> => {
+  const all = getStoredCoproducers();
+  const filtered = all.filter((c) => c.id !== coproducerId);
+  saveCoproducers(filtered);
+
+  const client = getSupabaseClient();
+  if (client) {
+    try {
+      const { error } = await client.from('event_coproducers').delete().eq('id', coproducerId);
+      if (error) {
+        console.warn('Sync Supabase deleteCoproducer:', error.message);
+      }
+    } catch (e: any) {
+      console.warn('Erreur Supabase deleteCoproducer:', e.message);
+    }
+  }
+
+  return { success: true };
+};
+
+/**
  * Validation et Signature Numérique du Décompte par l'Artiste / Staff (Étape 4)
  */
 export const validateDecompteAtomic = async (
@@ -5069,6 +5094,22 @@ export const updateEventInSupabase = async (
     if (updates.waveLinkPrevente !== undefined) dbPayload.wave_link_prevente = updates.waveLinkPrevente.trim();
     if (updates.waveLinkJourJ !== undefined) dbPayload.wave_link_jour_j = updates.waveLinkJourJ.trim();
     if (updates.waveLinkVip !== undefined) dbPayload.wave_link_vip = updates.waveLinkVip.trim();
+    if (updates.whatsappContact !== undefined) dbPayload.whatsapp_contact = updates.whatsappContact.trim();
+    if (updates.socialFacebook !== undefined) dbPayload.social_facebook = updates.socialFacebook.trim();
+    if (updates.socialInstagram !== undefined) dbPayload.social_instagram = updates.socialInstagram.trim();
+    if (updates.socialTiktok !== undefined) dbPayload.social_tiktok = updates.socialTiktok.trim();
+    if (updates.socialYoutube !== undefined) {
+      dbPayload.social_youtube = updates.socialYoutube.trim();
+      dbPayload.youtube_url = updates.socialYoutube.trim();
+    }
+    if (updates.websiteUrl !== undefined) dbPayload.website_url = updates.websiteUrl.trim();
+    if (updates.promoter?.name) dbPayload.promoter_name = updates.promoter.name.trim();
+    if (updates.salesActive !== undefined) dbPayload.sales_active = updates.salesActive;
+    if (updates.featured !== undefined) dbPayload.featured = updates.featured;
+    if (updates.vipAvailable !== undefined) dbPayload.vip_available = updates.vipAvailable;
+    if (updates.isExclusive !== undefined) dbPayload.is_exclusive = updates.isExclusive;
+    if (updates.promoCode !== undefined) dbPayload.promo_code = updates.promoCode.trim();
+    if (updates.promoDiscountPercent !== undefined) dbPayload.promo_discount_percent = updates.promoDiscountPercent;
 
     let { data, error } = await client
       .from('events')
@@ -5084,6 +5125,19 @@ export const updateEventInSupabase = async (
       delete minimalPayload.wave_link_vip;
       delete minimalPayload.long_description;
       delete minimalPayload.quartier;
+      delete minimalPayload.whatsapp_contact;
+      delete minimalPayload.social_facebook;
+      delete minimalPayload.social_instagram;
+      delete minimalPayload.social_tiktok;
+      delete minimalPayload.social_youtube;
+      delete minimalPayload.youtube_url;
+      delete minimalPayload.website_url;
+      delete minimalPayload.promoter_name;
+      delete minimalPayload.sales_active;
+      delete minimalPayload.vip_available;
+      delete minimalPayload.is_exclusive;
+      delete minimalPayload.promo_code;
+      delete minimalPayload.promo_discount_percent;
       const fb = await client.from('events').update(minimalPayload).eq('id', eventId).select().single();
       data = fb.data;
       error = fb.error;
@@ -5138,6 +5192,28 @@ export const fetchOrdersFromSupabase = async (): Promise<{ orders: OrderRecord[]
     return { orders: mapped, error: null };
   } catch (err: any) {
     return { orders: [], error: err.message };
+  }
+};
+
+/**
+ * Récupère tous les billets d'un événement pour les statistiques admin & de scan
+ */
+export const fetchAllTicketsForEvent = async (
+  eventId: string
+): Promise<{ tickets: any[]; error: string | null }> => {
+  const client = getSupabaseClient();
+  if (!client) return { tickets: [], error: 'Supabase non connecté.' };
+
+  try {
+    const { data, error } = await client
+      .from('tickets')
+      .select('*')
+      .eq('event_id', eventId);
+
+    if (error) return { tickets: [], error: error.message };
+    return { tickets: data || [], error: null };
+  } catch (err: any) {
+    return { tickets: [], error: err.message };
   }
 };
 
