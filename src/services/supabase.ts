@@ -4617,9 +4617,21 @@ ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tickets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY;
 
--- Profiles : lecture par tous, modification par le propriétaire ou admin via is_admin()
+-- Profiles : lecture privée restreinte au propriétaire, admins et co-producteurs (anti-fuite de données)
 DROP POLICY IF EXISTS "Profiles select policy" ON public.profiles;
-CREATE POLICY "Profiles select policy" ON public.profiles FOR SELECT USING (true);
+CREATE POLICY "Profiles select policy" ON public.profiles FOR SELECT 
+USING (
+  auth.uid() = id 
+  OR public.is_admin() 
+  OR EXISTS (SELECT 1 FROM public.event_coproducers WHERE user_id = auth.uid() AND promoter_id = profiles.id::text)
+);
+
+-- Vue publique sanitisée pour les visiteurs non connectés (sans email ni téléphone)
+DROP VIEW IF EXISTS public.public_profiles;
+CREATE VIEW public.public_profiles WITH (security_invoker = false) AS
+  SELECT id, name, username, avatar, role FROM public.profiles;
+GRANT SELECT ON public.public_profiles TO anon, authenticated, service_role;
+
 DROP POLICY IF EXISTS "Profiles update policy" ON public.profiles;
 CREATE POLICY "Profiles update policy" ON public.profiles FOR UPDATE USING (auth.uid() = id OR public.is_admin());
 
