@@ -1224,7 +1224,9 @@ export const createOrderWithStockCheck = async (
 // ====================================================================
 export const scanTicketAtomic = async (
   ticketCode: string,
-  localTickets: UserTicket[]
+  localTickets: UserTicket[],
+  stationCode: string = 'ADMIN-CHECKIN',
+  eventId?: string
 ): Promise<{
   success: boolean;
   message: string;
@@ -1235,9 +1237,11 @@ export const scanTicketAtomic = async (
 
   if (client) {
     try {
-      // Appel de la procédure stockée RPC sécurisée avec verrouillage de ligne FOR UPDATE
+      // Appel de la procédure stockée RPC sécurisée avec stationCode et eventId
       const { data, error } = await client.rpc('scan_ticket', {
         p_qr_code: cleanCode,
+        p_station_code: (stationCode || 'ADMIN-CHECKIN').trim(),
+        p_event_id: isValidUUID(eventId) ? eventId : null,
       });
 
       if (!error && data) {
@@ -3132,14 +3136,22 @@ export const syncOfflineScansToSupabase = async (
     return { syncedCount: 0, errorsCount: 0 };
   }
 
+  // Résolution de l'événement associé au poste de scan pour validation stricte
+  const stationCheck = await verifyScanStationAccess(accessCode);
+  const stationEventId = stationCheck.station?.eventId;
+
   let syncedCount = 0;
   let errorsCount = 0;
   const remainingQueue: OfflineScanItem[] = [];
 
   for (const item of queue) {
     try {
-      const { data, error } = await client.rpc('scan_ticket', { p_qr_code: item.qrCode });
-      if (!error && data) {
+      const { data, error } = await client.rpc('scan_ticket', {
+        p_qr_code: item.qrCode,
+        p_station_code: item.stationAccessCode || accessCode,
+        p_event_id: isValidUUID(stationEventId) ? stationEventId : null,
+      });
+      if (!error && data?.success) {
         syncedCount++;
       } else {
         remainingQueue.push(item);
@@ -3290,10 +3302,14 @@ export const scanTicketFromStation = async (
   const client = getSupabaseClient();
   const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
 
-  // TENTATIVE EN LIGNE PRIORITAIRE AVEC SUPABASE RPC
+  // TENTATIVE EN LIGNE PRIORITAIRE AVEC SUPABASE RPC (3 PARAMÈTRES SÉCURISÉS)
   if (client && isOnline) {
     try {
-      const { data, error } = await client.rpc('scan_ticket', { p_qr_code: cleanCode });
+      const { data, error } = await client.rpc('scan_ticket', {
+        p_qr_code: cleanCode,
+        p_station_code: station.accessCode,
+        p_event_id: isValidUUID(station.eventId) ? station.eventId : null,
+      });
       if (!error && data) {
         const raw = data.ticket;
         const holderName = raw?.holder_name?.trim() || 'Nom non renseigné';
@@ -4154,21 +4170,46 @@ ALTER TABLE public.profiles ADD CONSTRAINT profiles_role_check CHECK (role IN ('
 -- FONCTIONS RPC SÉCURISÉES : SCAN ATOMIQUE & CONFIRMATION COMMANDE
 -- ====================================================================
 
--- RPC 1 : Scan sécurisé et sans concurrence (RÈGLE DE SÉCURITÉ : VALIDATION PAR VENTE)
+-- RPC 1 : Scan sécurisé et sans concurrence (RÈGLE DE SÉCURITÉ : VALIDATION PAR VENTE & CONTRÔLE D'ÉVÉNEMENT)
 DROP FUNCTION IF EXISTS public.scan_ticket(TEXT);
-CREATE OR REPLACE FUNCTION public.scan_ticket(p_qr_code TEXT)
+DROP FUNCTION IF EXISTS public.scan_ticket(TEXT, TEXT, UUID);
+CREATE OR REPLACE FUNCTION public.scan_ticket(
+  p_qr_code TEXT,
+  p_station_code TEXT,
+  p_event_id UUID
+)
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
+  v_station public.scan_stations%ROWTYPE;
   v_ticket public.tickets%ROWTYPE;
-  v_previous_scan_time TEXT;
   v_clean_code TEXT;
+  v_clean_station TEXT;
+  v_previous_scan_time TEXT;
 BEGIN
   v_clean_code := upper(trim(p_qr_code));
+  v_clean_station := upper(trim(p_station_code));
 
-  -- Verrouillage de la ligne avec FOR UPDATE pour empêcher la validation concurrente
+  -- 1. Contrôle du poste de contrôle
+  IF v_clean_station IS NULL OR v_clean_station = '' THEN
+    RETURN jsonb_build_object('success', false, 'reason', 'invalid_station', 'message', 'CODE DE POSTE REQUIS');
+  END IF;
+
+  SELECT * INTO v_station FROM public.scan_stations WHERE upper(trim(access_code)) = v_clean_station AND is_active = true;
+  IF NOT FOUND THEN
+    IF NOT (public.is_admin() OR v_clean_station IN ('ADMIN-CHECKIN', 'STA-ADMIN-MASTER')) THEN
+      RETURN jsonb_build_object('success', false, 'reason', 'invalid_station', 'message', 'POSTE DE CONTRÔLE INVALIDE OU DÉSACTIVÉ');
+    END IF;
+  ELSE
+    IF v_station.event_id IS NOT NULL AND p_event_id IS NOT NULL AND v_station.event_id <> p_event_id THEN
+      RETURN jsonb_build_object('success', false, 'reason', 'station_event_mismatch', 'message', 'POSTE NON AUTORISÉ POUR CET ÉVÉNEMENT');
+    END IF;
+  END IF;
+
+  -- 2. Verrouillage de la ligne avec FOR UPDATE pour empêcher la validation concurrente
   SELECT * INTO v_ticket 
   FROM public.tickets
   WHERE upper(trim(qr_code)) = v_clean_code OR id::text = trim(p_qr_code)
@@ -4182,7 +4223,17 @@ BEGIN
     );
   END IF;
 
-  -- 1. Billet physique non vendu : ACCÈS STRICTEMENT REFUSÉ
+  -- 3. Contrôle d'appartenance strict à l'événement
+  IF p_event_id IS NOT NULL AND (v_ticket.event_id IS NULL OR v_ticket.event_id <> p_event_id) THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'reason', 'wrong_event',
+      'message', 'BILLET INVALIDE POUR CET ÉVÉNEMENT (CONFLIT DE SOIRÉE)',
+      'ticket', jsonb_build_object('id', v_ticket.id, 'event_id', v_ticket.event_id, 'event_title', v_ticket.event_title)
+    );
+  END IF;
+
+  -- 4. Billet physique non vendu : ACCÈS STRICTEMENT REFUSÉ
   IF v_ticket.status = 'printed_not_sold' OR v_ticket.status IN ('physical_printed', 'physical_allocated') THEN
     RETURN jsonb_build_object(
       'success', false, 
@@ -4201,7 +4252,7 @@ BEGIN
     );
   END IF;
 
-  -- 2. Billet déjà scanné
+  -- 5. Billet déjà scanné
   IF v_ticket.status IN ('scanned', 'used') THEN
     v_previous_scan_time := coalesce(to_char(v_ticket.used_at, 'HH24:MI:SS'), 'heure inconnue');
     RETURN jsonb_build_object(
@@ -4223,7 +4274,7 @@ BEGIN
     );
   END IF;
 
-  -- 3. Billet annulé ou désactivé
+  -- 6. Billet annulé ou désactivé
   IF v_ticket.status = 'cancelled' THEN
     RETURN jsonb_build_object(
       'success', false, 
@@ -4242,12 +4293,20 @@ BEGIN
     );
   END IF;
 
-  -- 4. Billet valide (sold_valid ou digital valid) : passage IMMÉDIAT à scanned
+  -- 7. Billet valide (sold_valid ou digital valid) : passage IMMÉDIAT à scanned
   UPDATE public.tickets
   SET 
     status = 'scanned', 
-    used_at = timezone('utc'::text, now())
+    used_at = timezone('utc'::text, now()),
+    validated_station_id = v_clean_station,
+    validated_station_name = coalesce(v_station.name, v_clean_station)
   WHERE id = v_ticket.id;
+
+  IF v_station.id IS NOT NULL THEN
+    UPDATE public.scan_stations
+    SET scans_count = coalesce(scans_count, 0) + 1, last_scanned_at = timezone('utc'::text, now())
+    WHERE id = v_station.id;
+  END IF;
 
   RETURN jsonb_build_object(
     'success', true, 
@@ -4257,6 +4316,17 @@ BEGIN
     'scanned_at_formatted', to_char(timezone('utc'::text, now()), 'HH24:MI:SS'),
     'ticket', jsonb_build_object(
       'id', v_ticket.id,
+      'holder_name', coalesce(nullif(trim(v_ticket.holder_name), ''), 'Nom non renseigné'),
+      'holder_phone', coalesce(nullif(trim(v_ticket.holder_phone), ''), 'Téléphone non renseigné'),
+      'qr_code', v_ticket.qr_code,
+      'event_title', v_ticket.event_title,
+      'tier_name', v_ticket.tier_name,
+      'status', 'scanned',
+      'is_physical', coalesce(v_ticket.is_physical, false)
+    )
+  );
+END;
+$$;
       'holder_name', coalesce(nullif(trim(v_ticket.holder_name), ''), 'Nom non renseigné'),
       'holder_phone', coalesce(nullif(trim(v_ticket.holder_phone), ''), 'Téléphone non renseigné'),
       'qr_code', v_ticket.qr_code,
@@ -5434,7 +5504,9 @@ export interface SupabaseScanRpcResponse {
 }
 
 export const scanTicketWithSupabase = async (
-  qrCode: string
+  qrCode: string,
+  stationCode: string = 'ADMIN-CHECKIN',
+  eventId?: string
 ): Promise<SupabaseScanRpcResponse> => {
   const client = getSupabaseClient();
   if (!client) {
@@ -5442,7 +5514,11 @@ export const scanTicketWithSupabase = async (
   }
 
   try {
-    const { data, error } = await client.rpc('scan_ticket', { p_qr_code: qrCode.trim() });
+    const { data, error } = await client.rpc('scan_ticket', {
+      p_qr_code: qrCode.trim(),
+      p_station_code: (stationCode || 'ADMIN-CHECKIN').trim(),
+      p_event_id: isValidUUID(eventId) ? eventId : null,
+    });
     if (error) {
       return { success: false, message: error.message };
     }

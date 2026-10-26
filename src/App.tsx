@@ -861,6 +861,7 @@ export default function App() {
               {activeTab === 'checkin' && effectiveRole === 'admin' && (
                 <CheckInScannerView
                   tickets={tickets}
+                  events={events}
                   onValidateTicket={handleValidateTicket}
                 />
               )}

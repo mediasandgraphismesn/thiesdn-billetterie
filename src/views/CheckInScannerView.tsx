@@ -17,20 +17,25 @@ import {
   CameraOff,
 } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
-import { UserTicket, Accreditation } from '../types';
+import { UserTicket, Accreditation, EventItem } from '../types';
 import { scanTicketAtomic, scanTicketWithSupabase, scanGuestTicketAtomic, scanAccreditationAtomic, getStoredAccreditations } from '../services/supabase';
 
 interface CheckInScannerViewProps {
   tickets: UserTicket[];
+  events?: EventItem[];
   onValidateTicket: (ticketId: string) => void;
 }
 
 export const CheckInScannerView: React.FC<CheckInScannerViewProps> = ({
   tickets,
+  events = [],
   onValidateTicket,
 }) => {
   const [searchCode, setSearchCode] = useState('');
   const [isValidating, setIsValidating] = useState(false);
+  const [selectedEventId, setSelectedEventId] = useState<string>(() => {
+    return events?.[0]?.id || '';
+  });
   const [scanResult, setScanResult] = useState<{
     status: 'success' | 'error' | null;
     message: string;
@@ -239,8 +244,12 @@ export const CheckInScannerView: React.FC<CheckInScannerViewProps> = ({
         }
       }
 
-      // 2. Vérification sécurisée en base Supabase via RPC scan_ticket
-      const rpcResult = await scanTicketWithSupabase(trimmedCode);
+      // 2. Vérification sécurisée en base Supabase via RPC scan_ticket (avec code de poste et eventId)
+      const rpcResult = await scanTicketWithSupabase(
+        trimmedCode,
+        'ADMIN-CHECKIN',
+        selectedEventId || undefined
+      );
       if (rpcResult.success) {
         playFeedbackSound('success');
         setScanResult({
@@ -253,7 +262,12 @@ export const CheckInScannerView: React.FC<CheckInScannerViewProps> = ({
         }
       } else {
         // Fallback local atomique si présent en mémoire
-        const localResult = await scanTicketAtomic(trimmedCode, tickets);
+        const localResult = await scanTicketAtomic(
+          trimmedCode,
+          tickets,
+          'ADMIN-CHECKIN',
+          selectedEventId || undefined
+        );
         if (localResult.success && localResult.ticket) {
           playFeedbackSound('success');
           onValidateTicket(localResult.ticket.id);
@@ -316,6 +330,28 @@ export const CheckInScannerView: React.FC<CheckInScannerViewProps> = ({
 
       {activeTab === 'scan' ? (
         <div className="space-y-6">
+          {/* Sélecteur d'Événement & Poste de Contrôle Sécurisé */}
+          {events && events.length > 0 && (
+            <div className="p-3.5 rounded-2xl bg-[#161616] border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-lg">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-[#E9C349]" />
+                <span className="text-xs font-bold text-gray-300">Événement contrôlé :</span>
+              </div>
+              <select
+                value={selectedEventId}
+                onChange={(e) => setSelectedEventId(e.target.value)}
+                className="bg-[#202020] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white font-medium focus:outline-none focus:border-[#8A2BE2]"
+              >
+                <option value="">Tous les événements (Admin Master)</option>
+                {events.map((ev) => (
+                  <option key={ev.id} value={ev.id}>
+                    {ev.title} ({ev.city})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {/* Zone Caméra & Viseur Temps Réel */}
           <div className="relative h-72 sm:h-80 rounded-3xl overflow-hidden bg-black border-2 border-[#8A2BE2]/50 flex flex-col items-center justify-center shadow-2xl">
             {/* Conteneur DOM où html5-qrcode injecte le stream <video> */}
