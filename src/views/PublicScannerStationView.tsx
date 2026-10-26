@@ -30,6 +30,7 @@ import {
   StationScanResult,
   getStoredTickets,
   getStoredAccreditations,
+  verifyAndLockVigileSession,
 } from '../services/supabase';
 
 interface PublicScannerStationViewProps {
@@ -42,6 +43,8 @@ export const PublicScannerStationView: React.FC<PublicScannerStationViewProps> =
   const [station, setStation] = useState<ScanStation | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [sessionLockError, setSessionLockError] = useState<string | null>(null);
+  const [sessionInfo, setSessionInfo] = useState<{ location?: string; device?: string } | null>(null);
 
   const [inputCode, setInputCode] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
@@ -111,8 +114,27 @@ export const PublicScannerStationView: React.FC<PublicScannerStationViewProps> =
   const loadStation = async () => {
     setIsLoading(true);
     setErrorMessage(null);
+    setSessionLockError(null);
     const res = await verifyScanStationAccess(accessCode);
     if (res.success && res.station) {
+      // Vérification & verrouillage de session vigile (anti-partage de poste)
+      const lockRes = await verifyAndLockVigileSession(
+        accessCode,
+        res.station.eventId,
+        res.station.eventTitle,
+        res.station.name
+      );
+
+      if (!lockRes.allowed) {
+        setSessionLockError(
+          lockRes.message ||
+            'Ce poste de contrôle est déjà actif sur un autre appareil. Pour garantir la sécurité, le partage de ce lien est interdit.'
+        );
+        setIsLoading(false);
+        return;
+      }
+
+      setSessionInfo({ location: lockRes.locationLabel, device: lockRes.deviceLabel });
       setStation(res.station);
 
       // Pré-chargement des billets de l'événement dans le cache local (mode hors-ligne)
@@ -304,6 +326,33 @@ export const PublicScannerStationView: React.FC<PublicScannerStationViewProps> =
   }
 
   // 2. Écran d'erreur : Poste Invalide ou Désactivé
+  if (sessionLockError) {
+    return (
+      <div className="min-h-screen bg-[#0A0A0A] flex flex-col items-center justify-center p-6 text-center space-y-6">
+        <div className="w-20 h-20 rounded-3xl bg-red-950/80 border-2 border-red-500/60 flex items-center justify-center shadow-[0_0_30px_rgba(239,68,68,0.4)] animate-pulse">
+          <Lock className="w-10 h-10 text-red-400" />
+        </div>
+        <div className="space-y-2 max-w-sm">
+          <h2 className="font-heading text-2xl font-black text-white uppercase tracking-tight">
+            Poste Déjà Actif
+          </h2>
+          <p className="text-sm font-bold text-red-200">
+            {sessionLockError}
+          </p>
+          <p className="text-xs text-gray-400 pt-2">
+            Contactez l'administrateur ou la régie pour révoquer la session précédente et libérer ce scanner.
+          </p>
+        </div>
+        <button
+          onClick={loadStation}
+          className="px-5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs uppercase transition-all flex items-center gap-2"
+        >
+          <RefreshCw className="w-4 h-4" /> Réessayer
+        </button>
+      </div>
+    );
+  }
+
   if (errorMessage || !station) {
     return (
       <div className="min-h-screen bg-[#0A0A0A] flex flex-col items-center justify-center p-6 text-center space-y-6">
@@ -397,6 +446,19 @@ export const PublicScannerStationView: React.FC<PublicScannerStationViewProps> =
             </div>
           </div>
         </div>
+
+        {/* Badge Session Sécurisée Vigile */}
+        {sessionInfo && (
+          <div className="mt-2.5 pt-2 border-t border-white/5 flex items-center justify-between text-[10px] text-gray-400">
+            <span className="flex items-center gap-1 text-[#DCB8FF] font-semibold">
+              <ShieldCheck className="w-3 h-3 text-[#E9C349]" />
+              <span>Session Sécurisée</span>
+            </span>
+            <span className="font-mono text-emerald-400 font-semibold truncate max-w-[220px]">
+              {sessionInfo.location} • {sessionInfo.device}
+            </span>
+          </div>
+        )}
       </header>
 
       {/* CONTENU PRINCIPAL */}

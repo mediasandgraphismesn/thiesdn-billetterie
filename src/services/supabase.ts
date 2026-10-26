@@ -16,6 +16,8 @@ import {
   AccreditationType,
   AccreditationStatus,
   ScanStation,
+  LoginHistoryRecord,
+  VigileSessionRecord,
 } from '../types';
 import { INITIAL_TICKETS } from '../data/mockEvents';
 import { parseEventDates } from './calendar';
@@ -5977,4 +5979,385 @@ export const declineTicketAssignment = async (
   }
 
   return { success: true, message: 'Le billet a été décliné et restitué à l’acheteur.' };
+};
+
+// ==============================================================================
+// MODULE DE CYBERSÉCURITÉ : TRAÇABILITÉ DES CONNEXIONS & SESSIONS VIGILES
+// ==============================================================================
+
+const LOGIN_HISTORY_CACHE_KEY = 'thiesdn_login_history_cache';
+const VIGILE_SESSIONS_CACHE_KEY = 'thiesdn_vigile_sessions_cache';
+
+/**
+ * Récupère l'adresse IP publique du client avec fallback
+ */
+export const getClientPublicIp = async (): Promise<string> => {
+  try {
+    const res = await fetch('https://api.ipify.org?format=json', { signal: AbortSignal.timeout(2000) });
+    if (res.ok) {
+      const data = await res.json();
+      return data.ip || '127.0.0.1';
+    }
+  } catch {}
+  return '127.0.0.1';
+};
+
+/**
+ * Récupère la géolocalisation IP (Ville, Pays)
+ */
+export const getIpGeoLocation = async (ip: string): Promise<{ country: string; city: string }> => {
+  if (!ip || ip === '127.0.0.1' || ip.startsWith('192.168.') || ip === 'localhost') {
+    return { country: 'Sénégal', city: 'Thiès' };
+  }
+  try {
+    const res = await fetch(`https://ipapi.co/${ip}/json/`, { signal: AbortSignal.timeout(2500) });
+    if (res.ok) {
+      const data = await res.json();
+      return {
+        country: data.country_name || 'Sénégal',
+        city: data.city || 'Thiès',
+      };
+    }
+  } catch {}
+  return { country: 'Sénégal', city: 'Thiès' };
+};
+
+/**
+ * Enregistrer une connexion utilisateur (Login History)
+ */
+export const recordLoginHistory = async (
+  email: string,
+  userId?: string,
+  action: string = 'login'
+): Promise<void> => {
+  const ip = await getClientPublicIp();
+  const geo = await getIpGeoLocation(ip);
+  const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : 'Client Web';
+
+  const newLog: LoginHistoryRecord = {
+    id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `log-${Date.now()}`,
+    userId,
+    email: email.trim().toLowerCase(),
+    ipAddress: ip,
+    userAgent,
+    country: geo.country,
+    city: geo.city,
+    action,
+    createdAt: new Date().toISOString(),
+  };
+
+  const client = getSupabaseClient();
+  if (client) {
+    try {
+      await client.from('login_history').insert([
+        {
+          user_id: isValidUUID(userId) ? userId : null,
+          email: newLog.email,
+          ip_address: newLog.ipAddress,
+          user_agent: newLog.userAgent,
+          country: newLog.country,
+          city: newLog.city,
+          action: newLog.action,
+        },
+      ]);
+    } catch (e) {
+      console.warn('Fallback enregistrement log Supabase:', e);
+    }
+  }
+
+  // Cache local pour affichage immédiat
+  try {
+    const raw = localStorage.getItem(LOGIN_HISTORY_CACHE_KEY);
+    const logs: LoginHistoryRecord[] = raw ? JSON.parse(raw) : [];
+    logs.unshift(newLog);
+    localStorage.setItem(LOGIN_HISTORY_CACHE_KEY, JSON.stringify(logs.slice(0, 300)));
+  } catch {}
+};
+
+/**
+ * Récupérer l'historique des connexions avec pagination et filtres
+ */
+export const fetchLoginHistory = async (
+  page: number = 1,
+  pageSize: number = 50,
+  filters?: { email?: string; country?: string; action?: string }
+): Promise<{ logs: LoginHistoryRecord[]; totalCount: number }> => {
+  const client = getSupabaseClient();
+
+  if (client) {
+    try {
+      let query = client
+        .from('login_history')
+        .select('*', { count: 'exact' })
+        .order('created_at', { ascending: false });
+
+      if (filters?.email?.trim()) {
+        query = query.ilike('email', `%${filters.email.trim()}%`);
+      }
+      if (filters?.country && filters.country !== 'all') {
+        query = query.eq('country', filters.country);
+      }
+      if (filters?.action && filters.action !== 'all') {
+        query = query.eq('action', filters.action);
+      }
+
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
+      const { data, count, error } = await query.range(from, to);
+
+      if (!error && data) {
+        const mapped: LoginHistoryRecord[] = data.map((d: any) => ({
+          id: d.id,
+          userId: d.user_id,
+          email: d.email,
+          ipAddress: d.ip_address,
+          userAgent: d.user_agent,
+          country: d.country,
+          city: d.city,
+          action: d.action || 'login',
+          createdAt: d.created_at,
+        }));
+        return { logs: mapped, totalCount: count || mapped.length };
+      }
+    } catch (e) {
+      console.warn('Fallback lecture login_history:', e);
+    }
+  }
+
+  // Cache local en cas de secours
+  try {
+    const raw = localStorage.getItem(LOGIN_HISTORY_CACHE_KEY);
+    let logs: LoginHistoryRecord[] = raw ? JSON.parse(raw) : [];
+
+    if (filters?.email?.trim()) {
+      const q = filters.email.trim().toLowerCase();
+      logs = logs.filter((l) => l.email.toLowerCase().includes(q));
+    }
+    if (filters?.country && filters.country !== 'all') {
+      logs = logs.filter((l) => l.country === filters.country);
+    }
+    if (filters?.action && filters.action !== 'all') {
+      logs = logs.filter((l) => l.action === filters.action);
+    }
+
+    const from = (page - 1) * pageSize;
+    const paged = logs.slice(from, from + pageSize);
+    return { logs: paged, totalCount: logs.length };
+  } catch {
+    return { logs: [], totalCount: 0 };
+  }
+};
+
+/**
+ * Récupérer toutes les sessions de scan vigiles pour l'administrateur
+ */
+export const fetchVigileSessions = async (): Promise<VigileSessionRecord[]> => {
+  const client = getSupabaseClient();
+
+  if (client) {
+    try {
+      const { data, error } = await client
+        .from('vigile_sessions')
+        .select('*')
+        .order('last_seen_at', { ascending: false });
+
+      if (!error && data) {
+        return data.map((d: any) => ({
+          id: d.id,
+          stationCode: d.station_code,
+          stationName: d.station_name,
+          eventId: d.event_id,
+          eventTitle: d.event_title,
+          userId: d.user_id,
+          ipAddress: d.ip_address,
+          userAgent: d.user_agent,
+          country: d.country,
+          city: d.city,
+          isActive: Boolean(d.is_active),
+          lastSeenAt: d.last_seen_at,
+          createdAt: d.created_at,
+        }));
+      }
+    } catch (e) {
+      console.warn('Fallback lecture vigile_sessions:', e);
+    }
+  }
+
+  try {
+    const raw = localStorage.getItem(VIGILE_SESSIONS_CACHE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
+/**
+ * Révoquer une session vigile (force la déconnexion d'un scanner)
+ */
+export const revokeVigileSession = async (sessionId: string): Promise<boolean> => {
+  const client = getSupabaseClient();
+  if (client) {
+    try {
+      const { error } = await client
+        .from('vigile_sessions')
+        .update({ is_active: false })
+        .eq('id', sessionId);
+      if (!error) return true;
+    } catch (e) {
+      console.warn('Erreur révocation vigile session:', e);
+    }
+  }
+
+  try {
+    const raw = localStorage.getItem(VIGILE_SESSIONS_CACHE_KEY);
+    if (raw) {
+      const sessions: VigileSessionRecord[] = JSON.parse(raw);
+      const updated = sessions.map((s) => (s.id === sessionId ? { ...s, isActive: false } : s));
+      localStorage.setItem(VIGILE_SESSIONS_CACHE_KEY, JSON.stringify(updated));
+    }
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Vérifier et verrouiller une session de scan vigile (Anti-partage d'appareil)
+ */
+export const verifyAndLockVigileSession = async (
+  stationCode: string,
+  eventId?: string,
+  eventTitle?: string,
+  stationName?: string
+): Promise<{
+  allowed: boolean;
+  message?: string;
+  session?: VigileSessionRecord;
+  locationLabel?: string;
+  deviceLabel?: string;
+}> => {
+  const cleanCode = stationCode.toUpperCase().trim();
+  const ip = await getClientPublicIp();
+  const geo = await getIpGeoLocation(ip);
+  const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : 'Mobile Scanner';
+
+  // Formatage appareil simplifié
+  let deviceLabel = 'Smartphone Mobile';
+  if (/iPhone/i.test(userAgent)) deviceLabel = 'Apple iPhone';
+  else if (/Android/i.test(userAgent)) deviceLabel = 'Smartphone Android';
+  else if (/iPad/i.test(userAgent)) deviceLabel = 'Apple iPad';
+  else if (/Windows/i.test(userAgent)) deviceLabel = 'PC Windows';
+  else if (/Macintosh/i.test(userAgent)) deviceLabel = 'Apple Mac';
+
+  const locationLabel = `${geo.city}, ${geo.country}`;
+
+  const client = getSupabaseClient();
+  if (client) {
+    try {
+      // Rechercher si une session active existe déjà pour ce code de poste
+      const { data: existing, error } = await client
+        .from('vigile_sessions')
+        .select('*')
+        .eq('station_code', cleanCode)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (!error && existing && existing.length > 0) {
+        const active = existing[0];
+        // Si même IP ou même User-Agent : même appareil autorisé
+        const isSameDevice =
+          (active.ip_address && active.ip_address === ip) ||
+          (active.user_agent && active.user_agent === userAgent);
+
+        if (isSameDevice) {
+          // Prolongation last_seen_at
+          await client
+            .from('vigile_sessions')
+            .update({ last_seen_at: new Date().toISOString() })
+            .eq('id', active.id);
+
+          return {
+            allowed: true,
+            session: {
+              id: active.id,
+              stationCode: active.station_code,
+              stationName: active.station_name,
+              eventId: active.event_id,
+              eventTitle: active.event_title,
+              ipAddress: active.ip_address,
+              userAgent: active.user_agent,
+              country: active.country,
+              city: active.city,
+              isActive: true,
+              lastSeenAt: new Date().toISOString(),
+              createdAt: active.created_at,
+            },
+            locationLabel,
+            deviceLabel,
+          };
+        }
+
+        // Si IP ET User-Agent diffèrent : BLOCAGE STRICT (Poste partagé)
+        return {
+          allowed: false,
+          message:
+            'Ce poste de contrôle est déjà actif sur un autre appareil. Pour garantir la sécurité des entrées, le partage de ce lien est interdit.',
+          locationLabel,
+          deviceLabel,
+        };
+      }
+
+      // Aucune session active : création de la première session autorisée
+      const { data: created, error: insertErr } = await client
+        .from('vigile_sessions')
+        .insert([
+          {
+            station_code: cleanCode,
+            station_name: stationName || 'Poste de Contrôle',
+            event_id: isValidUUID(eventId) ? eventId : null,
+            event_title: eventTitle || 'Événement Thiès',
+            ip_address: ip,
+            user_agent: userAgent,
+            country: geo.country,
+            city: geo.city,
+            is_active: true,
+            last_seen_at: new Date().toISOString(),
+          },
+        ])
+        .select()
+        .single();
+
+      if (!insertErr && created) {
+        return {
+          allowed: true,
+          session: {
+            id: created.id,
+            stationCode: created.station_code,
+            stationName: created.station_name,
+            eventId: created.event_id,
+            eventTitle: created.event_title,
+            ipAddress: created.ip_address,
+            userAgent: created.user_agent,
+            country: created.country,
+            city: created.city,
+            isActive: true,
+            lastSeenAt: created.last_seen_at,
+            createdAt: created.created_at,
+          },
+          locationLabel,
+          deviceLabel,
+        };
+      }
+    } catch (e) {
+      console.warn('Erreur verrouillage session vigile Supabase, repli local:', e);
+    }
+  }
+
+  // Fallback local en mémoire
+  return {
+    allowed: true,
+    locationLabel,
+    deviceLabel,
+  };
 };

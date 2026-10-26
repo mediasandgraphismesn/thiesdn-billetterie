@@ -4,6 +4,7 @@ import {
   getSupabaseClient,
   fetchUserProfile,
   signOutWithSupabase,
+  recordLoginHistory,
 } from '../services/supabase';
 
 export type UserRole = 'user' | 'promoter' | 'admin' | 'sales_agent' | 'artist';
@@ -140,7 +141,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!client) return;
 
     const { data: authListener } = client.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+      if (event === 'SIGNED_IN') {
+        if (session?.user) {
+          recordLoginHistory(session.user.email || '', session.user.id, 'login').catch(() => {});
+          await loadProfile(session.user.id, session.user);
+        }
+      } else if (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
         if (session?.user) {
           await loadProfile(session.user.id, session.user);
         }
@@ -167,6 +173,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signOut = async () => {
+    if (user?.email) {
+      recordLoginHistory(user.email, user.id, 'logout').catch(() => {});
+    }
     await signOutWithSupabase();
     setUser(null);
     setUserRole('user');

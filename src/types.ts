@@ -309,6 +309,34 @@ export interface EventPreRegistration {
   createdAt: string;
 }
 
+export interface LoginHistoryRecord {
+  id: string;
+  userId?: string;
+  email: string;
+  ipAddress?: string;
+  userAgent?: string;
+  country?: string;
+  city?: string;
+  action: string;
+  createdAt: string;
+}
+
+export interface VigileSessionRecord {
+  id: string;
+  userId?: string;
+  eventId?: string;
+  eventTitle?: string;
+  stationCode: string;
+  stationName?: string;
+  ipAddress?: string;
+  userAgent?: string;
+  country?: string;
+  city?: string;
+  isActive: boolean;
+  lastSeenAt: string;
+  createdAt: string;
+}
+
 export const CURRENT_TERMS_VERSION = 'v1.0';
 
 export const CATEGORIES: { label: string; value: string; icon: string }[] = [

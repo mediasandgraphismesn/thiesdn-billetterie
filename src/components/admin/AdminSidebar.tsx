@@ -11,6 +11,8 @@ import {
   Smartphone,
   PlusCircle,
   Ticket,
+  History,
+  Radio,
 } from 'lucide-react';
 import { UserProfile } from '../../types';
 
@@ -90,6 +92,20 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       icon: Smartphone,
       badge: 'Multi-Entrées',
       badgeStyle: 'bg-emerald-500/20 text-emerald-400',
+    },
+    {
+      id: 'vigile_sessions',
+      label: 'Sessions de Scan',
+      icon: Radio,
+      badge: 'Live',
+      badgeStyle: 'bg-emerald-500/20 text-emerald-400 font-bold',
+    },
+    {
+      id: 'login_history',
+      label: 'Journal des Connexions',
+      icon: History,
+      badge: 'Audit',
+      badgeStyle: 'bg-[#8A2BE2]/20 text-[#DCB8FF]',
     },
     {
       id: 'settings',

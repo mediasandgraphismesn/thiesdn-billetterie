@@ -29,6 +29,8 @@ import { ScanStationsView } from './views/ScanStationsView';
 import { PublicScannerStationView } from './views/PublicScannerStationView';
 import { ClaimTicketView } from './views/ClaimTicketView';
 import { CGVView } from './views/CGVView';
+import { LoginHistoryView } from './views/LoginHistoryView';
+import { VigileSessionsView } from './views/VigileSessionsView';
 
 import {
   INITIAL_USER,
@@ -908,6 +910,16 @@ export default function App() {
                   promoterId={user.id}
                   promoterName={user.name}
                 />
+              )}
+
+              {/* SESSIONS DE SCAN VIGILES (ANTI-PARTAGE & SUPERVISION EN DIRECT) */}
+              {activeTab === 'vigile_sessions' && effectiveRole === 'admin' && (
+                <VigileSessionsView />
+              )}
+
+              {/* JOURNAL DES CONNEXIONS & TRAÇABILITÉ DES ACCÈS */}
+              {activeTab === 'login_history' && effectiveRole === 'admin' && (
+                <LoginHistoryView />
               )}
 
               {activeTab === 'tickets' && (
