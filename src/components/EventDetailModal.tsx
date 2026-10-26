@@ -106,10 +106,12 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
     event.salesOpenAt && new Date(event.salesOpenAt).getTime() > Date.now()
   );
 
-  // Extraction d'ID YouTube robuste (supporte standard, shorts, embed, et lien court youtu.be)
+  // Extraction d'ID YouTube robuste (supporte standard, shorts, embed, lien court youtu.be, ou ID brut 11 caractères)
   const extractYouTubeId = (url?: string): string | null => {
     if (!url) return null;
-    const match = url.match(
+    const trimmed = url.trim();
+    if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed)) return trimmed;
+    const match = trimmed.match(
       /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?|shorts)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i
     );
     return match ? match[1] : null;
@@ -366,10 +368,19 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
               </div>
 
               {/* Bouton Voir le Teaser YouTube (TÂCHE 4) */}
-              {youtubeVideoId && (
+              {(youtubeVideoId || event.videoSpotUrl || event.youtubeUrl || event.socialYoutube) && (
                 <button
                   type="button"
-                  onClick={() => setIsTeaserOpen(true)}
+                  onClick={() => {
+                    if (youtubeVideoId) {
+                      setIsTeaserOpen(true);
+                    } else {
+                      const targetUrl = event.videoSpotUrl || event.youtubeUrl || event.socialYoutube;
+                      if (targetUrl && typeof window !== 'undefined') {
+                        window.open(targetUrl, '_blank', 'noopener,noreferrer');
+                      }
+                    }
+                  }}
                   className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-red-600/90 hover:bg-red-600 text-white font-heading font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-red-900/40 hover:scale-105 transition-all self-start sm:self-auto shrink-0 border border-red-400/30"
                 >
                   <Play className="w-3.5 h-3.5 fill-current" />
@@ -605,7 +616,16 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                         {(event.socialYoutube || event.youtubeUrl || event.videoSpotUrl) && (
                           <button
                             type="button"
-                            onClick={() => setIsTeaserOpen(true)}
+                            onClick={() => {
+                              if (youtubeVideoId) {
+                                setIsTeaserOpen(true);
+                              } else {
+                                const targetUrl = event.videoSpotUrl || event.youtubeUrl || event.socialYoutube;
+                                if (targetUrl && typeof window !== 'undefined') {
+                                  window.open(targetUrl, '_blank', 'noopener,noreferrer');
+                                }
+                              }
+                            }}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-600/15 hover:bg-red-600/30 text-red-400 border border-red-500/30 text-xs font-semibold transition-all hover:scale-105"
                           >
                             <Youtube className="w-3.5 h-3.5" />

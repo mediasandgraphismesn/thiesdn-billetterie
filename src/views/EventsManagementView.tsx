@@ -1141,9 +1141,9 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                         </label>
                         <input
                           type="url"
-                          value={editForm.socialYoutube}
-                          onChange={(e) => setEditForm({ ...editForm, socialYoutube: e.target.value })}
-                          placeholder="https://youtube.com/watch?v=..."
+                          value={editForm.videoSpotUrl || editForm.socialYoutube}
+                          onChange={(e) => setEditForm({ ...editForm, videoSpotUrl: e.target.value, socialYoutube: e.target.value })}
+                          placeholder="https://youtube.com/watch?v=... ou youtu.be/..."
                           className="w-full bg-[#111111] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
                         />
                       </div>

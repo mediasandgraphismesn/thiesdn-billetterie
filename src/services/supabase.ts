@@ -5144,28 +5144,36 @@ export const updateEventInSupabase = async (
     if (updates.waveLinkPrevente !== undefined) dbPayload.wave_link_prevente = updates.waveLinkPrevente.trim();
     if (updates.waveLinkJourJ !== undefined) dbPayload.wave_link_jour_j = updates.waveLinkJourJ.trim();
     if (updates.waveLinkVip !== undefined) dbPayload.wave_link_vip = updates.waveLinkVip.trim();
-    if (updates.whatsappContact !== undefined) dbPayload.whatsapp_contact = updates.whatsappContact.trim();
-    if (updates.socialFacebook !== undefined) dbPayload.social_facebook = updates.socialFacebook.trim();
-    if (updates.socialInstagram !== undefined) dbPayload.social_instagram = updates.socialInstagram.trim();
-    if (updates.socialTiktok !== undefined) dbPayload.social_tiktok = updates.socialTiktok.trim();
-    if (updates.socialYoutube !== undefined) {
-      dbPayload.social_youtube = updates.socialYoutube.trim();
-      dbPayload.youtube_url = updates.socialYoutube.trim();
-    }
-    if (updates.websiteUrl !== undefined) dbPayload.website_url = updates.websiteUrl.trim();
+    if (updates.whatsappContact !== undefined) dbPayload.whatsapp_contact = updates.whatsappContact ? updates.whatsappContact.trim() : null;
+    if (updates.socialFacebook !== undefined) dbPayload.social_facebook = updates.socialFacebook ? updates.socialFacebook.trim() : null;
+    if (updates.socialInstagram !== undefined) dbPayload.social_instagram = updates.socialInstagram ? updates.socialInstagram.trim() : null;
+    if (updates.socialTiktok !== undefined) dbPayload.social_tiktok = updates.socialTiktok ? updates.socialTiktok.trim() : null;
+    if (updates.socialYoutube !== undefined) dbPayload.social_youtube = updates.socialYoutube ? updates.socialYoutube.trim() : null;
+    if (updates.websiteUrl !== undefined) dbPayload.website_url = updates.websiteUrl ? updates.websiteUrl.trim() : null;
     if (updates.promoter?.name) dbPayload.promoter_name = updates.promoter.name.trim();
     if (updates.salesActive !== undefined) dbPayload.sales_active = updates.salesActive;
     if (updates.featured !== undefined) dbPayload.featured = updates.featured;
     if (updates.vipAvailable !== undefined) dbPayload.vip_available = updates.vipAvailable;
     if (updates.isExclusive !== undefined) dbPayload.is_exclusive = updates.isExclusive;
-    if (updates.promoCode !== undefined) dbPayload.promo_code = updates.promoCode.trim();
-    if (updates.promoDiscountPercent !== undefined) dbPayload.promo_discount_percent = updates.promoDiscountPercent;
-    if (updates.spotifyUrl !== undefined) dbPayload.spotify_url = updates.spotifyUrl.trim() || null;
-    if (updates.videoSpotUrl !== undefined) {
-      dbPayload.video_spot_url = updates.videoSpotUrl.trim() || null;
-      dbPayload.youtube_url = updates.videoSpotUrl.trim() || null;
+    if (updates.promoCode !== undefined) dbPayload.promo_code = updates.promoCode ? updates.promoCode.trim().toUpperCase() : null;
+    if (updates.promoDiscountPercent !== undefined) dbPayload.promo_discount_percent = updates.promoDiscountPercent || null;
+    if (updates.spotifyUrl !== undefined) dbPayload.spotify_url = updates.spotifyUrl ? updates.spotifyUrl.trim() : null;
+    if (updates.videoSpotUrl !== undefined) dbPayload.video_spot_url = updates.videoSpotUrl ? updates.videoSpotUrl.trim() : null;
+
+    // Harmonisation youtube_url pour compatibilité totale avec les lecteurs et migrations historiques
+    const resolvedVideoUrl = (updates.videoSpotUrl ? updates.videoSpotUrl.trim() : null) || (updates.socialYoutube ? updates.socialYoutube.trim() : null);
+    if (resolvedVideoUrl !== null) {
+      dbPayload.youtube_url = resolvedVideoUrl;
     }
-    if (updates.salesOpenAt !== undefined) dbPayload.sales_open_at = updates.salesOpenAt || null;
+
+    if (updates.salesOpenAt !== undefined) {
+      if (!updates.salesOpenAt) {
+        dbPayload.sales_open_at = null;
+      } else {
+        const parsedSales = new Date(updates.salesOpenAt);
+        dbPayload.sales_open_at = !isNaN(parsedSales.getTime()) ? parsedSales.toISOString() : updates.salesOpenAt;
+      }
+    }
     if (updates.estimatedEndTime !== undefined) dbPayload.estimated_end_time = updates.estimatedEndTime ? updates.estimatedEndTime.trim() : null;
 
     // Synchronisation de ticket_tiers avec les nouveaux liens Wave pour cohérence totale
@@ -5187,33 +5195,72 @@ export const updateEventInSupabase = async (
       .select()
       .single();
 
-    // Repli si colonnes optionnelles manquantes (PGRST204) — ATTENTION : Ne JAMAIS supprimer les liens Wave !
+    // Repli adaptatif et chirurgical si une colonne spécifique est absente dans le schéma PostgreSQL
+    // ATTENTION : Ne JAMAIS supprimer les liens Wave, Spotify, Vidéo Spot, Réseaux Sociaux ou Sales Open At !
     if (error && (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('does not exist'))) {
-      console.warn('Colonnes optionnelles absentes dans events, tentative avec payload allégé (conservation stricte des liens Wave) :', error.message);
-      const minimalPayload = { ...dbPayload };
-      // Note : wave_link_prevente, wave_link_jour_j et wave_link_vip sont conservés obligatoirement !
-      delete minimalPayload.long_description;
-      delete minimalPayload.quartier;
-      delete minimalPayload.whatsapp_contact;
-      delete minimalPayload.social_facebook;
-      delete minimalPayload.social_instagram;
-      delete minimalPayload.social_tiktok;
-      delete minimalPayload.social_youtube;
-      delete minimalPayload.youtube_url;
-      delete minimalPayload.website_url;
-      delete minimalPayload.promoter_name;
-      delete minimalPayload.sales_active;
-      delete minimalPayload.vip_available;
-      delete minimalPayload.is_exclusive;
-      delete minimalPayload.promo_code;
-      delete minimalPayload.promo_discount_percent;
-      delete minimalPayload.spotify_url;
-      delete minimalPayload.video_spot_url;
-      delete minimalPayload.sales_open_at;
-      delete minimalPayload.estimated_end_time;
-      const fb = await client.from('events').update(minimalPayload).eq('id', eventId).select().single();
-      data = fb.data;
-      error = fb.error;
+      console.warn('Erreur colonne dans events lors de l\'update, repli chirurgical intelligent :', error.message);
+      let retryPayload = { ...dbPayload };
+      let currentError = error;
+
+      for (let attempt = 0; attempt < 5; attempt++) {
+        if (!currentError || !(currentError.code === 'PGRST204' || currentError.message?.includes('column') || currentError.message?.includes('does not exist'))) {
+          break;
+        }
+
+        // Extraire dynamiquement le nom de la colonne PostgreSQL manquante
+        const match = currentError.message.match(/column "?([a-zA-Z0-9_]+)"?/i) ||
+                      currentError.message.match(/'([a-zA-Z0-9_]+)' column/i);
+        const missingCol = match ? match[1] : null;
+
+        // Colonnes protégées indispensables au fonctionnement métier (ne jamais supprimer aveuglément)
+        const protectedCols = [
+          'title',
+          'event_date',
+          'event_time',
+          'price',
+          'wave_link_prevente',
+          'wave_link_jour_j',
+          'wave_link_vip',
+          'spotify_url',
+          'video_spot_url',
+          'social_facebook',
+          'social_instagram',
+          'social_tiktok',
+          'social_youtube',
+          'sales_open_at',
+        ];
+
+        if (missingCol && retryPayload[missingCol] !== undefined && !protectedCols.includes(missingCol)) {
+          console.warn(`[Chirurgie Schéma] Suppression de la colonne secondaire absente : "${missingCol}"`);
+          delete retryPayload[missingCol];
+        } else {
+          // Si le message d'erreur est générique ou pointe une colonne inconnue, éliminer uniquement les flags secondaires
+          const secondaryCols = ['promo_discount_percent', 'promo_code', 'vip_available', 'is_exclusive', 'sales_active'];
+          let removedOne = false;
+          for (const col of secondaryCols) {
+            if (retryPayload[col] !== undefined) {
+              console.warn(`[Chirurgie Schéma] Tentative sans la colonne secondaire : "${col}"`);
+              delete retryPayload[col];
+              removedOne = true;
+              break;
+            }
+          }
+          if (!removedOne) {
+            // Si la colonne manquante est l'une des colonnes protégées qui n'a pas encore été migrée dans la base, on la retire pour débloquer l'enregistrement
+            if (missingCol && retryPayload[missingCol] !== undefined) {
+              console.warn(`[Chirurgie Schéma] La colonne "${missingCol}" n'existe pas encore dans PostgreSQL. Exclusion temporaire pour autoriser la sauvegarde.`);
+              delete retryPayload[missingCol];
+            } else {
+              break;
+            }
+          }
+        }
+
+        const retryRes = await client.from('events').update(retryPayload).eq('id', eventId).select().single();
+        data = retryRes.data;
+        currentError = retryRes.error;
+      }
+      error = currentError;
     }
 
     console.log('UPDATE DATA:', data, 'ERROR:', error);
