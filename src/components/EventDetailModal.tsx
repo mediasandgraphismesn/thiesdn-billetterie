@@ -518,13 +518,13 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
                     <div className="w-10 h-10 rounded-xl bg-[#E9C349]/20 text-[#E9C349] flex items-center justify-center flex-shrink-0">
                       <MapPin className="w-5 h-5" />
                     </div>
-                    <div>
+                    <div className="flex-1 min-w-0">
                       <p className="text-[11px] uppercase tracking-wider text-gray-400 font-bold">Lieu & Ville</p>
-                      <p className="text-sm font-semibold text-white truncate">{event.venue}{event.quartier ? ` • ${event.quartier}` : ''}, {event.city}</p>
+                      <p className="text-sm font-semibold text-white break-words line-clamp-2 leading-snug">{event.venue}{event.quartier ? ` • ${event.quartier}` : ''}, {event.city}</p>
                     </div>
                   </div>
                 </div>
