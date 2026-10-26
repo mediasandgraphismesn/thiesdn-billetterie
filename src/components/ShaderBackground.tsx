@@ -160,3 +160,5 @@ export const ShaderBackground: React.FC<ShaderBackgroundProps> = ({
     </div>
   );
 };
+
+export default ShaderBackground;

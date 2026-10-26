@@ -1,3 +1,4 @@
+import React from "react";
 import type { LucideIcon } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -8,6 +9,7 @@ type Props = {
   index?: number;
   accent?: "violet" | "gold";
   compact?: boolean;
+  key?: React.Key;
 };
 
 export default function FeatureCard({ icon: Icon, title, text, index = 0, accent = "violet", compact }: Props) {

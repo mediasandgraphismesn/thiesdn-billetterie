@@ -1,5 +1,4 @@
 import { useCallback, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion, useScroll, useTransform } from "framer-motion";
 import {
   Ticket, ShieldCheck, Handshake, BarChart3, Printer, Badge, QrCode, WifiOff,
@@ -9,6 +8,10 @@ import ShaderBackground from "../components/ShaderBackground";
 import LoadingIntro from "../components/LoadingIntro";
 import FeatureCard from "../components/FeatureCard";
 import TimelineStep from "../components/TimelineStep";
+
+interface LandingShowcaseViewProps {
+  onNavigate?: (tab: string) => void;
+}
 
 const SEEN_KEY = "thiesdn_intro_seen";
 
@@ -71,8 +74,7 @@ const features = [
   { icon: Map, title: "Carte Interactive", text: "Vos événements géolocalisés au Sénégal." },
 ];
 
-export default function LandingShowcaseView() {
-  const navigate = useNavigate();
+export default function LandingShowcaseView({ onNavigate }: LandingShowcaseViewProps) {
   const [showIntro, setShowIntro] = useState(() => {
     try { return !sessionStorage.getItem(SEEN_KEY); } catch { return true; }
   });
@@ -80,6 +82,14 @@ export default function LandingShowcaseView() {
     try { sessionStorage.setItem(SEEN_KEY, "1"); } catch { /* stockage indisponible */ }
     setShowIntro(false);
   }, []);
+
+  const handleNavigateAuth = (role: 'promoteur' | 'artiste') => {
+    if (onNavigate) {
+      onNavigate('profile');
+    } else if (typeof window !== 'undefined') {
+      window.location.href = `/?role=${role}#auth`;
+    }
+  };
 
   const { scrollY } = useScroll();
   const shaderY = useTransform(scrollY, [0, 800], [0, 120]);
@@ -90,6 +100,16 @@ export default function LandingShowcaseView() {
   return (
     <main className="min-h-screen bg-[#0A0A0A] font-[Inter] text-[#F5F5F5]">
       <AnimatePresence>{showIntro && <LoadingIntro onDone={finishIntro} />}</AnimatePresence>
+
+      {/* Bouton Retour Navigation */}
+      <div className="fixed top-5 left-5 z-40">
+        <button
+          onClick={() => (onNavigate ? onNavigate('home') : (window.location.href = '/'))}
+          className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#121118]/80 hover:bg-[#121118] border border-white/10 hover:border-[#E9C349]/50 text-xs font-semibold text-gray-300 hover:text-white transition-all cursor-pointer backdrop-blur-md shadow-lg"
+        >
+          <span>← Billetterie Principale</span>
+        </button>
+      </div>
 
       {/* HERO */}
       <section className="relative flex min-h-screen items-center overflow-hidden px-6">
@@ -133,16 +153,16 @@ export default function LandingShowcaseView() {
             <motion.button
               whileHover={{ scale: 1.05, boxShadow: "0 0 40px #8A2BE2aa" }}
               whileTap={{ scale: 0.97 }}
-              onClick={() => navigate("/register?role=promoteur")}
-              className="rounded-full bg-[#8A2BE2] px-8 py-4 font-[Montserrat] font-bold text-white"
+              onClick={() => handleNavigateAuth("promoteur")}
+              className="rounded-full bg-[#8A2BE2] px-8 py-4 font-[Montserrat] font-bold text-white cursor-pointer"
             >
               Je suis Promoteur
             </motion.button>
             <motion.button
               whileHover={{ scale: 1.05, boxShadow: "0 0 40px #E9C349aa" }}
               whileTap={{ scale: 0.97 }}
-              onClick={() => navigate("/register?role=artiste")}
-              className="rounded-full bg-[#E9C349] px-8 py-4 font-[Montserrat] font-bold text-[#0A0A0A]"
+              onClick={() => handleNavigateAuth("artiste")}
+              className="rounded-full bg-[#E9C349] px-8 py-4 font-[Montserrat] font-bold text-[#0A0A0A] cursor-pointer"
             >
               Je suis Artiste
             </motion.button>
@@ -221,8 +241,8 @@ export default function LandingShowcaseView() {
             animate={{ boxShadow: ["0 0 10px #8A2BE244", "0 0 45px #8A2BE2cc", "0 0 10px #8A2BE244"] }}
             transition={{ duration: 2, repeat: Infinity }}
             whileHover={{ scale: 1.05 }}
-            onClick={() => navigate("/register?role=promoteur")}
-            className="mt-10 rounded-full bg-[#8A2BE2] px-10 py-4 font-[Montserrat] font-bold text-white"
+            onClick={() => handleNavigateAuth("promoteur")}
+            className="mt-10 rounded-full bg-[#8A2BE2] px-10 py-4 font-[Montserrat] font-bold text-white cursor-pointer"
           >
             Créer Mon Compte Promoteur
           </motion.button>

@@ -1,6 +1,7 @@
+import React from "react";
 import { motion } from "framer-motion";
 
-type Props = { index: number; title: string; text: string };
+type Props = { index: number; title: string; text: string; key?: React.Key };
 
 export default function TimelineStep({ index, title, text }: Props) {
   const left = index % 2 === 0;

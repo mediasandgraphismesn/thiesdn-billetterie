@@ -31,6 +31,9 @@ import { ClaimTicketView } from './views/ClaimTicketView';
 import { CGVView } from './views/CGVView';
 import { LoginHistoryView } from './views/LoginHistoryView';
 import { VigileSessionsView } from './views/VigileSessionsView';
+import LoadingIntro from './components/LoadingIntro';
+
+const LandingShowcaseView = React.lazy(() => import('./views/LandingShowcaseView'));
 
 import {
   INITIAL_USER,
@@ -167,6 +170,16 @@ export default function App() {
         setActiveTab('cgv');
       }
 
+      // 6. Routes Publiques Showcase Motion Design (/showcase, /presentation)
+      if (path === '/showcase' || path === '/presentation' || hash.includes('/showcase') || hash.includes('/presentation') || search.includes('tab=showcase')) {
+        setActiveTab('showcase');
+      }
+
+      // 7. Routes Authentification & Inscription
+      if (path === '/inscription' || path === '/auth' || path === '/login' || path === '/register' || hash.includes('/auth') || hash.includes('/login') || search.includes('tab=auth')) {
+        setActiveTab('profile');
+      }
+
       // Écouter la navigation arrière/avant du navigateur
       const handlePopState = () => {
         const scanCode = getInitialScanCode();
@@ -177,13 +190,18 @@ export default function App() {
           setScanStationCode(null);
         }
 
-        if (window.location.pathname === '/admin') {
+        const currentPath = window.location.pathname;
+        if (currentPath === '/admin') {
           setActiveTab('dashboard');
-        } else if (window.location.pathname === '/create-event') {
+        } else if (currentPath === '/create-event') {
           setActiveTab('create');
-        } else if (window.location.pathname === '/cgv') {
+        } else if (currentPath === '/cgv') {
           setActiveTab('cgv');
-        } else if (window.location.pathname === '/') {
+        } else if (currentPath === '/showcase' || currentPath === '/presentation') {
+          setActiveTab('showcase');
+        } else if (currentPath === '/inscription' || currentPath === '/auth' || currentPath === '/login' || currentPath === '/register') {
+          setActiveTab('profile');
+        } else if (currentPath === '/') {
           setActiveTab('home');
         }
       };
@@ -194,8 +212,8 @@ export default function App() {
 
   // Contrôle d'accès strict par rôle aux onglets (Route Guards)
   const isTabAllowedForRole = (tab: string, role: 'user' | 'promoter' | 'admin' | 'sales_agent' | 'artist', isAuth: boolean): boolean => {
-    // Les Conditions Générales de Vente sont d'ordre public et consultables par tous
-    if (tab === 'cgv') {
+    // Les Conditions Générales de Vente et la Vitrine Showcase sont d'ordre public et consultables par tous
+    if (tab === 'cgv' || tab === 'showcase' || tab === 'presentation') {
       return true;
     }
 
@@ -206,7 +224,7 @@ export default function App() {
     }
 
     if (!isAuth) {
-      return ['home', 'explore', 'cgv'].includes(tab);
+      return ['home', 'explore', 'cgv', 'showcase', 'presentation'].includes(tab);
     }
     if (role === 'admin') {
       return true; // Accès complet
@@ -243,6 +261,8 @@ export default function App() {
         window.history.pushState(null, '', '/create-event');
       } else if (targetTab === 'cgv' && window.location.pathname !== '/cgv') {
         window.history.pushState(null, '', '/cgv');
+      } else if ((targetTab === 'showcase' || targetTab === 'presentation') && window.location.pathname !== '/showcase') {
+        window.history.pushState(null, '', '/showcase');
       } else if (targetTab === 'home' && window.location.pathname !== '/') {
         window.history.pushState(null, '', '/');
       }
@@ -658,10 +678,12 @@ export default function App() {
         )}
 
         {/* Dynamic Main View Canvas : Marges adaptées (Plein écran pour visiteurs, décalé pour clients connectés) */}
-        <main className={`flex-grow flex flex-col pt-24 pb-6 w-full mx-auto relative z-10 transition-all ${
-          isAuthenticated 
-            ? 'px-4 sm:px-6 lg:pl-80 lg:pr-10 max-w-7xl' 
-            : 'px-4 sm:px-8 lg:px-12 max-w-6xl'
+        <main className={`flex-grow flex flex-col w-full mx-auto relative z-10 transition-all ${
+          activeTab === 'showcase' || activeTab === 'presentation'
+            ? 'p-0 m-0 max-w-none pt-0 pb-0'
+            : isAuthenticated 
+            ? 'pt-24 pb-6 px-4 sm:px-6 lg:pl-80 lg:pr-10 max-w-7xl' 
+            : 'pt-24 pb-6 px-4 sm:px-8 lg:px-12 max-w-6xl'
         }`}>
           {eventsError && (
             <div className="mb-6 p-4 rounded-2xl bg-rose-950/80 border border-rose-500/40 text-rose-200 flex items-center justify-between">
@@ -954,14 +976,23 @@ export default function App() {
                   onBack={() => handleTabChange(effectiveRole === 'admin' ? 'dashboard' : 'home')}
                 />
               )}
+
+              {/* VITRINE MOTION DESIGN SHOWCASE & PRÉSENTATION PARTENARIAT */}
+              {(activeTab === 'showcase' || activeTab === 'presentation') && (
+                <React.Suspense fallback={<LoadingIntro />}>
+                  <LandingShowcaseView onNavigate={handleTabChange} />
+                </React.Suspense>
+              )}
             </>
           )}
 
           {/* Pied de page Officiel (Footer) complet et responsive */}
-          <Footer
-            onNavigateAdmin={() => handleTabChange('dashboard')}
-            onNavigateCGV={() => handleTabChange('cgv')}
-          />
+          {activeTab !== 'showcase' && activeTab !== 'presentation' && (
+            <Footer
+              onNavigateAdmin={() => handleTabChange('dashboard')}
+              onNavigateCGV={() => handleTabChange('cgv')}
+            />
+          )}
         </main>
       </div>
 

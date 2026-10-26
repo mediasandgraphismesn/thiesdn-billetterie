@@ -4,13 +4,15 @@ import { motion } from "framer-motion";
 const TAGLINE = "L'ÉCOSYSTÈME ÉVÉNEMENTIEL DU SÉNÉGAL";
 const DURATION = 2500;
 
-export default function LoadingIntro({ onDone }: { onDone: () => void }) {
+export default function LoadingIntro({ onDone }: { onDone?: () => void }) {
   const [typed, setTyped] = useState(0);
 
   useEffect(() => {
     const step = (DURATION - 700) / TAGLINE.length;
     const typer = setInterval(() => setTyped((n) => Math.min(n + 1, TAGLINE.length)), step);
-    const end = setTimeout(onDone, DURATION);
+    const end = setTimeout(() => {
+      onDone?.();
+    }, DURATION);
     return () => { clearInterval(typer); clearTimeout(end); };
   }, [onDone]);
 

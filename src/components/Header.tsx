@@ -7,6 +7,7 @@ import {
   Crown,
   Plus,
   Compass,
+  Handshake,
 } from 'lucide-react';
 import { NotificationItem, UserProfile } from '../types';
 
@@ -84,6 +85,16 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Contrôles Droite */}
       <div className="flex items-center gap-2 sm:gap-3">
+        {/* Bouton Discret Partenariat (Accès Showcase Motion Design) */}
+        <button
+          onClick={() => onNavigate('showcase')}
+          className="group flex items-center gap-1.5 px-2.5 py-1.5 text-xs sm:text-sm font-medium text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-white/5 cursor-pointer"
+          title="Partenariat & Espace Promoteur / Artiste"
+        >
+          <Handshake className="w-4 h-4 text-gray-400 group-hover:text-white transition-colors" />
+          <span>Partenariat</span>
+        </button>
+
         {/* Bouton Connexion Visiteur (Uniquement si NON connecté) */}
         {!isAuthenticated && (
           <button
