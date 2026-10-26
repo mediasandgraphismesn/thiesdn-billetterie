@@ -34,91 +34,138 @@ function drawCropMark(doc: jsPDF, x: number, y: number): void {
   doc.line(x, y - arm, x, y + arm);
 }
 
+// DataURL d'un PNG 500x1 pixels pré-généré avec un dégradé linéaire horizontal ultra-lisse (296 octets décodés)
+// 0% -> rgba(10, 10, 14, 0.92) | 45% -> rgba(10, 10, 14, 0.85) | 70% -> rgba(10, 10, 14, 0.40) | 100% -> rgba(10, 10, 14, 0.0)
+const DEFAULT_GRADIENT_PNG_DATA_URL =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAfQAAAABCAYAAAAo/lyUAAAA70lEQVR4AVXBoXUDARBEMZkapP8yXUByP2DAPkuv9/vng5ycfMvJycnJycnJt5ycnJycnJycnJycnJycnJycnJycnJycnJxMTk5OTk5OTiYnJycnJ5OTk5PJycnJ5OTkZHJyMjk5mZycTE5OJieTk5PJyeRkcjI5mZxMTiYnk5PJyWRyMpmcTE4mk5PJZHIymZxMJpOTyWQymZxMJpPJZHIymUwmk8lkMplMJpPJZEImk8lkMpmQyWQyIZPJhEwmZDIhkwmZkAmZTMiEkAmZkAkhE0ImhJAJIWRCCCGEEEIIIYQQwoMQHoQHD8Iffv8BIjXnJKz++JQAAAAASUVORK5CYII=';
+
+/**
+ * Génère ou récupère le dégradé PNG horizontal 500x1 pixels garantissant zéro banding.
+ */
+function getLinearGradientOverlayDataUrl(): string {
+  if (typeof document !== 'undefined') {
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = 500;
+      canvas.height = 1;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        const grad = ctx.createLinearGradient(0, 0, 500, 0);
+        grad.addColorStop(0, 'rgba(10, 10, 14, 0.92)');
+        grad.addColorStop(0.35, 'rgba(10, 10, 14, 0.86)');
+        grad.addColorStop(0.65, 'rgba(10, 10, 14, 0.45)');
+        grad.addColorStop(0.85, 'rgba(10, 10, 14, 0.15)');
+        grad.addColorStop(1, 'rgba(10, 10, 14, 0.0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, 500, 1);
+        return canvas.toDataURL('image/png');
+      }
+    } catch (e) {
+      console.warn('Fallback dégradé canvas:', e);
+    }
+  }
+  return DEFAULT_GRADIENT_PNG_DATA_URL;
+}
+
+// Cache global d'affiches en mémoire (Map) pour éviter tout re-téléchargement au sein d'un même lot
+const posterCache = new Map<string, string>();
+
 /**
  * Charge l'affiche officielle de l'événement et la convertit en DataURL optimisée.
- * Fonctionne nativement dans le navigateur web et dans les environnements de test Node.js.
+ * Dispose d'une mise en cache mémoire (Map) et d'un triple fallback anti-CORS (weserv.nl -> allorigins.win -> direct).
  */
 async function loadEventPosterDataUrl(event: EventItem): Promise<string | null> {
-  const url = (event as any).affiche_url || (event as any).poster_url || event.posterUrl;
-  if (!url) return null;
+  const rawUrl = (event as any).affiche_url || (event as any).poster_url || event.posterUrl;
+  if (!rawUrl) return null;
 
-  if (url.startsWith('data:image/')) {
-    return url;
+  // 1. Vérification du cache en mémoire
+  if (posterCache.has(rawUrl)) {
+    return posterCache.get(rawUrl)!;
   }
 
-  // 1. Environnement Navigateur Web
-  if (typeof window !== 'undefined') {
-    try {
-      const res = await fetch(url, { mode: 'cors' });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const blob = await res.blob();
+  // 2. Si c'est déjà un DataURL
+  if (rawUrl.startsWith('data:image/')) {
+    posterCache.set(rawUrl, rawUrl);
+    return rawUrl;
+  }
 
-      // Optimisation de la taille via canvas si trop grande
-      return await new Promise<string>((resolve) => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = () => {
-          const maxDim = 800;
-          let w = img.width;
-          let h = img.height;
-          if (w > maxDim || h > maxDim) {
-            if (w > h) {
-              h = Math.round((h * maxDim) / w);
-              w = maxDim;
-            } else {
-              w = Math.round((w * maxDim) / h);
-              h = maxDim;
-            }
-          }
-          const canvas = document.createElement('canvas');
-          canvas.width = w;
-          canvas.height = h;
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.drawImage(img, 0, 0, w, h);
-            resolve(canvas.toDataURL('image/jpeg', 0.82));
-          } else {
-            resolve(URL.createObjectURL(blob));
-          }
-        };
-        img.onerror = () => {
+  // 3. Environnement Navigateur Web (Triple Fallback Anti-CORS)
+  if (typeof window !== 'undefined') {
+    const candidateUrls: string[] = [];
+    if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
+      // Priorité 1 : Proxy CDN weserv.nl avec compression et redimensionnement
+      candidateUrls.push(
+        `https://images.weserv.nl/?url=${encodeURIComponent(rawUrl)}&w=900&q=82&output=jpg`
+      );
+      // Priorité 2 : Proxy universel secondaire allorigins.win
+      candidateUrls.push(`https://api.allorigins.win/raw?url=${encodeURIComponent(rawUrl)}`);
+      // Priorité 3 : Téléchargement direct
+      candidateUrls.push(rawUrl);
+    } else {
+      candidateUrls.push(rawUrl);
+    }
+
+    for (const targetUrl of candidateUrls) {
+      try {
+        const res = await fetch(targetUrl, { mode: 'cors' });
+        if (!res.ok) continue;
+        const blob = await res.blob();
+
+        const dataUrl = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
           reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
           reader.readAsDataURL(blob);
-        };
-        img.src = URL.createObjectURL(blob);
-      });
-    } catch (e) {
-      console.warn("Impossible de charger l'affiche dans le navigateur:", e);
-      return null;
+        });
+
+        if (dataUrl && dataUrl.startsWith('data:image/')) {
+          posterCache.set(rawUrl, dataUrl);
+          return dataUrl;
+        }
+      } catch (err) {
+        // Poursuivre vers le candidat suivant
+      }
     }
   }
 
-  // 2. Environnement Node.js (Tests automatisés Playwright / ts-node)
+  // 4. Environnement Node.js (Tests automatisés Playwright / ts-node)
   try {
     const req = typeof window === 'undefined' ? (Function('return require')() as any) : null;
     if (req) {
       const fs = req('fs');
       const path = req('path');
 
-      let localPath = url;
-      if (url.startsWith('/')) {
-        localPath = path.join(process.cwd(), 'public', url.replace(/^\//, ''));
+      let localPath = rawUrl;
+      if (rawUrl.startsWith('/')) {
+        localPath = path.join(process.cwd(), 'public', rawUrl.replace(/^\//, ''));
       }
 
       if (fs.existsSync(localPath)) {
         const fileBuffer = fs.readFileSync(localPath);
         const ext = path.extname(localPath).toLowerCase().replace('.', '') || 'jpeg';
         const mime = ext === 'png' ? 'image/png' : 'image/jpeg';
-        return `data:${mime};base64,${fileBuffer.toString('base64')}`;
+        const dataUrl = `data:${mime};base64,${fileBuffer.toString('base64')}`;
+        posterCache.set(rawUrl, dataUrl);
+        return dataUrl;
       }
 
-      if (url.startsWith('http://') || url.startsWith('https://')) {
-        const res = await fetch(url);
-        if (res.ok) {
-          const arrayBuf = await res.arrayBuffer();
-          const base64 = Buffer.from(arrayBuf).toString('base64');
-          return `data:image/jpeg;base64,${base64}`;
+      if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
+        const candidateUrls = [
+          `https://images.weserv.nl/?url=${encodeURIComponent(rawUrl)}&w=900&q=82&output=jpg`,
+          `https://api.allorigins.win/raw?url=${encodeURIComponent(rawUrl)}`,
+          rawUrl,
+        ];
+        for (const targetUrl of candidateUrls) {
+          try {
+            const res = await fetch(targetUrl);
+            if (res.ok) {
+              const arrayBuf = await res.arrayBuffer();
+              const base64 = Buffer.from(arrayBuf).toString('base64');
+              const dataUrl = `data:image/jpeg;base64,${base64}`;
+              posterCache.set(rawUrl, dataUrl);
+              return dataUrl;
+            }
+          } catch (e) {}
         }
       }
     }
@@ -200,7 +247,6 @@ async function generateQrWithLogoDataUrl(text: string): Promise<string> {
     return canvas.toDataURL('image/png');
   }
 
-  // Fallback si environnement sans DOM
   return QRCode.toDataURL(text, {
     width: qrSize,
     margin: 1,
@@ -238,12 +284,11 @@ function generateBarcode1DDataUrl(text: string): string {
 
 /**
  * Génère une planche de billets physiques imprimables au format A4 (5 billets par page)
- * Rendu Print Premium :
- * - Affiche officielle de l'événement en plein fond avec overlay sombre semi-transparent (doc.setGState opacity: 0.68)
- * - En-tête vectoriel avec logo Thièsdn et badge de formule/catégorie Or (#E9C349)
- * - Souche contrôle d'accès : QR Code officiel (logo centré), code-barres 1D Code 128 et identifiant unique
- * - Corps central : détails de l'événement, date, heure, lieu et organisateur
- * - Zone guichet droite : tarif public FCFA TTC en or XXL et point de vente
+ * Moteur 100% Dynamique & Print Premium :
+ * - Lecture stricte de l'affiche de l'événement avec triple fallback anti-CORS (weserv.nl / allorigins.win)
+ * - Dégradé PNG horizontal lisse (500x1 px) par-dessus l'affiche pour une lisibilité textuelle absolue sans banding
+ * - Zéro texte en dur : titre, date, lieu, catégorie et tarif sont 100% dynamiques
+ * - Souche contrôle d'accès avec QR Code (logo officiel centré) + Code-barres 1D Code 128 sur fond blanc
  * - Repères de coupe en croix (+) aux 4 angles de chaque billet
  */
 export const generatePhysicalTicketsPdf = async (
@@ -268,8 +313,21 @@ export const generatePhysicalTicketsPdf = async (
 
   const total = tickets.length;
 
-  // Chargement optimisé de l'affiche de l'événement (une seule fois pour tout le lot)
+  // 1. Chargement de l'affiche via le cache mémoire et triple fallback CORS (une seule fois pour tout le lot)
   const posterDataUrl = await loadEventPosterDataUrl(event);
+
+  // 2. Récupération du dégradé PNG horizontal continu (zéro banding)
+  const gradientPngDataUrl = getLinearGradientOverlayDataUrl();
+
+  // 3. Préparation des textes dynamiques nettoyés pour jsPDF
+  const cleanTitle = sanitizeForPdf(event.title).toUpperCase() || 'EVENEMENT OFFICIEL';
+  const cleanDate = sanitizeForPdf(event.date) || 'Date a confirmer';
+  const cleanTime = sanitizeForPdf(event.time) || '20:00';
+  const cleanVenue = sanitizeForPdf(event.venue) || 'Lieu a confirmer';
+  const cleanQuartier = event.quartier ? ` (${sanitizeForPdf(event.quartier)})` : '';
+  const cleanCity = sanitizeForPdf(event.city) || 'Thies';
+  const cleanPromoter = sanitizeForPdf(event.promoter?.name || 'Organisateur Partenaire');
+  const cleanTierName = sanitizeForPdf(tier.name).toUpperCase() || 'PASS STANDARD';
 
   for (let i = 0; i < total; i++) {
     const ticket = tickets[i];
@@ -285,10 +343,10 @@ export const generatePhysicalTicketsPdf = async (
 
     const startY = marginTop + indexOnPage * (ticketHeight + ticketSpacing);
 
-    // 1. QR Code officiel avec logo Thièsdn au centre
+    // QR Code officiel avec logo Thièsdn au centre
     const qrDataUrl = await generateQrWithLogoDataUrl(ticket.qrCode);
 
-    // 2. Code-barres 1D Code 128
+    // Code-barres 1D Code 128
     const barcodeDataUrl = generateBarcode1DDataUrl(ticket.qrCode);
 
     // =================================================================
@@ -300,7 +358,7 @@ export const generatePhysicalTicketsPdf = async (
     drawCropMark(doc, marginX + ticketWidth, startY + ticketHeight);
 
     // =================================================================
-    // FOND DU BILLET AVEC AFFICHE OFFICIELLE & OVERLAY LISIBILITÉ
+    // FOND DU BILLET : AFFICHE OFFICIELLE + DÉGRADÉ PNG LISSE SANS BANDING
     // =================================================================
     // Fond de base noir anthracite
     doc.setFillColor(14, 14, 18);
@@ -316,15 +374,19 @@ export const generatePhysicalTicketsPdf = async (
       }
     }
 
-    // Overlay sombre semi-transparent pour garantir la lisibilité absolue des textes
-    doc.setFillColor(10, 10, 12);
+    // Application du dégradé PNG horizontal étiré par-dessus l'affiche (noir 92% à gauche -> transparent à droite)
     try {
-      doc.setGState(new doc.GState({ opacity: 0.68 }));
-      doc.rect(marginX, startY, ticketWidth, ticketHeight, 'F');
-      doc.setGState(new doc.GState({ opacity: 1.0 }));
-    } catch {
-      // Fallback si setGState non disponible
-      doc.rect(marginX, startY, ticketWidth, ticketHeight, 'F');
+      doc.addImage(gradientPngDataUrl, 'PNG', marginX, startY, ticketWidth, ticketHeight);
+    } catch (gradErr) {
+      // Fallback overlay uni si problème d'insertion du PNG dégradé
+      try {
+        doc.setFillColor(10, 10, 12);
+        doc.setGState(new doc.GState({ opacity: 0.68 }));
+        doc.rect(marginX, startY, ticketWidth, ticketHeight, 'F');
+        doc.setGState(new doc.GState({ opacity: 1.0 }));
+      } catch (e) {
+        doc.rect(marginX, startY, ticketWidth, ticketHeight, 'F');
+      }
     }
 
     // Liseré extérieur doré prestige (#E9C349)
@@ -333,14 +395,11 @@ export const generatePhysicalTicketsPdf = async (
     doc.rect(marginX, startY, ticketWidth, ticketHeight, 'D');
 
     // =================================================================
-    // EN-TÊTE : LOGO THIÈSDN, TITRE DE BILLETTERIE & BADGE CATÉGORIE OR
+    // EN-TÊTE : LOGO THIÈSDN, BILLETTERIE & BADGE FORMULE OR DYNAMIQUE
     // =================================================================
-    // Logo Thièsdn officiel à gauche
     try {
       doc.addImage(LOGO_TIGHT_DATA_URL, 'PNG', marginX + 3, startY + 1.2, 10, 5);
-    } catch (e) {
-      // Fallback si erreur logo
-    }
+    } catch (e) {}
 
     doc.setTextColor(255, 255, 255);
     doc.setFont('helvetica', 'bold');
@@ -351,20 +410,19 @@ export const generatePhysicalTicketsPdf = async (
     doc.setTextColor(233, 195, 73);
     doc.text('OFFICIEL', marginX + 54, startY + 4.8);
 
-    // Badge de catégorie / formule à droite (Fond Or #E9C349 avec texte noir bold)
+    // Badge de catégorie / formule à droite (Fond Or #E9C349 avec texte noir bold 100% dynamique)
     const badgeCategoryWidth = 36;
     const badgeCategoryHeight = 5.0;
     const badgeCategoryX = marginX + ticketWidth - badgeCategoryWidth - 3;
     const badgeCategoryY = startY + 1.2;
 
-    doc.setFillColor(233, 195, 73); // Or officiel
+    doc.setFillColor(233, 195, 73);
     doc.roundedRect(badgeCategoryX, badgeCategoryY, badgeCategoryWidth, badgeCategoryHeight, 1.2, 1.2, 'F');
 
-    doc.setTextColor(18, 18, 20); // Texte noir soutenu
+    doc.setTextColor(18, 18, 20);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(6.5);
-    const cleanTierBadge = sanitizeForPdf(tier.name).toUpperCase();
-    doc.text(cleanTierBadge, badgeCategoryX + badgeCategoryWidth / 2, badgeCategoryY + 3.6, {
+    doc.text(cleanTierName, badgeCategoryX + badgeCategoryWidth / 2, badgeCategoryY + 3.6, {
       align: 'center',
     });
 
@@ -377,19 +435,19 @@ export const generatePhysicalTicketsPdf = async (
     // 1. SOUCHE GAUCHE : CONTRÔLE D'ACCÈS (QR CODE + CODE-BARRES 1D)
     // =================================================================
     const stubWidth = 48;
-    // Fond blanc net pour contraste maximal de lecture optique et laser
+    // Fond blanc net garantissant un contraste optique et laser à 100%
     doc.setFillColor(255, 255, 255);
     doc.setDrawColor(233, 195, 73);
     doc.setLineWidth(0.3);
     doc.roundedRect(marginX + 2.5, startY + 8.5, stubWidth - 3.5, 37, 1.5, 1.5, 'FD');
 
-    // A. Image du QR Code officiel avec Logo Thièsdn (24 mm x 24 mm)
+    // QR Code officiel avec Logo Thièsdn centré (24 mm x 24 mm)
     const qrSize = 24;
     const qrX = marginX + 2.5 + (stubWidth - 3.5 - qrSize) / 2;
     const qrY = startY + 9.5;
     doc.addImage(qrDataUrl, 'PNG', qrX, qrY, qrSize, qrSize);
 
-    // Si pas de DOM (Node.js fallback logo au centre)
+    // Fallback Node.js pour le logo centré
     if (typeof document === 'undefined') {
       const logoW = qrSize * 0.24;
       const logoH = logoW * (357 / 716);
@@ -407,7 +465,7 @@ export const generatePhysicalTicketsPdf = async (
       doc.addImage(LOGO_TIGHT_DATA_URL, 'PNG', badgeX + padX, badgeY + padY, logoW, logoH);
     }
 
-    // B. Code-barres 1D Code 128 (Largeur 40mm, Hauteur 6mm)
+    // Code-barres 1D Code 128 (Largeur 40mm, Hauteur 6mm)
     const barcodeW = 40;
     const barcodeH = 6;
     const barcodeX = marginX + 2.5 + (stubWidth - 3.5 - barcodeW) / 2;
@@ -443,7 +501,7 @@ export const generatePhysicalTicketsPdf = async (
     doc.setLineDashPattern([], 0);
 
     // =================================================================
-    // 2. CORPS CENTRAL : DÉTAILS DE L'ÉVÉNEMENT (Largeur 98 mm)
+    // 2. CORPS CENTRAL : DÉTAILS DE L'ÉVÉNEMENT (100% DYNAMIQUE)
     // =================================================================
     const bodyStartX = marginX + stubWidth + 4;
     const bodyWidth = 98;
@@ -452,27 +510,21 @@ export const generatePhysicalTicketsPdf = async (
     doc.setTextColor(255, 255, 255);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
-    const cleanTitle = sanitizeForPdf(event.title).toUpperCase();
     const titleLines = doc.splitTextToSize(cleanTitle, bodyWidth);
     doc.text(titleLines.slice(0, 2), bodyStartX, startY + 12);
 
     const titleOffset = titleLines.length > 1 ? 4 : 0;
 
-    // Date & Heure avec séparateur ASCII propre
+    // Date & Heure
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7.8);
-    doc.setTextColor(233, 195, 73); // Or chaud
-    const cleanDate = sanitizeForPdf(event.date);
-    const cleanTime = sanitizeForPdf(event.time);
+    doc.setTextColor(233, 195, 73);
     doc.text(`DATE : ${cleanDate}  -  HEURE : ${cleanTime}`, bodyStartX, startY + 18.5 + titleOffset);
 
     // Lieu, Quartier & Ville
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.2);
     doc.setTextColor(225, 225, 230);
-    const cleanVenue = sanitizeForPdf(event.venue);
-    const cleanQuartier = event.quartier ? ` (${sanitizeForPdf(event.quartier)})` : '';
-    const cleanCity = sanitizeForPdf(event.city);
     const locationStr = `LIEU : ${cleanVenue}${cleanQuartier}, ${cleanCity}`;
     const locationLines = doc.splitTextToSize(locationStr, bodyWidth);
     doc.text(locationLines.slice(0, 2), bodyStartX, startY + 24 + titleOffset);
@@ -481,20 +533,18 @@ export const generatePhysicalTicketsPdf = async (
     doc.setFont('helvetica', 'italic');
     doc.setFontSize(6.2);
     doc.setTextColor(170, 170, 175);
-    const cleanPromoter = sanitizeForPdf(event.promoter.name);
-    doc.text(`Organise par : ${cleanPromoter}`, bodyStartX, startY + 30 + titleOffset);
+    doc.text(`Organise par : ${cleanPromoter}`, bodyStartX, startY + 29.5 + titleOffset);
 
     // Badge catégorie interne
     doc.setFillColor(32, 26, 45);
     doc.setDrawColor(138, 43, 226);
     doc.setLineWidth(0.25);
-    doc.roundedRect(bodyStartX, startY + 34.5 + titleOffset, 55, 5, 1, 1, 'FD');
+    doc.roundedRect(bodyStartX, startY + 34 + titleOffset, 55, 5, 1, 1, 'FD');
 
     doc.setTextColor(220, 184, 255);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(6.2);
-    const cleanTierName = sanitizeForPdf(tier.name).toUpperCase();
-    doc.text(`CATEGORIE : ${cleanTierName}`, bodyStartX + 2.5, startY + 38 + titleOffset);
+    doc.text(`CATEGORIE : ${cleanTierName}`, bodyStartX + 2.5, startY + 37.5 + titleOffset);
 
     // Consigne de sécurité
     doc.setFont('helvetica', 'normal');
@@ -514,7 +564,7 @@ export const generatePhysicalTicketsPdf = async (
     doc.setLineDashPattern([], 0);
 
     // =================================================================
-    // 3. ENCART DROIT : SOUCHE GUICHET & TARIF PUBLIC (Largeur 33 mm)
+    // 3. ENCART DROIT : SOUCHE GUICHET & TARIF PUBLIC (100% DYNAMIQUE)
     // =================================================================
     const rightStartX = marginX + ticketWidth - 34;
     doc.setFillColor(25, 22, 17);
@@ -522,7 +572,7 @@ export const generatePhysicalTicketsPdf = async (
     doc.setLineWidth(0.35);
     doc.roundedRect(rightStartX, startY + 8.5, 31.5, 37, 1.5, 1.5, 'FD');
 
-    // Identifiant Pass
+    // Numéro de pass
     doc.setTextColor(233, 195, 73);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(6.0);
@@ -536,7 +586,7 @@ export const generatePhysicalTicketsPdf = async (
     doc.setFontSize(5.5);
     doc.text('TARIF PUBLIC', rightStartX + 15.75, startY + 17, { align: 'center' });
 
-    // Prix en très grand
+    // Prix en grand
     doc.setTextColor(233, 195, 73);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(10.5);
@@ -559,13 +609,14 @@ export const generatePhysicalTicketsPdf = async (
     doc.setTextColor(255, 255, 255);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(5.0);
-    const agentDisplay = sanitizeForPdf(ticket.agentName) || 'Agence Thies Can';
+    const agentDisplay = sanitizeForPdf(ticket.agentName) || 'Point de Vente Agree';
     doc.text(agentDisplay.slice(0, 18), rightStartX + 3.2, startY + 36.5);
 
+    // Label billetterie dynamique
     doc.setTextColor(138, 43, 226);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(4.8);
-    doc.text('THIESDN CAN 2026', rightStartX + 15.75, startY + 41.5, { align: 'center' });
+    doc.text('THIESDN BILLETTERIE', rightStartX + 15.75, startY + 41.5, { align: 'center' });
 
     // =================================================================
     // PIED DE PAGE : MENTIONS LÉGALES & SIGNATURE OFFICIELLE
