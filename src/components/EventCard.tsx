@@ -250,16 +250,22 @@ export const EventCard: React.FC<EventCardProps> = ({
         </div>
 
         <div className="pt-2 border-t border-white/5 flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <img
-              src={event.promoter.avatar}
-              alt={event.promoter.name}
-              className="w-5 h-5 rounded-full object-cover"
-            />
-            <span className="text-[11px] text-gray-400 truncate max-w-[100px]">
-              {event.promoter.name}
-            </span>
-          </div>
+          {event.promoter?.name && event.promoter.name.trim().toLowerCase() !== 'utilisateur' ? (
+            <div className="flex items-center gap-1.5">
+              {event.promoter.avatar && (
+                <img
+                  src={event.promoter.avatar}
+                  alt={event.promoter.name}
+                  className="w-5 h-5 rounded-full object-cover"
+                />
+              )}
+              <span className="text-[11px] text-gray-400 truncate max-w-[100px]">
+                {event.promoter.name}
+              </span>
+            </div>
+          ) : (
+            <div />
+          )}
 
           <button
             className={

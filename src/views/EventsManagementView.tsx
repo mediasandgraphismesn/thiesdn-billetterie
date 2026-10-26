@@ -33,6 +33,7 @@ import {
   DollarSign,
   Ticket,
   QrCode,
+  Printer,
   TrendingUp,
   Check,
   ShieldCheck,
@@ -58,6 +59,7 @@ import {
   fetchOrdersFromSupabase,
   fetchAllTicketsForEvent,
 } from '../services/supabase';
+import { PhysicalTicketsModal } from '../components/PhysicalTicketsModal';
 
 const TikTokIcon = ({ className = 'w-4 h-4' }: { className?: string }) => (
   <svg className={className} viewBox="0 0 24 24" fill="currentColor">
@@ -106,6 +108,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
   const [activeModalTab, setActiveModalTab] = useState<'details' | 'coproducers' | 'stats' | 'settings'>('details');
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+  const [isPhysicalModalOpen, setIsPhysicalModalOpen] = useState(false);
 
   // État local du formulaire d'édition
   const [editForm, setEditForm] = useState({
@@ -1627,6 +1630,30 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                       <span>Lien officiel WhatsApp (/event/{editingEvent.id.slice(0, 8)}...)</span>
                     </a>
                   </div>
+
+                  {/* Bloc Gestion des Billets Physiques & Impression */}
+                  <div className="p-4 rounded-2xl bg-gradient-to-r from-[#8A2BE2]/15 via-black/40 to-[#E9C349]/10 border border-[#8A2BE2]/30 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-bold text-white flex items-center gap-1.5">
+                          <Printer className="w-4 h-4 text-[#E9C349]" />
+                          <span>Gestion des Billets Physiques</span>
+                        </p>
+                        <p className="text-[10px] text-gray-300 mt-0.5">
+                          Générez et imprimez des planches A4 de billets sécurisés avec l'affiche officielle en fond, QR code centré et code-barres laser 1D.
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setIsPhysicalModalOpen(true)}
+                        className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#8A2BE2] to-[#A855F7] hover:from-[#7824c7] hover:to-[#9333ea] text-white font-heading font-extrabold text-xs flex items-center justify-center gap-2 shadow-lg shadow-[#8A2BE2]/30 transition-all shrink-0 hover:scale-[1.02]"
+                      >
+                        <Printer className="w-4 h-4 text-[#E9C349]" />
+                        <span>Générer les QR Codes pour Impression</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -1706,6 +1733,13 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Modale de Génération des Billets Physiques Imprimables */}
+      <PhysicalTicketsModal
+        isOpen={isPhysicalModalOpen}
+        onClose={() => setIsPhysicalModalOpen(false)}
+        event={editingEvent}
+      />
     </div>
   );
 };

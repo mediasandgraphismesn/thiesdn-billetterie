@@ -56,7 +56,7 @@ export const SpotifyVinylPlayer: React.FC<SpotifyVinylPlayerProps> = ({
               Bande-Son & Ambiance
             </span>
             <h4 className="text-sm sm:text-base font-heading font-bold text-white line-clamp-1">
-              Plongez dans l'univers musical
+              La Sélection Musicale
             </h4>
           </div>
         </div>
@@ -119,18 +119,18 @@ export const SpotifyVinylPlayer: React.FC<SpotifyVinylPlayerProps> = ({
           <div className="flex-1 text-center sm:text-left space-y-2">
             <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#8A2BE2]/20 border border-[#8A2BE2]/40 text-[#DCB8FF] text-[10px] font-bold uppercase tracking-wider">
               <Disc3 className="w-3.5 h-3.5 animate-spin" />
-              <span>Lecteur Haute Fidélité</span>
+              <span>THIÈSDN SOUND</span>
             </div>
             <h5 className="font-heading font-extrabold text-base sm:text-lg text-white group-hover:text-[#E9C349] transition-colors">
-              Écouter l'extrait ou la playlist
+              Découvrez l'univers de l'artiste
             </h5>
             <p className="text-xs text-gray-300 leading-relaxed">
-              Cliquez pour lancer le lecteur officiel Spotify et découvrir les morceaux phares prévus pour cet événement.
+              Écoutez un aperçu des morceaux qui rythmeront la nuit.
             </p>
             <div className="pt-2">
               <span className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-[#E9C349] to-[#d6ad30] text-[#241A00] font-heading font-black text-xs uppercase tracking-wider shadow-lg group-hover:shadow-[#E9C349]/30 transition-all">
                 <Play className="w-3.5 h-3.5 fill-current" />
-                Lancer la lecture
+                Lancer la playlist
               </span>
             </div>
           </div>

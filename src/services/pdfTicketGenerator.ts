@@ -11,33 +11,126 @@ export interface GeneratePdfOptions {
 
 /**
  * Nettoie les textes pour jsPDF :
- * jsPDF avec les polices de base (Helvetica/Courier) ne supporte pas les emojis ni l'UTF-8 étendu.
- * Cette fonction remplace les accents par leur équivalent ASCII propre et supprime tout emoji ou caractère corrompu.
+ * Transforme les accents en ASCII pur (é -> e, à -> a, etc.) via décomposition canonique NFD
+ * et supprime les caractères non ASCII pour éviter tout caractère corrompu ou crash jsPDF.
  */
 export function sanitizeForPdf(input: string | null | undefined): string {
   if (!input) return '';
   return String(input)
-    .replace(/[éèêë]/g, 'e')
-    .replace(/[ÉÈÊË]/g, 'E')
-    .replace(/[àâä]/g, 'a')
-    .replace(/[ÀÂÄ]/g, 'A')
-    .replace(/[îï]/g, 'i')
-    .replace(/[ÎÏ]/g, 'I')
-    .replace(/[ôö]/g, 'o')
-    .replace(/[ÔÖ]/g, 'O')
-    .replace(/[ùûü]/g, 'u')
-    .replace(/[ÙÛÜ]/g, 'U')
-    .replace(/[ç]/g, 'c')
-    .replace(/[Ç]/g, 'C')
-    .replace(/[’']/g, "'")
-    .replace(/[—–]/g, '-')
-    // Supprime catégoriquement tout caractère hors ASCII imprimable standard (dont emojis 📍, ⭐, 👤, etc.)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^\x20-\x7E]/g, '')
     .trim();
 }
 
 /**
- * Génère un QR Code fusionné en haute résolution avec le logo officiel Thièsdn au centre.
+ * Dessine un repère de coupe en croix (+) aux coins d'un billet pour faciliter le massicotage.
+ */
+function drawCropMark(doc: jsPDF, x: number, y: number): void {
+  const arm = 2.0;
+  doc.setDrawColor(180, 180, 185);
+  doc.setLineWidth(0.2);
+  doc.line(x - arm, y, x + arm, y);
+  doc.line(x, y - arm, x, y + arm);
+}
+
+/**
+ * Charge l'affiche officielle de l'événement et la convertit en DataURL optimisée.
+ * Fonctionne nativement dans le navigateur web et dans les environnements de test Node.js.
+ */
+async function loadEventPosterDataUrl(event: EventItem): Promise<string | null> {
+  const url = (event as any).affiche_url || (event as any).poster_url || event.posterUrl;
+  if (!url) return null;
+
+  if (url.startsWith('data:image/')) {
+    return url;
+  }
+
+  // 1. Environnement Navigateur Web
+  if (typeof window !== 'undefined') {
+    try {
+      const res = await fetch(url, { mode: 'cors' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+
+      // Optimisation de la taille via canvas si trop grande
+      return await new Promise<string>((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          const maxDim = 800;
+          let w = img.width;
+          let h = img.height;
+          if (w > maxDim || h > maxDim) {
+            if (w > h) {
+              h = Math.round((h * maxDim) / w);
+              w = maxDim;
+            } else {
+              w = Math.round((w * maxDim) / h);
+              h = maxDim;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, w, h);
+            resolve(canvas.toDataURL('image/jpeg', 0.82));
+          } else {
+            resolve(URL.createObjectURL(blob));
+          }
+        };
+        img.onerror = () => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(blob);
+        };
+        img.src = URL.createObjectURL(blob);
+      });
+    } catch (e) {
+      console.warn("Impossible de charger l'affiche dans le navigateur:", e);
+      return null;
+    }
+  }
+
+  // 2. Environnement Node.js (Tests automatisés Playwright / ts-node)
+  try {
+    const req = typeof window === 'undefined' ? (Function('return require')() as any) : null;
+    if (req) {
+      const fs = req('fs');
+      const path = req('path');
+
+      let localPath = url;
+      if (url.startsWith('/')) {
+        localPath = path.join(process.cwd(), 'public', url.replace(/^\//, ''));
+      }
+
+      if (fs.existsSync(localPath)) {
+        const fileBuffer = fs.readFileSync(localPath);
+        const ext = path.extname(localPath).toLowerCase().replace('.', '') || 'jpeg';
+        const mime = ext === 'png' ? 'image/png' : 'image/jpeg';
+        return `data:${mime};base64,${fileBuffer.toString('base64')}`;
+      }
+
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        const res = await fetch(url);
+        if (res.ok) {
+          const arrayBuf = await res.arrayBuffer();
+          const base64 = Buffer.from(arrayBuf).toString('base64');
+          return `data:image/jpeg;base64,${base64}`;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Fallback affiche non chargée:', err);
+  }
+
+  return null;
+}
+
+/**
+ * Génère un QR Code haute résolution (320px) avec le logo officiel Thièsdn centré sur badge protecteur.
  */
 async function generateQrWithLogoDataUrl(text: string): Promise<string> {
   const qrSize = 320;
@@ -81,7 +174,6 @@ async function generateQrWithLogoDataUrl(text: string): Promise<string> {
       const badgeY = (qrSize - badgeH) / 2;
 
       ctx.save();
-      // Badge blanc protecteur avec ombre douce
       ctx.fillStyle = '#FFFFFF';
       ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
       ctx.shadowBlur = 8;
@@ -96,13 +188,11 @@ async function generateQrWithLogoDataUrl(text: string): Promise<string> {
       }
       ctx.fill();
 
-      // Liseré or officiel Thièsdn (#E9C349)
       ctx.shadowColor = 'transparent';
       ctx.strokeStyle = '#E9C349';
       ctx.lineWidth = 2.5;
       ctx.stroke();
 
-      // Dessin de l'image officielle du logo
       ctx.drawImage(logoImg, badgeX + padX, badgeY + padY, logoW, logoH);
       ctx.restore();
     }
@@ -123,7 +213,7 @@ async function generateQrWithLogoDataUrl(text: string): Promise<string> {
 }
 
 /**
- * Génère un code-barres 1D (Code 128) via JsBarcode.
+ * Génère un code-barres 1D (Code 128) via JsBarcode pour douchette laser optique.
  */
 function generateBarcode1DDataUrl(text: string): string {
   if (typeof document !== 'undefined') {
@@ -132,8 +222,8 @@ function generateBarcode1DDataUrl(text: string): string {
       JsBarcode(canvas, text, {
         format: 'CODE128',
         width: 2,
-        height: 45,
-        displayValue: false, // Valeur écrite vectoriellement par jsPDF en dessous
+        height: 48,
+        displayValue: false,
         background: '#FFFFFF',
         lineColor: '#000000',
         margin: 2,
@@ -147,9 +237,14 @@ function generateBarcode1DDataUrl(text: string): string {
 }
 
 /**
- * Génère une planche de billets physiques imprimables au format A4 (4 billets par page)
- * Chaque billet dispose d'une souche de contrôle d'accès avec QR Code officiel (logo centré),
- * code-barres 1D (Code 128 pour douchette laser), corps de l'événement et encart vendeur détachable.
+ * Génère une planche de billets physiques imprimables au format A4 (5 billets par page)
+ * Rendu Print Premium :
+ * - Affiche officielle de l'événement en plein fond avec overlay sombre semi-transparent (doc.setGState opacity: 0.68)
+ * - En-tête vectoriel avec logo Thièsdn et badge de formule/catégorie Or (#E9C349)
+ * - Souche contrôle d'accès : QR Code officiel (logo centré), code-barres 1D Code 128 et identifiant unique
+ * - Corps central : détails de l'événement, date, heure, lieu et organisateur
+ * - Zone guichet droite : tarif public FCFA TTC en or XXL et point de vente
+ * - Repères de coupe en croix (+) aux 4 angles de chaque billet
  */
 export const generatePhysicalTicketsPdf = async (
   event: EventItem,
@@ -165,13 +260,16 @@ export const generatePhysicalTicketsPdf = async (
 
   const pageWidth = 210;
   const marginX = 10;
-  const marginTop = 12;
-  const ticketsPerPage = 4;
-  const ticketWidth = pageWidth - marginX * 2; // 190mm
-  const ticketHeight = 63; // 63mm x 4 = 252mm + spacing = 270mm (sur 297mm A4)
-  const ticketSpacing = 4;
+  const ticketWidth = pageWidth - marginX * 2; // 190 mm
+  const ticketHeight = 52; // 52 mm
+  const ticketSpacing = 3; // 3 mm
+  const marginTop = 12.5; // (297 - (5 * 52 + 4 * 3)) / 2 = 12.5 mm
+  const ticketsPerPage = 5;
 
   const total = tickets.length;
+
+  // Chargement optimisé de l'affiche de l'événement (une seule fois pour tout le lot)
+  const posterDataUrl = await loadEventPosterDataUrl(event);
 
   for (let i = 0; i < total; i++) {
     const ticket = tickets[i];
@@ -187,66 +285,116 @@ export const generatePhysicalTicketsPdf = async (
 
     const startY = marginTop + indexOnPage * (ticketHeight + ticketSpacing);
 
-    // 1. Génération du QR Code officiel avec logo Thièsdn au centre
+    // 1. QR Code officiel avec logo Thièsdn au centre
     const qrDataUrl = await generateQrWithLogoDataUrl(ticket.qrCode);
 
-    // 2. Génération du code-barres 1D Code 128
+    // 2. Code-barres 1D Code 128
     const barcodeDataUrl = generateBarcode1DDataUrl(ticket.qrCode);
 
     // =================================================================
-    // DESSIN DU BILLET (Cadre Nocturnal Elegance Imprimable)
+    // REPÈRES DE COUPE EN CROIX (+) AUX 4 COINS
     // =================================================================
+    drawCropMark(doc, marginX, startY);
+    drawCropMark(doc, marginX + ticketWidth, startY);
+    drawCropMark(doc, marginX, startY + ticketHeight);
+    drawCropMark(doc, marginX + ticketWidth, startY + ticketHeight);
 
-    // Fond du billet principal (Gris anthracite très sombre)
-    doc.setFillColor(18, 18, 20);
-    doc.setDrawColor(233, 195, 73); // Liseré Or chaud
-    doc.setLineWidth(0.6);
-    doc.roundedRect(marginX, startY, ticketWidth, ticketHeight, 3, 3, 'FD');
+    // =================================================================
+    // FOND DU BILLET AVEC AFFICHE OFFICIELLE & OVERLAY LISIBILITÉ
+    // =================================================================
+    // Fond de base noir anthracite
+    doc.setFillColor(14, 14, 18);
+    doc.rect(marginX, startY, ticketWidth, ticketHeight, 'F');
 
-    // Bandeau d'en-tête officiel
-    doc.setFillColor(138, 43, 226); // Violet Thièsdn
-    doc.roundedRect(marginX, startY, ticketWidth, 7, 3, 3, 'F');
-    // Correction des coins bas du bandeau
-    doc.rect(marginX, startY + 3, ticketWidth, 4, 'F');
+    // Insertion de l'affiche officielle en plein fond si disponible
+    if (posterDataUrl) {
+      try {
+        const imageFormat = posterDataUrl.includes('image/png') ? 'PNG' : 'JPEG';
+        doc.addImage(posterDataUrl, imageFormat, marginX, startY, ticketWidth, ticketHeight);
+      } catch (imgErr) {
+        console.warn("Impossible d'insérer l'affiche dans le PDF:", imgErr);
+      }
+    }
+
+    // Overlay sombre semi-transparent pour garantir la lisibilité absolue des textes
+    doc.setFillColor(10, 10, 12);
+    try {
+      doc.setGState(new doc.GState({ opacity: 0.68 }));
+      doc.rect(marginX, startY, ticketWidth, ticketHeight, 'F');
+      doc.setGState(new doc.GState({ opacity: 1.0 }));
+    } catch {
+      // Fallback si setGState non disponible
+      doc.rect(marginX, startY, ticketWidth, ticketHeight, 'F');
+    }
+
+    // Liseré extérieur doré prestige (#E9C349)
+    doc.setDrawColor(233, 195, 73);
+    doc.setLineWidth(0.5);
+    doc.rect(marginX, startY, ticketWidth, ticketHeight, 'D');
+
+    // =================================================================
+    // EN-TÊTE : LOGO THIÈSDN, TITRE DE BILLETTERIE & BADGE CATÉGORIE OR
+    // =================================================================
+    // Logo Thièsdn officiel à gauche
+    try {
+      doc.addImage(LOGO_TIGHT_DATA_URL, 'PNG', marginX + 3, startY + 1.2, 10, 5);
+    } catch (e) {
+      // Fallback si erreur logo
+    }
 
     doc.setTextColor(255, 255, 255);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7.5);
-    doc.text(
-      'THIES DAYS AND NIGHTS - BILLET PHYSIQUE OFFICIEL SECURISE',
-      marginX + 4,
-      startY + 4.8
-    );
+    doc.text('THIESDN BILLETTERIE', marginX + 14.5, startY + 4.8);
 
-    doc.setFontSize(7);
+    doc.setFontSize(5.5);
     doc.setTextColor(233, 195, 73);
-    const serialStr = ticket.serialNumber
-      ? `N ${String(ticket.serialNumber).padStart(4, '0')} / ${String(total).padStart(4, '0')}`
-      : `PASS #${i + 1}`;
-    doc.text(serialStr, marginX + ticketWidth - 32, startY + 4.8);
+    doc.text('OFFICIEL', marginX + 54, startY + 4.8);
+
+    // Badge de catégorie / formule à droite (Fond Or #E9C349 avec texte noir bold)
+    const badgeCategoryWidth = 36;
+    const badgeCategoryHeight = 5.0;
+    const badgeCategoryX = marginX + ticketWidth - badgeCategoryWidth - 3;
+    const badgeCategoryY = startY + 1.2;
+
+    doc.setFillColor(233, 195, 73); // Or officiel
+    doc.roundedRect(badgeCategoryX, badgeCategoryY, badgeCategoryWidth, badgeCategoryHeight, 1.2, 1.2, 'F');
+
+    doc.setTextColor(18, 18, 20); // Texte noir soutenu
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(6.5);
+    const cleanTierBadge = sanitizeForPdf(tier.name).toUpperCase();
+    doc.text(cleanTierBadge, badgeCategoryX + badgeCategoryWidth / 2, badgeCategoryY + 3.6, {
+      align: 'center',
+    });
+
+    // Ligne de séparation fine dorée sous l'en-tête
+    doc.setDrawColor(233, 195, 73);
+    doc.setLineWidth(0.35);
+    doc.line(marginX + 2, startY + 7.2, marginX + ticketWidth - 2, startY + 7.2);
 
     // =================================================================
     // 1. SOUCHE GAUCHE : CONTRÔLE D'ACCÈS (QR CODE + CODE-BARRES 1D)
     // =================================================================
-    const stubWidth = 54;
-    // Fond blanc pour garantir le contraste du scan optique et laser
+    const stubWidth = 48;
+    // Fond blanc net pour contraste maximal de lecture optique et laser
     doc.setFillColor(255, 255, 255);
-    doc.setDrawColor(200, 200, 200);
+    doc.setDrawColor(233, 195, 73);
     doc.setLineWidth(0.3);
-    doc.roundedRect(marginX + 2.5, startY + 9, stubWidth - 5, ticketHeight - 11.5, 2, 2, 'FD');
+    doc.roundedRect(marginX + 2.5, startY + 8.5, stubWidth - 3.5, 37, 1.5, 1.5, 'FD');
 
-    // A. Image du QR Code officiel avec Logo Thièsdn (27 mm x 27 mm)
-    const qrSize = 27;
-    const qrX = marginX + (stubWidth - qrSize) / 2;
-    const qrY = startY + 10.5;
+    // A. Image du QR Code officiel avec Logo Thièsdn (24 mm x 24 mm)
+    const qrSize = 24;
+    const qrX = marginX + 2.5 + (stubWidth - 3.5 - qrSize) / 2;
+    const qrY = startY + 9.5;
     doc.addImage(qrDataUrl, 'PNG', qrX, qrY, qrSize, qrSize);
 
-    // Si pas de DOM (Node), dessiner le badge blanc et le logo de secours
+    // Si pas de DOM (Node.js fallback logo au centre)
     if (typeof document === 'undefined') {
       const logoW = qrSize * 0.24;
       const logoH = logoW * (357 / 716);
-      const padX = 0.9;
-      const padY = 0.7;
+      const padX = 0.8;
+      const padY = 0.6;
       const badgeW = logoW + padX * 2;
       const badgeH = logoH + padY * 2;
       const badgeX = qrX + (qrSize - badgeW) / 2;
@@ -259,159 +407,191 @@ export const generatePhysicalTicketsPdf = async (
       doc.addImage(LOGO_TIGHT_DATA_URL, 'PNG', badgeX + padX, badgeY + padY, logoW, logoH);
     }
 
-    // B. Code-barres 1D Code 128 (Largeur 44mm, Hauteur 10mm)
-    const barcodeW = 44;
-    const barcodeH = 10;
-    const barcodeX = marginX + (stubWidth - barcodeW) / 2;
-    const barcodeY = startY + 38.5;
+    // B. Code-barres 1D Code 128 (Largeur 40mm, Hauteur 6mm)
+    const barcodeW = 40;
+    const barcodeH = 6;
+    const barcodeX = marginX + 2.5 + (stubWidth - 3.5 - barcodeW) / 2;
+    const barcodeY = startY + 34.2;
 
     if (barcodeDataUrl) {
       doc.addImage(barcodeDataUrl, 'PNG', barcodeX, barcodeY, barcodeW, barcodeH);
     } else {
-      // Cadre de secours pour le code-barres
       doc.setFillColor(245, 245, 245);
       doc.rect(barcodeX, barcodeY, barcodeW, barcodeH, 'F');
     }
 
-    // Texte sous le code-barres (Identifiant unique du billet)
+    // Identifiant unique sous le code-barres
     doc.setTextColor(20, 20, 20);
     doc.setFont('courier', 'bold');
-    doc.setFontSize(6.5);
-    doc.text(sanitizeForPdf(ticket.qrCode), marginX + stubWidth / 2, startY + 52, {
+    doc.setFontSize(5.2);
+    doc.text(sanitizeForPdf(ticket.qrCode), marginX + 2.5 + (stubWidth - 3.5) / 2, startY + 42.2, {
       align: 'center',
     });
 
-    doc.setTextColor(100, 100, 105);
+    doc.setTextColor(110, 110, 115);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(4.8);
-    doc.text('SCAN QR OU DOUCHETTE LASER 1D', marginX + stubWidth / 2, startY + 55.5, {
+    doc.setFontSize(4.0);
+    doc.text('SCAN QR OU DOUCHETTE LASER 1D', marginX + 2.5 + (stubWidth - 3.5) / 2, startY + 44.5, {
       align: 'center',
     });
 
     // Ligne de découpe pointillée entre la souche et le corps
-    doc.setDrawColor(140, 140, 140);
+    doc.setDrawColor(180, 180, 180);
     doc.setLineDashPattern([1.5, 1.5], 0);
-    doc.setLineWidth(0.3);
-    doc.line(marginX + stubWidth, startY + 8, marginX + stubWidth, startY + ticketHeight);
-    doc.setLineDashPattern([], 0); // Réinitialiser le style de ligne
+    doc.setLineWidth(0.25);
+    doc.line(marginX + stubWidth + 1, startY + 7.5, marginX + stubWidth + 1, startY + 46.5);
+    doc.setLineDashPattern([], 0);
 
     // =================================================================
-    // 2. CORPS CENTRAL : DÉTAILS DE L'ÉVÉNEMENT
+    // 2. CORPS CENTRAL : DÉTAILS DE L'ÉVÉNEMENT (Largeur 98 mm)
     // =================================================================
-    const bodyStartX = marginX + stubWidth + 5;
-    const bodyWidth = 88;
+    const bodyStartX = marginX + stubWidth + 4;
+    const bodyWidth = 98;
 
-    // Titre de l'événement (sans emojis ni caractères corrompus)
+    // Titre de l'événement en grand (helvetica bold)
     doc.setTextColor(255, 255, 255);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
     const cleanTitle = sanitizeForPdf(event.title).toUpperCase();
     const titleLines = doc.splitTextToSize(cleanTitle, bodyWidth);
-    doc.text(titleLines.slice(0, 2), bodyStartX, startY + 14);
+    doc.text(titleLines.slice(0, 2), bodyStartX, startY + 12);
 
     const titleOffset = titleLines.length > 1 ? 4 : 0;
 
-    // Date & Heure (propre sans emojis)
+    // Date & Heure avec séparateur ASCII propre
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8.5);
-    doc.setTextColor(233, 195, 73); // Or
+    doc.setFontSize(7.8);
+    doc.setTextColor(233, 195, 73); // Or chaud
     const cleanDate = sanitizeForPdf(event.date);
     const cleanTime = sanitizeForPdf(event.time);
-    doc.text(`DATE : ${cleanDate} - ${cleanTime}`, bodyStartX, startY + 22 + titleOffset);
+    doc.text(`DATE : ${cleanDate}  -  HEURE : ${cleanTime}`, bodyStartX, startY + 18.5 + titleOffset);
 
-    // Lieu & Ville (propre sans emojis)
+    // Lieu, Quartier & Ville
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.setTextColor(220, 220, 225);
+    doc.setFontSize(7.2);
+    doc.setTextColor(225, 225, 230);
     const cleanVenue = sanitizeForPdf(event.venue);
     const cleanQuartier = event.quartier ? ` (${sanitizeForPdf(event.quartier)})` : '';
     const cleanCity = sanitizeForPdf(event.city);
     const locationStr = `LIEU : ${cleanVenue}${cleanQuartier}, ${cleanCity}`;
     const locationLines = doc.splitTextToSize(locationStr, bodyWidth);
-    doc.text(locationLines.slice(0, 2), bodyStartX, startY + 28 + titleOffset);
-
-    // Catégorie / Formule
-    doc.setFillColor(35, 30, 45);
-    doc.setDrawColor(138, 43, 226);
-    doc.setLineWidth(0.3);
-    doc.roundedRect(bodyStartX, startY + 36.5 + titleOffset, 58, 6.5, 1.5, 1.5, 'FD');
-
-    doc.setTextColor(220, 184, 255);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7.5);
-    const cleanTierName = sanitizeForPdf(tier.name).toUpperCase();
-    doc.text(`FORMULE : ${cleanTierName}`, bodyStartX + 3, startY + 41 + titleOffset);
+    doc.text(locationLines.slice(0, 2), bodyStartX, startY + 24 + titleOffset);
 
     // Organisateur officiel
     doc.setFont('helvetica', 'italic');
-    doc.setFontSize(6.5);
-    doc.setTextColor(150, 150, 155);
+    doc.setFontSize(6.2);
+    doc.setTextColor(170, 170, 175);
     const cleanPromoter = sanitizeForPdf(event.promoter.name);
-    doc.text(`Organise par : ${cleanPromoter}`, bodyStartX, startY + 48 + titleOffset);
+    doc.text(`Organise par : ${cleanPromoter}`, bodyStartX, startY + 30 + titleOffset);
+
+    // Badge catégorie interne
+    doc.setFillColor(32, 26, 45);
+    doc.setDrawColor(138, 43, 226);
+    doc.setLineWidth(0.25);
+    doc.roundedRect(bodyStartX, startY + 34.5 + titleOffset, 55, 5, 1, 1, 'FD');
+
+    doc.setTextColor(220, 184, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(6.2);
+    const cleanTierName = sanitizeForPdf(tier.name).toUpperCase();
+    doc.text(`CATEGORIE : ${cleanTierName}`, bodyStartX + 2.5, startY + 38 + titleOffset);
 
     // Consigne de sécurité
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(5.5);
-    doc.setTextColor(140, 140, 140);
+    doc.setFontSize(5.0);
+    doc.setTextColor(140, 140, 145);
     doc.text(
-      'Pass officiel infalsifiable. Billet a usage unique avec controle instantane.',
+      'Pass officiel infalsifiable - Billet a usage unique avec controle instantane.',
       bodyStartX,
-      startY + 53.5
+      startY + 44.5
     );
 
+    // Ligne de découpe pointillée entre le corps et la zone droite
+    doc.setDrawColor(180, 180, 180);
+    doc.setLineDashPattern([1.5, 1.5], 0);
+    doc.setLineWidth(0.25);
+    doc.line(marginX + ticketWidth - 36, startY + 7.5, marginX + ticketWidth - 36, startY + 46.5);
+    doc.setLineDashPattern([], 0);
+
     // =================================================================
-    // 3. ENCART DROIT : SOUCHE GUICHET & TARIF PUBLIC
+    // 3. ENCART DROIT : SOUCHE GUICHET & TARIF PUBLIC (Largeur 33 mm)
     // =================================================================
-    const rightStartX = marginX + ticketWidth - 38;
-    doc.setFillColor(25, 23, 18);
+    const rightStartX = marginX + ticketWidth - 34;
+    doc.setFillColor(25, 22, 17);
     doc.setDrawColor(233, 195, 73);
-    doc.setLineWidth(0.4);
-    doc.roundedRect(rightStartX, startY + 9, 35, ticketHeight - 11.5, 2, 2, 'FD');
+    doc.setLineWidth(0.35);
+    doc.roundedRect(rightStartX, startY + 8.5, 31.5, 37, 1.5, 1.5, 'FD');
 
-    doc.setTextColor(180, 180, 180);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(6.5);
-    doc.text('TARIF PUBLIC', rightStartX + 17.5, startY + 15.5, { align: 'center' });
-
-    // Prix en grand
+    // Identifiant Pass
     doc.setTextColor(233, 195, 73);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    doc.text(`${tier.price.toLocaleString('fr-FR')} F`, rightStartX + 17.5, startY + 22.5, {
+    doc.setFontSize(6.0);
+    const serialStr = ticket.serialNumber
+      ? `PASS #${String(ticket.serialNumber).padStart(3, '0')}`
+      : `PASS #${String(i + 1).padStart(3, '0')}`;
+    doc.text(serialStr, rightStartX + 15.75, startY + 12.5, { align: 'center' });
+
+    doc.setTextColor(180, 180, 185);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(5.5);
+    doc.text('TARIF PUBLIC', rightStartX + 15.75, startY + 17, { align: 'center' });
+
+    // Prix en très grand
+    doc.setTextColor(233, 195, 73);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10.5);
+    doc.text(`${tier.price.toLocaleString('fr-FR')} F`, rightStartX + 15.75, startY + 23, {
       align: 'center',
     });
 
     doc.setTextColor(200, 200, 200);
-    doc.setFontSize(6);
-    doc.text('FCFA TTC', rightStartX + 17.5, startY + 26.5, { align: 'center' });
+    doc.setFontSize(5.5);
+    doc.text('FCFA TTC', rightStartX + 15.75, startY + 26.5, { align: 'center' });
 
-    // Zone attribution collaborateur
+    // Zone attribution collaborateur / point de vente
     doc.setFillColor(15, 15, 18);
-    doc.roundedRect(rightStartX + 2, startY + 30.5, 31, 15, 1.5, 1.5, 'F');
+    doc.roundedRect(rightStartX + 1.8, startY + 29, 28, 15, 1, 1, 'F');
 
     doc.setTextColor(150, 150, 155);
-    doc.setFontSize(5);
-    doc.text('POINT DE VENTE :', rightStartX + 3.5, startY + 34.5);
+    doc.setFontSize(4.8);
+    doc.text('POINT DE VENTE :', rightStartX + 3.2, startY + 32.5);
 
     doc.setTextColor(255, 255, 255);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(5.5);
-    const agentDisplay = sanitizeForPdf(ticket.agentName) || 'Reseau Partenaire';
-    doc.text(agentDisplay.slice(0, 16), rightStartX + 3.5, startY + 38.5);
+    doc.setFontSize(5.0);
+    const agentDisplay = sanitizeForPdf(ticket.agentName) || 'Agence Thies Can';
+    doc.text(agentDisplay.slice(0, 18), rightStartX + 3.2, startY + 36.5);
 
     doc.setTextColor(138, 43, 226);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(5);
-    doc.text('THIESDN RESEAU 2026', rightStartX + 17.5, startY + 43.5, { align: 'center' });
+    doc.setFontSize(4.8);
+    doc.text('THIESDN CAN 2026', rightStartX + 15.75, startY + 41.5, { align: 'center' });
 
-    // Découpe extérieure en pointillés pour faciliter la coupe aux ciseaux
-    if (indexOnPage < ticketsPerPage - 1) {
-      doc.setDrawColor(180, 180, 180);
-      doc.setLineDashPattern([2, 3], 0);
-      doc.setLineWidth(0.2);
-      doc.line(marginX, startY + ticketHeight + 2, marginX + ticketWidth, startY + ticketHeight + 2);
-      doc.setLineDashPattern([], 0);
-    }
+    // =================================================================
+    // PIED DE PAGE : MENTIONS LÉGALES & SIGNATURE OFFICIELLE
+    // =================================================================
+    doc.setDrawColor(233, 195, 73);
+    doc.setLineWidth(0.3);
+    doc.line(marginX + 2, startY + 46.8, marginX + ticketWidth - 2, startY + 46.8);
+
+    doc.setTextColor(150, 150, 155);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(5.0);
+    doc.text(
+      "Presentation obligatoire a l'entree. Billet strictement nominatif et infalsifiable.",
+      marginX + 3.5,
+      startY + 50.2
+    );
+
+    doc.setTextColor(233, 195, 73);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(5.0);
+    doc.text(
+      'Thiesdn Officiel - DAW Digital Arts Work by MG',
+      marginX + ticketWidth - 3.5,
+      startY + 50.2,
+      { align: 'right' }
+    );
   }
 
   return doc.output('blob');

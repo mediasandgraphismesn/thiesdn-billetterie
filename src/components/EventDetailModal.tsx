@@ -393,7 +393,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                       }
                     }
                   }}
-                  className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-red-600/90 hover:bg-red-600 text-white font-heading font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-red-900/40 hover:scale-105 transition-all self-start sm:self-auto shrink-0 border border-red-400/30"
+                  className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#8A2BE2] hover:bg-[#7824c7] text-white font-heading font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-[#8A2BE2]/30 hover:scale-105 transition-all self-start sm:self-auto shrink-0 border border-white/20"
                 >
                   <Play className="w-3.5 h-3.5 fill-current" />
                   <span>Voir le Teaser</span>
@@ -554,13 +554,14 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                 {(event.description || event.longDescription || event.socialFacebook || event.socialInstagram || event.socialTiktok || event.socialYoutube || event.youtubeUrl || event.websiteUrl) && (
                   <div className="bg-[#201F1F] p-4 sm:p-5 rounded-2xl border border-white/5 space-y-4">
                     <div className="flex items-center justify-between">
-                      <h3 className="font-heading text-xs font-bold text-[#DCB8FF] uppercase tracking-wider flex items-center gap-1.5">
-                        <Sparkles className="w-4 h-4 text-[#8A2BE2]" />
-                        <span>À Propos de l'Événement</span>
+                      <h3 className="font-heading text-xs font-bold text-[#DCB8FF] uppercase tracking-wider">
+                        À Propos de l'Événement
                       </h3>
-                      <span className="text-[11px] text-[#E9C349] font-medium">
-                        Par {event.promoter.name}
-                      </span>
+                      {event.promoter?.name && event.promoter.name.trim().toLowerCase() !== 'utilisateur' && (
+                        <span className="text-[11px] text-[#E9C349] font-medium">
+                          Par {event.promoter.name}
+                        </span>
+                      )}
                     </div>
 
                     {/* Accroche / Description Courte */}
@@ -1187,7 +1188,11 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
 
             {/* Footer de la modale vidéo */}
             <div className="p-3.5 bg-[#14131A] border-t border-white/10 flex items-center justify-between text-xs text-gray-400">
-              <span className="truncate">Produit et partagé par {event.promoter.name}</span>
+              <span className="truncate">
+                {event.promoter?.name && event.promoter.name.trim().toLowerCase() !== 'utilisateur'
+                  ? `Produit et partagé par ${event.promoter.name}`
+                  : 'Production officielle Thièsdn'}
+              </span>
               <button
                 onClick={() => setIsTeaserOpen(false)}
                 className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs"
