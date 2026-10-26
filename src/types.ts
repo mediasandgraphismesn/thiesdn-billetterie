@@ -102,6 +102,7 @@ export interface EventItem {
   spotifyUrl?: string;
   videoSpotUrl?: string;
   salesOpenAt?: string; // Date & Heure ISO d'ouverture officielle des ventes (si future => mode compte a rebours et pre-inscription)
+  estimatedEndTime?: string; // Heure estimée de fin (ex: "05:00" le lendemain matin, défaut: +6h après début)
   promoCode?: string;
   promoDiscountPercent?: number;
   tiers?: TicketTier[];

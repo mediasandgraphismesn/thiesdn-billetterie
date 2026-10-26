@@ -4745,6 +4745,41 @@ USING (
 // MÉTHODES DE PRODUCTION RÉELLE — PERSISTANCE SUPABASE EXCLUSIVE
 // ====================================================================
 
+/**
+ * Calcule l'heure réelle de fin d'un événement (gestion des nuits traversant minuit).
+ * Si estimatedEndTime n'est pas renseigné, applique une durée par défaut de 6 heures.
+ * Si l'heure de fin est <= heure de début (ex: 23h00 -> 05h00), bascule automatiquement au lendemain matin.
+ */
+export const getEventEndDatetime = (event: {
+  datetimeIso?: string;
+  date?: string;
+  time?: string;
+  estimatedEndTime?: string;
+}): Date => {
+  const start = event.datetimeIso ? new Date(event.datetimeIso) : new Date();
+  if (isNaN(start.getTime())) return new Date();
+
+  if (event.estimatedEndTime && event.estimatedEndTime.trim()) {
+    const parts = event.estimatedEndTime.trim().split(':');
+    if (parts.length >= 2) {
+      const h = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10);
+      if (!isNaN(h) && !isNaN(m)) {
+        const end = new Date(start);
+        end.setHours(h, m, 0, 0);
+        // Si l'heure de fin est inférieure ou égale à l'heure de début, c'est le lendemain matin
+        if (end.getTime() <= start.getTime()) {
+          end.setDate(end.getDate() + 1);
+        }
+        return end;
+      }
+    }
+  }
+
+  // Durée forfaitaire par défaut de 6 heures après le début
+  return new Date(start.getTime() + 6 * 60 * 60 * 1000);
+};
+
 export const mapDbEventToItem = (db: any): EventItem => {
   const tiers: TicketTier[] = Array.isArray(db.ticket_tiers) && db.ticket_tiers.length > 0
     ? db.ticket_tiers
@@ -4833,6 +4868,7 @@ export const mapDbEventToItem = (db: any): EventItem => {
     spotifyUrl: db.spotify_url || db.spotifyUrl || '',
     videoSpotUrl: db.video_spot_url || db.youtube_url || db.social_youtube || '',
     salesOpenAt: db.sales_open_at || db.salesOpenAt || undefined,
+    estimatedEndTime: db.estimated_end_time || db.estimatedEndTime || undefined,
     promoCode: db.promo_code || db.promoCode || '',
     promoDiscountPercent: db.promo_discount_percent ? Number(db.promo_discount_percent) : (db.promoDiscountPercent ? Number(db.promoDiscountPercent) : undefined),
     tiers: enrichedTiers,
@@ -4891,6 +4927,7 @@ export const createEventInSupabase = async (
     spotifyUrl?: string;
     videoSpotUrl?: string;
     salesOpenAt?: string;
+    estimatedEndTime?: string;
     promoCode?: string;
     promoDiscountPercent?: number;
   },
@@ -4981,6 +5018,7 @@ export const createEventInSupabase = async (
       spotify_url: eventData.spotifyUrl?.trim() || null,
       video_spot_url: eventData.videoSpotUrl?.trim() || eventData.socialYoutube?.trim() || null,
       sales_open_at: eventData.salesOpenAt?.trim() || null,
+      estimated_end_time: eventData.estimatedEndTime?.trim() || null,
       promo_code: eventData.promoCode?.trim().toUpperCase() || null,
       promo_discount_percent: eventData.promoDiscountPercent || null,
     };
@@ -5128,6 +5166,19 @@ export const updateEventInSupabase = async (
       dbPayload.youtube_url = updates.videoSpotUrl.trim() || null;
     }
     if (updates.salesOpenAt !== undefined) dbPayload.sales_open_at = updates.salesOpenAt || null;
+    if (updates.estimatedEndTime !== undefined) dbPayload.estimated_end_time = updates.estimatedEndTime ? updates.estimatedEndTime.trim() : null;
+
+    // Synchronisation de ticket_tiers avec les nouveaux liens Wave pour cohérence totale
+    if (Array.isArray(updates.tiers) && updates.tiers.length > 0) {
+      dbPayload.ticket_tiers = updates.tiers.map((t) => {
+        let waveUrl = t.wavePaymentUrl;
+        const nameLower = (t.name || '').toLowerCase();
+        if (nameLower.includes('vip') && updates.waveLinkVip) waveUrl = updates.waveLinkVip.trim();
+        else if (nameLower.includes('jour') && updates.waveLinkJourJ) waveUrl = updates.waveLinkJourJ.trim();
+        else if ((nameLower.includes('prévente') || nameLower.includes('prevente')) && updates.waveLinkPrevente) waveUrl = updates.waveLinkPrevente.trim();
+        return { ...t, wavePaymentUrl: waveUrl };
+      });
+    }
 
     let { data, error } = await client
       .from('events')
@@ -5136,11 +5187,11 @@ export const updateEventInSupabase = async (
       .select()
       .single();
 
+    // Repli si colonnes optionnelles manquantes (PGRST204) — ATTENTION : Ne JAMAIS supprimer les liens Wave !
     if (error && (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('does not exist'))) {
+      console.warn('Colonnes optionnelles absentes dans events, tentative avec payload allégé (conservation stricte des liens Wave) :', error.message);
       const minimalPayload = { ...dbPayload };
-      delete minimalPayload.wave_link_prevente;
-      delete minimalPayload.wave_link_jour_j;
-      delete minimalPayload.wave_link_vip;
+      // Note : wave_link_prevente, wave_link_jour_j et wave_link_vip sont conservés obligatoirement !
       delete minimalPayload.long_description;
       delete minimalPayload.quartier;
       delete minimalPayload.whatsapp_contact;
@@ -5159,12 +5210,24 @@ export const updateEventInSupabase = async (
       delete minimalPayload.spotify_url;
       delete minimalPayload.video_spot_url;
       delete minimalPayload.sales_open_at;
+      delete minimalPayload.estimated_end_time;
       const fb = await client.from('events').update(minimalPayload).eq('id', eventId).select().single();
       data = fb.data;
       error = fb.error;
     }
 
-    if (error) return { success: false, error: error.message };
+    console.log('UPDATE DATA:', data, 'ERROR:', error);
+
+    if (error) {
+      console.error('Erreur Supabase update event:', error);
+      return { success: false, error: error.message };
+    }
+
+    if (!data) {
+      console.warn('Aucune donnée retournée par update event (RLS bloque la mise à jour).');
+      return { success: false, error: 'Erreur : modification non persistée. Vérifiez les permissions RLS.' };
+    }
+
     return { success: true, event: mapDbEventToItem(data) };
   } catch (err: any) {
     return { success: false, error: err.message };

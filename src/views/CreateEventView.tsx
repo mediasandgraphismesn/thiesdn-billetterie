@@ -109,6 +109,7 @@ interface EventFormData {
   websiteUrl: string;
   spotifyUrl: string;
   salesOpenAt: string;
+  estimatedEndTime: string;
   pricePrevente: number;
   priceJourJ: number;
   priceVip: number;
@@ -147,6 +148,7 @@ const INITIAL_FORM_STATE: EventFormData = {
   websiteUrl: '',
   spotifyUrl: '',
   salesOpenAt: '',
+  estimatedEndTime: '',
   pricePrevente: 3500,
   priceJourJ: 5000,
   priceVip: 10000,
@@ -305,6 +307,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
     websiteUrl,
     spotifyUrl,
     salesOpenAt,
+    estimatedEndTime,
     pricePrevente,
     priceJourJ,
     priceVip,
@@ -323,6 +326,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
   const setStartDatetime = (val: string) => updateField('startDatetime', val);
   const setEndDatetime = (val: string) => updateField('endDatetime', val);
   const setSalesOpenAt = (val: string) => updateField('salesOpenAt', val);
+  const setEstimatedEndTime = (val: string) => updateField('estimatedEndTime', val);
   const setSpotifyUrl = (val: string) => updateField('spotifyUrl', val);
   const setVenue = (val: string) => updateField('venue', val);
   const setCity = (val: string) => updateField('city', val);
@@ -520,6 +524,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
           websiteUrl: websiteUrl.trim() || undefined,
           spotifyUrl: spotifyUrl.trim() || undefined,
           salesOpenAt: salesOpenAt ? new Date(salesOpenAt).toISOString() : undefined,
+          estimatedEndTime: estimatedEndTime.trim() || undefined,
           videoSpotUrl: (youtubeUrl.trim() || socialYoutube.trim()) || undefined,
           promoCode: promoCode.trim().toUpperCase() || undefined,
           promoDiscountPercent: promoDiscountPercent ? Number(promoDiscountPercent) : undefined,
@@ -900,6 +905,29 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
                 />
               </div>
             </div>
+          </div>
+
+          {/* Heure de fin estimée (gestion soirée traversant minuit) */}
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-[#DCB8FF]" />
+                <span>Heure de Fin Estimée de la Soirée (Optionnel)</span>
+              </label>
+              <span className="text-[10px] text-[#DCB8FF]">Défaut: 6h après début si vide</span>
+            </div>
+            <div className="input-glass rounded-xl px-4 py-3">
+              <input
+                type="text"
+                value={estimatedEndTime}
+                onChange={(e) => setEstimatedEndTime(e.target.value)}
+                placeholder="Ex: 05:00 (si l'événement traverse minuit jusqu'à l'aube)"
+                className="w-full bg-transparent border-none outline-none text-white text-sm focus:ring-0 p-0 font-mono"
+              />
+            </div>
+            <p className="text-[11px] text-gray-400">
+              Permet au système de maintenir l'événement actif et affiché le lendemain matin (ex: KMOU JANGO commence à 23h00 et se termine à 05h00).
+            </p>
           </div>
 
           {/* Date d'ouverture des ventes (Compte à rebours & Pré-inscriptions) */}

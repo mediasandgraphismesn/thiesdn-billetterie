@@ -265,8 +265,11 @@ export const PublicScannerStationView: React.FC<PublicScannerStationViewProps> =
             <h1 className="font-heading text-lg font-black text-white leading-tight mt-0.5">
               {station.name}
             </h1>
-            <p className="text-[11px] text-gray-400 truncate max-w-[240px]">
-              {station.eventTitle}
+            <p className="text-[11px] text-gray-400 truncate max-w-[240px] flex items-center gap-1.5">
+              <span>{station.eventTitle}</span>
+              <span className="text-[9px] text-[#DCB8FF] font-bold bg-[#8A2BE2]/20 px-1.5 py-0.2 rounded">
+                24h/24
+              </span>
             </p>
           </div>
 

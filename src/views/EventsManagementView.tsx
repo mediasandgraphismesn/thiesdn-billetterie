@@ -131,6 +131,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
     salesActive: true,
     featured: false,
     salesOpenAt: '',
+    estimatedEndTime: '',
     spotifyUrl: '',
     videoSpotUrl: '',
     waveLinkPrevente: '',
@@ -274,6 +275,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
       salesActive: event.salesActive !== undefined ? event.salesActive : true,
       featured: Boolean(event.featured),
       salesOpenAt: event.salesOpenAt || '',
+      estimatedEndTime: event.estimatedEndTime || '',
       spotifyUrl: event.spotifyUrl || '',
       videoSpotUrl: event.videoSpotUrl || event.youtubeUrl || event.socialYoutube || '',
       waveLinkPrevente: event.waveLinkPrevente || '',
@@ -290,6 +292,13 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingEvent) return;
+
+    // Diagnostic console de l'envoi des liens Wave
+    console.log('PAYLOAD WAVE:', {
+      wave_link_prevente: editForm.waveLinkPrevente,
+      wave_link_jour_j: editForm.waveLinkJourJ,
+      wave_link_vip: editForm.waveLinkVip,
+    });
 
     setIsSavingEdit(true);
     setEditError(null);
@@ -315,6 +324,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
       websiteUrl: editForm.websiteUrl,
       spotifyUrl: editForm.spotifyUrl,
       salesOpenAt: editForm.salesOpenAt || undefined,
+      estimatedEndTime: editForm.estimatedEndTime || undefined,
       videoSpotUrl: editForm.videoSpotUrl || editForm.socialYoutube,
       salesActive: editForm.salesActive,
       featured: editForm.featured,
@@ -325,12 +335,14 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
       waveLinkPrevente: editForm.waveLinkPrevente,
       waveLinkJourJ: editForm.waveLinkJourJ,
       waveLinkVip: editForm.waveLinkVip,
+      tiers: editingEvent.tiers,
     });
 
     setIsSavingEdit(false);
 
-    if (!res.success) {
-      setEditError(res.error || 'Erreur lors de la mise à jour.');
+    // Élimination du faux succès : on exige un retour de données effectif de Supabase
+    if (!res.success || !res.event) {
+      setEditError(res.error || 'Erreur : modification non persistée. Vérifiez les permissions RLS.');
       return;
     }
 
@@ -880,9 +892,9 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                       Date, Horaires & Emplacement
                     </p>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <label className="text-[10px] text-gray-400">Date textuelle</label>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="space-y-1 sm:col-span-1">
+                        <label className="text-[10px] text-gray-400">Date textuelle *</label>
                         <input
                           type="text"
                           required
@@ -893,14 +905,28 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                         />
                       </div>
 
-                      <div className="space-y-1">
-                        <label className="text-[10px] text-gray-400">Heure de début</label>
+                      <div className="space-y-1 sm:col-span-1">
+                        <label className="text-[10px] text-gray-400">Heure de début *</label>
                         <input
                           type="text"
                           required
                           value={editForm.time}
                           onChange={(e) => setEditForm({ ...editForm, time: e.target.value })}
-                          placeholder="ex: 20:00"
+                          placeholder="ex: 23:00"
+                          className="w-full bg-[#111111] border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
+                        />
+                      </div>
+
+                      <div className="space-y-1 sm:col-span-1">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] text-gray-400">Fin estimée</label>
+                          <span className="text-[9px] text-[#DCB8FF]">Défaut: +6h</span>
+                        </div>
+                        <input
+                          type="text"
+                          value={editForm.estimatedEndTime}
+                          onChange={(e) => setEditForm({ ...editForm, estimatedEndTime: e.target.value })}
+                          placeholder="ex: 05:00 (traversée 00h)"
                           className="w-full bg-[#111111] border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
                         />
                       </div>

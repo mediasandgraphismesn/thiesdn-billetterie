@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Search, SlidersHorizontal, TrendingUp, ChevronRight, Calendar, MapPin } from 'lucide-react';
 import { EventItem, CATEGORIES } from '../types';
 import { EventCard } from '../components/EventCard';
+import { getEventEndDatetime } from '../services/supabase';
 
 interface HomeViewProps {
   events: EventItem[];
@@ -19,10 +20,21 @@ export const HomeView: React.FC<HomeViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
 
-  // Filter approved events for public display
+  // Filtrer les événements approuvés
   const approvedEvents = events.filter((e) => e.status === 'approved');
 
-  const filteredEvents = approvedEvents.filter((e) => {
+  // Séparation dynamique : un événement n'est considéré "passé" que si maintenant > date_debut + fin_estimée
+  // Ainsi les soirées nocturnes qui traversent minuit (ex: KMOU JANGO) restent actives et "En cours" le lendemain matin
+  const now = Date.now();
+  const activeEvents = approvedEvents.filter((e) => {
+    const end = getEventEndDatetime(e).getTime();
+    return now <= end;
+  });
+
+  // Si tous les événements sont passés, afficher approvedEvents en repli pour ne pas avoir une page vide
+  const displayPool = activeEvents.length > 0 ? activeEvents : approvedEvents;
+
+  const filteredEvents = displayPool.filter((e) => {
     const matchesSearch =
       e.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       e.venue.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -34,7 +46,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
     return matchesSearch && matchesCategory;
   });
 
-  const featuredEvents = approvedEvents.filter((e) => e.featured);
+  const featuredEvents = displayPool.filter((e) => e.featured);
   const upcomingEvents = filteredEvents.slice(0, 8);
 
   return (
