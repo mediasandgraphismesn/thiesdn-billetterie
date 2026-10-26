@@ -11,15 +11,18 @@ import {
 import { EventItem, CATEGORIES, SENEGAL_CITIES } from '../types';
 import { THIES_QUARTIERS_BY_ZONE } from '../data/thiesQuartiers';
 import { EventCard } from '../components/EventCard';
+import { EventCardSkeleton } from '../components/EventCardSkeleton';
 import { MapView } from '../components/MapView';
 
 interface ExploreViewProps {
   events: EventItem[];
+  isLoading?: boolean;
   onSelectEvent: (event: EventItem) => void;
 }
 
 export const ExploreView: React.FC<ExploreViewProps> = ({
   events,
+  isLoading = false,
   onSelectEvent,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -199,7 +202,13 @@ export const ExploreView: React.FC<ExploreViewProps> = ({
       )}
 
       {/* Grid of Events */}
-      {filteredEvents.length === 0 ? (
+      {isLoading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {Array.from({ length: 6 }).map((_, idx) => (
+            <EventCardSkeleton key={`explore-skel-${idx}`} variant="grid" />
+          ))}
+        </div>
+      ) : filteredEvents.length === 0 ? (
         <div className="glass-panel p-12 rounded-3xl text-center space-y-3 border border-white/10 col-span-full">
           <div className="w-12 h-12 rounded-2xl bg-[#E9C349]/10 text-[#E9C349] flex items-center justify-center mx-auto border border-[#E9C349]/20">
             <Calendar className="w-6 h-6" />

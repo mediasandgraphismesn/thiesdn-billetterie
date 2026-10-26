@@ -1,4 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { motion } from 'framer-motion';
+import confetti from 'canvas-confetti';
 import {
   X,
   MapPin,
@@ -25,8 +27,137 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
   onClose,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const scratchCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const isScratchingRef = useRef(false);
+  const scratchMovesRef = useRef(0);
+
   const [isQrReady, setIsQrReady] = useState(false);
+  const [isRevealed, setIsRevealed] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
+
+  // Pluie de confettis Violet (#8A2BE2) et Or (#E9C349) à l'ouverture du pass
+  useEffect(() => {
+    if (isOpen) {
+      setIsRevealed(false);
+      scratchMovesRef.current = 0;
+      confetti({
+        particleCount: 90,
+        spread: 75,
+        origin: { y: 0.6 },
+        colors: ['#8A2BE2', '#E9C349', '#DCB8FF', '#FFFFFF'],
+      });
+    }
+  }, [isOpen]);
+
+  // Initialisation du canvas de grattage (Scratch Card)
+  const initScratchCanvas = useCallback(() => {
+    const sc = scratchCanvasRef.current;
+    if (!sc) return;
+    const ctx = sc.getContext('2d');
+    if (!ctx) return;
+
+    sc.width = 260;
+    sc.height = 260;
+
+    // Fond métallisé nocturne protecteur
+    const grad = ctx.createLinearGradient(0, 0, sc.width, sc.height);
+    grad.addColorStop(0, '#26242C');
+    grad.addColorStop(0.5, '#393644');
+    grad.addColorStop(1, '#1C1A22');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, sc.width, sc.height);
+
+    // Liseré or de sécurité prestige (#E9C349)
+    ctx.strokeStyle = '#E9C349';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(4, 4, sc.width - 8, sc.height - 8);
+
+    // Typographie et instructions tactiles
+    ctx.font = 'bold 13px system-ui, sans-serif';
+    ctx.fillStyle = '#E9C349';
+    ctx.textAlign = 'center';
+    ctx.fillText('THIÈSDN PASS CERTIFIÉ', sc.width / 2, sc.height / 2 - 20);
+
+    ctx.font = 'bold 11px system-ui, sans-serif';
+    ctx.fillStyle = '#DCB8FF';
+    ctx.fillText('✨ Frottez ici pour révéler ✨', sc.width / 2, sc.height / 2 + 5);
+
+    ctx.font = '10px system-ui, sans-serif';
+    ctx.fillStyle = '#A0A0A0';
+    ctx.fillText('(Protection anti-capture)', sc.width / 2, sc.height / 2 + 25);
+  }, []);
+
+  // Détection du frottement (Touch & Mouse) avec globalCompositeOperation = 'destination-out'
+  const handleScratchMove = (clientX: number, clientY: number) => {
+    if (!isScratchingRef.current || isRevealed) return;
+    const sc = scratchCanvasRef.current;
+    if (!sc) return;
+    const ctx = sc.getContext('2d');
+    if (!ctx) return;
+
+    const rect = sc.getBoundingClientRect();
+    const scaleX = sc.width / rect.width;
+    const scaleY = sc.height / rect.height;
+    const x = (clientX - rect.left) * scaleX;
+    const y = (clientY - rect.top) * scaleY;
+
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.beginPath();
+    ctx.arc(x, y, 24, 0, Math.PI * 2);
+    ctx.fill();
+
+    scratchMovesRef.current += 1;
+
+    // Vérifier la proportion de surface grattée tous les 8 mouvements
+    if (scratchMovesRef.current % 8 === 0) {
+      try {
+        const imgData = ctx.getImageData(0, 0, sc.width, sc.height);
+        let transparent = 0;
+        const total = imgData.data.length / 16;
+        for (let i = 3; i < imgData.data.length; i += 16) {
+          if (imgData.data[i] === 0) transparent++;
+        }
+        // Si plus de 40% de la pellicule est effacée, déverrouiller complètement le QR code
+        if (transparent / total > 0.40) {
+          setIsRevealed(true);
+        }
+      } catch {
+        // Fallback transparent
+      }
+    }
+  };
+
+  const onMouseDown = () => {
+    isScratchingRef.current = true;
+  };
+
+  const onMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    handleScratchMove(e.clientX, e.clientY);
+  };
+
+  const onMouseUp = () => {
+    isScratchingRef.current = false;
+  };
+
+  const onTouchStart = () => {
+    isScratchingRef.current = true;
+  };
+
+  const onTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (e.touches[0]) {
+      handleScratchMove(e.touches[0].clientX, e.touches[0].clientY);
+    }
+  };
+
+  const onTouchEnd = () => {
+    isScratchingRef.current = false;
+  };
+
+  useEffect(() => {
+    if (isQrReady && !isRevealed) {
+      initScratchCanvas();
+    }
+  }, [isQrReady, isRevealed, initScratchCanvas]);
 
   useEffect(() => {
     if (!isOpen || !ticket || !canvasRef.current) return;
@@ -160,7 +291,12 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
-      <div className="relative w-full max-w-sm sm:max-w-md bg-gradient-to-b from-[#221F28] via-[#171717] to-[#121212] border border-[#8A2BE2]/40 rounded-3xl overflow-hidden shadow-2xl my-6">
+      <motion.div
+        initial={{ opacity: 0, y: 50, scale: 0.95 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+        className="relative w-full max-w-sm sm:max-w-md bg-gradient-to-b from-[#221F28] via-[#171717] to-[#121212] border border-[#8A2BE2]/40 rounded-3xl overflow-hidden shadow-2xl my-6"
+      >
         
         {/* TOP BAR AVEC LOGO OFFICIEL THIÈSDN */}
         <div className="p-4 flex items-center justify-between border-b border-white/10 bg-black/40">
@@ -245,18 +381,66 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
             <span className="truncate">{ticket.eventVenue}</span>
           </div>
 
-          {/* SECTION QR CODE AVEC LOGO CENTRÉ (CANVAS OVERLAY) */}
+          {/* SECTION QR CODE AVEC EFFET SCRATCH CARD INTERACTIF */}
           <div className="p-5 rounded-2xl bg-white text-black flex flex-col items-center justify-center text-center shadow-2xl relative">
-            <div className="p-2 rounded-xl bg-gray-50 border border-gray-200 mb-2 flex items-center justify-center">
+            
+            {/* Texte et indicateur Scratch Card */}
+            {!isRevealed ? (
+              <div className="mb-2.5 flex flex-col items-center gap-1">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#8A2BE2]/10 border border-[#8A2BE2]/30 text-[#8A2BE2] text-xs font-heading font-extrabold tracking-wide uppercase animate-pulse">
+                  <Sparkles className="w-3.5 h-3.5 text-[#E9C349]" />
+                  <span>Frottez pour révéler votre billet</span>
+                </span>
+                <p className="text-[10px] text-gray-500 font-medium">
+                  Glissez votre doigt ou la souris sur la surface dorée
+                </p>
+              </div>
+            ) : (
+              <div className="mb-2 flex items-center gap-1.5 text-emerald-600 text-xs font-bold animate-in fade-in">
+                <CheckCircle className="w-4 h-4" />
+                <span>Billet révélé et prêt pour le scan d'entrée</span>
+              </div>
+            )}
+
+            {/* Conteneur Superposé QR Code + Scratch Canvas */}
+            <div className="relative p-2 rounded-xl bg-gray-50 border border-gray-200 mb-2 flex items-center justify-center overflow-hidden touch-none select-none">
+              {/* Canvas du QR Code certifié */}
               <canvas
                 ref={canvasRef}
                 className={`w-52 h-52 sm:w-56 sm:h-56 transition-opacity duration-300 ${
                   isQrReady ? 'opacity-100' : 'opacity-20'
                 }`}
               />
+
+              {/* Canvas à gratter (Scratch Card) superposé */}
+              {!isRevealed && isQrReady && (
+                <canvas
+                  ref={scratchCanvasRef}
+                  onMouseDown={onMouseDown}
+                  onMouseMove={onMouseMove}
+                  onMouseUp={onMouseUp}
+                  onMouseLeave={onMouseUp}
+                  onTouchStart={onTouchStart}
+                  onTouchMove={onTouchMove}
+                  onTouchEnd={onTouchEnd}
+                  className="absolute inset-0 w-full h-full cursor-crosshair z-20 rounded-xl shadow-inner transition-opacity duration-300"
+                  style={{ touchAction: 'none' }}
+                />
+              )}
             </div>
 
-            <div className="flex items-center gap-1.5 justify-center">
+            {/* Bouton de secours rapide en cas de rush à l'entrée */}
+            {!isRevealed && isQrReady && (
+              <button
+                type="button"
+                onClick={() => setIsRevealed(true)}
+                className="mt-1 text-[11px] font-bold text-[#8A2BE2] hover:text-[#7822c9] underline transition-colors cursor-pointer"
+              >
+                Passer le grattage et afficher directement
+              </button>
+            )}
+
+            <div className="flex items-center gap-1.5 justify-center mt-2">
               <Sparkles className="w-3.5 h-3.5 text-[#8A2BE2]" />
               <p className="font-mono text-xs font-bold tracking-widest text-[#241A00]">
                 {ticket.qrCode}
@@ -323,7 +507,7 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
             </button>
           </div>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 };

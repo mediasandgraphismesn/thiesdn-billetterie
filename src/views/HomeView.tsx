@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import { Search, SlidersHorizontal, TrendingUp, ChevronRight, Calendar, MapPin } from 'lucide-react';
 import { EventItem, CATEGORIES } from '../types';
 import { EventCard } from '../components/EventCard';
+import { EventCardSkeleton } from '../components/EventCardSkeleton';
 import { getEventEndDatetime } from '../services/supabase';
 
 interface HomeViewProps {
   events: EventItem[];
+  isLoading?: boolean;
   onSelectEvent: (event: EventItem) => void;
   onNavigateToExplore: () => void;
   onNavigateToCreate: () => void;
@@ -13,6 +15,7 @@ interface HomeViewProps {
 
 export const HomeView: React.FC<HomeViewProps> = ({
   events,
+  isLoading = false,
   onSelectEvent,
   onNavigateToExplore,
   onNavigateToCreate,
@@ -113,15 +116,23 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
         {/* Horizontal Carousel */}
         <div className="flex gap-4 overflow-x-auto pb-3 pt-1 scrollbar-none snap-x snap-mandatory">
-          {featuredEvents.map((event) => (
-            <div key={event.id} className="snap-start flex-shrink-0">
-              <EventCard
-                event={event}
-                variant="featured"
-                onSelect={onSelectEvent}
-              />
-            </div>
-          ))}
+          {isLoading ? (
+            Array.from({ length: 3 }).map((_, idx) => (
+              <div key={`featured-skel-${idx}`} className="snap-start flex-shrink-0">
+                <EventCardSkeleton variant="featured" />
+              </div>
+            ))
+          ) : (
+            featuredEvents.map((event) => (
+              <div key={event.id} className="snap-start flex-shrink-0">
+                <EventCard
+                  event={event}
+                  variant="featured"
+                  onSelect={onSelectEvent}
+                />
+              </div>
+            ))
+          )}
         </div>
       </section>
 
@@ -132,11 +143,17 @@ export const HomeView: React.FC<HomeViewProps> = ({
             Événements à Venir
           </h2>
           <span className="text-xs text-gray-400 font-medium">
-            {upcomingEvents.length} événements
+            {isLoading ? 'Chargement...' : `${upcomingEvents.length} événements`}
           </span>
         </div>
 
-        {approvedEvents.length === 0 ? (
+        {isLoading ? (
+          <div className="space-y-3">
+            {Array.from({ length: 6 }).map((_, idx) => (
+              <EventCardSkeleton key={`upcoming-skel-${idx}`} variant="list" />
+            ))}
+          </div>
+        ) : approvedEvents.length === 0 ? (
           <div className="glass-panel p-12 rounded-3xl text-center space-y-3 border border-white/10">
             <div className="w-12 h-12 rounded-2xl bg-[#E9C349]/10 text-[#E9C349] flex items-center justify-center mx-auto border border-[#E9C349]/20">
               <Calendar className="w-6 h-6" />

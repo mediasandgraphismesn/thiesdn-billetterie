@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import confetti from 'canvas-confetti';
 import {
   X,
   Calendar,
@@ -304,8 +306,18 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
-        <div className="relative w-full max-w-2xl bg-[#171717] border border-white/10 rounded-3xl overflow-hidden shadow-2xl my-8 max-h-[90vh] flex flex-col">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.2 }}
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md overflow-y-auto"
+      >
+        <motion.div
+          initial={{ opacity: 0, y: 35, scale: 0.96 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+          className="relative w-full max-w-2xl bg-[#171717] border border-white/10 rounded-3xl overflow-hidden shadow-2xl my-8 max-h-[90vh] flex flex-col"
+        >
           {/* Poster Header */}
           <div className="relative h-48 sm:h-56 w-full flex-shrink-0">
             <img
@@ -716,9 +728,27 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                                         <ShieldCheck className="w-2.5 h-2.5" /> VIP
                                       </span>
                                     )}
-                                    <span className="text-[11px] text-gray-400 bg-white/5 px-2 py-0.5 rounded-full">
-                                      {tier.available} places
-                                    </span>
+
+                                    {/* Badge d'Urgence en Temps Réel (Stock) */}
+                                    {tier.available > 20 ? (
+                                      <span className="text-[10px] text-gray-400 bg-white/5 border border-white/5 px-2.5 py-0.5 rounded-full font-medium">
+                                        Disponible
+                                      </span>
+                                    ) : tier.available > 5 ? (
+                                      <span className="text-[10px] text-[#E9C349] bg-[#E9C349]/15 border border-[#E9C349]/40 px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1.5 animate-pulse shadow-sm shadow-[#E9C349]/20">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-[#E9C349]" />
+                                        Plus que {tier.available} places !
+                                      </span>
+                                    ) : tier.available > 0 ? (
+                                      <span className="text-[10px] text-[#EF4444] bg-[#EF4444]/15 border border-[#EF4444]/40 px-2.5 py-0.5 rounded-full font-extrabold flex items-center gap-1.5 shadow-sm shadow-red-500/20">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-[#EF4444] animate-ping" />
+                                        Dernières places !
+                                      </span>
+                                    ) : (
+                                      <span className="text-[10px] text-gray-500 bg-white/5 border border-white/5 px-2.5 py-0.5 rounded-full font-bold">
+                                        Épuisé
+                                      </span>
+                                    )}
                                   </div>
                                   <p className="text-xs text-gray-400 mt-1">{tier.description}</p>
                                 </div>
@@ -927,18 +957,54 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                   </div>
                 </div>
 
-                {/* Bouton WhatsApp */}
-                <div className="max-w-md mx-auto pt-1">
+                {/* Boutons d'Action Post-Achat */}
+                <div className="max-w-md mx-auto pt-1 space-y-2.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      confetti({
+                        particleCount: 110,
+                        spread: 80,
+                        origin: { y: 0.6 },
+                        colors: ['#8A2BE2', '#E9C349', '#DCB8FF', '#FFFFFF'],
+                      });
+                      if (onPurchaseSuccess && activeOrder) {
+                        const pseudoTicket: UserTicket = {
+                          id: activeOrder.id,
+                          eventId: event.id,
+                          eventTitle: event.title,
+                          eventDate: event.date,
+                          eventTime: event.time,
+                          eventVenue: event.venue,
+                          eventPoster: event.posterUrl,
+                          tierName: activeOrder.tierName,
+                          price: activeOrder.totalAmount,
+                          qrCode: activeOrder.reference,
+                          holderName: activeOrder.customerName,
+                          status: 'valid',
+                          isExclusive: event.isExclusive,
+                          purchasedAt: new Date().toISOString(),
+                        };
+                        onPurchaseSuccess(pseudoTicket);
+                      }
+                      onClose();
+                    }}
+                    className="w-full py-3.5 px-5 rounded-2xl font-heading font-extrabold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-2.5 transition-all shadow-lg bg-gradient-to-r from-[#8A2BE2] via-[#E9C349] to-[#8A2BE2] text-white shadow-[#8A2BE2]/30 hover:scale-[1.02] active:scale-[0.98]"
+                  >
+                    <Sparkles className="w-4 h-4 text-white" />
+                    <span>Voir mon billet</span>
+                  </button>
+
                   <a
                     href={generateWhatsAppConfirmationUrl(activeOrder)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="w-full py-3.5 px-5 rounded-2xl font-heading font-extrabold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-2.5 transition-all shadow-lg bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30 active:scale-[0.98]"
+                    className="w-full py-3 px-5 rounded-2xl font-heading font-extrabold text-xs tracking-wider uppercase flex items-center justify-center gap-2.5 transition-all shadow-md bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30 active:scale-[0.98]"
                   >
                     <MessageSquare className="w-4 h-4 fill-current" />
                     <span>Envoyer mon billet par WhatsApp</span>
                   </a>
-                  <p className="text-[11px] text-gray-400 mt-2">
+                  <p className="text-[11px] text-gray-400">
                     Recevez immédiatement une copie certifiée de votre reçu sur WhatsApp.
                   </p>
                 </div>
@@ -1040,16 +1106,53 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
             )}
 
             {step === 'confirmation' && (
-              <button
-                onClick={onClose}
-                className="w-full py-3.5 px-6 rounded-2xl font-heading font-bold text-xs tracking-wider uppercase transition-all bg-[#8A2BE2] hover:bg-[#7824c7] text-white shadow-lg shadow-[#8A2BE2]/25"
-              >
-                Compris, fermer
-              </button>
+              <div className="w-full flex flex-col sm:flex-row gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    confetti({
+                      particleCount: 100,
+                      spread: 75,
+                      origin: { y: 0.6 },
+                      colors: ['#8A2BE2', '#E9C349', '#DCB8FF', '#FFFFFF'],
+                    });
+                    if (onPurchaseSuccess && activeOrder) {
+                      const pseudoTicket: UserTicket = {
+                        id: activeOrder.id,
+                        eventId: event.id,
+                        eventTitle: event.title,
+                        eventDate: event.date,
+                        eventTime: event.time,
+                        eventVenue: event.venue,
+                        eventPoster: event.posterUrl,
+                        tierName: activeOrder.tierName,
+                        price: activeOrder.totalAmount,
+                        qrCode: activeOrder.reference,
+                        holderName: activeOrder.customerName,
+                        status: 'valid',
+                        isExclusive: event.isExclusive,
+                        purchasedAt: new Date().toISOString(),
+                      };
+                      onPurchaseSuccess(pseudoTicket);
+                    }
+                    onClose();
+                  }}
+                  className="flex-1 py-3.5 px-6 rounded-2xl font-heading font-extrabold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-2 transition-all shadow-lg bg-gradient-to-r from-[#8A2BE2] via-[#E9C349] to-[#8A2BE2] text-white shadow-[#8A2BE2]/30 hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  <Sparkles className="w-4 h-4 text-white" />
+                  <span>Voir mon billet</span>
+                </button>
+                <button
+                  onClick={onClose}
+                  className="sm:w-auto px-6 py-3.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-heading font-bold text-xs uppercase tracking-wider transition-all"
+                >
+                  Fermer
+                </button>
+              </div>
             )}
           </div>
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
 
       {/* MODALE TEASER VIDÉO YOUTUBE 16:9 AVEC LAZY LOADING (TÂCHE 4) */}
       {isTeaserOpen && youtubeVideoId && (

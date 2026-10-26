@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion } from 'framer-motion';
 import { Calendar, MapPin, Sparkles, Crown, ShieldCheck, Clock, Eye, Radio } from 'lucide-react';
 import { EventItem } from '../types';
 import { CountdownTimer } from './CountdownTimer';
@@ -29,9 +30,13 @@ export const EventCard: React.FC<EventCardProps> = ({
 
   if (variant === 'featured') {
     return (
-      <div
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        whileHover={{ scale: 1.02 }}
+        transition={{ duration: 0.3, ease: 'easeOut' }}
         onClick={() => onSelect(event)}
-        className="relative group cursor-pointer flex-shrink-0 w-80 sm:w-96 h-64 rounded-2xl overflow-hidden border border-white/10 shadow-xl transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl hover:shadow-[#8A2BE2]/20"
+        className="relative group cursor-pointer flex-shrink-0 w-80 sm:w-96 h-64 rounded-2xl overflow-hidden border border-white/10 shadow-xl transition-shadow duration-300 hover:shadow-2xl hover:shadow-[#8A2BE2]/20"
       >
         <img
           src={event.posterUrl}
@@ -91,15 +96,19 @@ export const EventCard: React.FC<EventCardProps> = ({
             </div>
           </div>
         </div>
-      </div>
+      </motion.div>
     );
   }
 
   if (variant === 'list') {
     return (
-      <div
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        whileHover={{ scale: 1.02 }}
+        transition={{ duration: 0.25, ease: 'easeOut' }}
         onClick={() => onSelect(event)}
-        className="glass-panel p-3.5 rounded-2xl flex items-center gap-4 cursor-pointer hover:border-[#8A2BE2]/50 hover:bg-[#252328] transition-all group"
+        className="glass-panel p-3.5 rounded-2xl flex items-center gap-4 cursor-pointer hover:border-[#8A2BE2]/50 hover:bg-[#252328] transition-colors group"
       >
         <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden flex-shrink-0 relative">
           <img
@@ -175,15 +184,19 @@ export const EventCard: React.FC<EventCardProps> = ({
             )}
           </button>
         </div>
-      </div>
+      </motion.div>
     );
   }
 
   // Grid variant
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      whileHover={{ scale: 1.02 }}
+      transition={{ duration: 0.25, ease: 'easeOut' }}
       onClick={() => onSelect(event)}
-      className="glass-panel rounded-2xl overflow-hidden flex flex-col cursor-pointer hover:border-[#8A2BE2]/50 hover:translate-y-[-2px] transition-all group shadow-lg"
+      className="glass-panel rounded-2xl overflow-hidden flex flex-col cursor-pointer hover:border-[#8A2BE2]/50 transition-shadow duration-300 group shadow-lg"
     >
       <div className="h-44 sm:h-48 relative overflow-hidden">
         <img
@@ -273,6 +286,6 @@ export const EventCard: React.FC<EventCardProps> = ({
           </button>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 };

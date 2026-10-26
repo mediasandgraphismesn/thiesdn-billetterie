@@ -763,6 +763,7 @@ export default function App() {
               {activeTab === 'home' && effectiveRole !== 'admin' && (
                 <HomeView
                   events={events}
+                  isLoading={isLoadingEvents}
                   onSelectEvent={(evt) => setSelectedEventForDetail(evt)}
                   onNavigateToExplore={() => handleTabChange('explore')}
                   onNavigateToCreate={() => handleTabChange('create')}
@@ -773,6 +774,7 @@ export default function App() {
               {activeTab === 'explore' && effectiveRole !== 'admin' && (
                 <ExploreView
                   events={events}
+                  isLoading={isLoadingEvents}
                   onSelectEvent={(evt) => setSelectedEventForDetail(evt)}
                 />
               )}
