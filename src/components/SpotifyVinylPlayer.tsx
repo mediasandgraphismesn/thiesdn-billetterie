@@ -22,7 +22,7 @@ export const SpotifyVinylPlayer: React.FC<SpotifyVinylPlayerProps> = ({
     if (!url) return '';
     try {
       const trimmed = url.trim();
-      const match = trimmed.match(/open\.spotify\.com\/(track|album|playlist|artist|show|episode)\/([a-zA-Z0-9]+)/i);
+      const match = trimmed.match(/(?:intl-[a-z]{2}\/)?(track|album|playlist|artist|show|episode)\/([a-zA-Z0-9]+)/i);
       if (match) {
         const type = match[1];
         const id = match[2];
@@ -30,7 +30,9 @@ export const SpotifyVinylPlayer: React.FC<SpotifyVinylPlayerProps> = ({
       }
       if (trimmed.includes('/embed/')) return trimmed;
       // Fallback si URL complète avec query params
-      return trimmed.replace('open.spotify.com/', 'open.spotify.com/embed/');
+      return trimmed
+        .replace(/open\.spotify\.com\/(?:intl-[a-z]{2}\/)?/, 'open.spotify.com/embed/')
+        .split('?')[0] + '?utm_source=generator&theme=0';
     } catch {
       return url;
     }
@@ -151,26 +153,28 @@ export const SpotifyVinylPlayer: React.FC<SpotifyVinylPlayerProps> = ({
             </button>
           </div>
 
-          {/* Spinner de chargement le temps que l'iframe charge */}
-          {!isIframeLoaded && (
-            <div className="flex items-center justify-center h-40 bg-[#121118]">
-              <div className="flex flex-col items-center gap-2">
-                <span className="w-6 h-6 border-2 border-[#1DB954] border-t-transparent rounded-full animate-spin" />
-                <span className="text-xs text-gray-400">Chargement de Spotify...</span>
+          <div className="relative w-full" style={{ height: embedUrl.includes('/track/') ? '152px' : '352px' }}>
+            {/* Spinner de chargement en overlay le temps que l'iframe charge */}
+            {!isIframeLoaded && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#121118]">
+                <div className="flex flex-col items-center gap-2">
+                  <span className="w-6 h-6 border-2 border-[#1DB954] border-t-transparent rounded-full animate-spin" />
+                  <span className="text-xs text-gray-400">Chargement de Spotify...</span>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          <iframe
-            src={embedUrl}
-            width="100%"
-            height={embedUrl.includes('/track/') ? '152' : '352'}
-            frameBorder="0"
-            allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-            loading="lazy"
-            onLoad={() => setIsIframeLoaded(true)}
-            className={`w-full transition-opacity duration-500 ${isIframeLoaded ? 'opacity-100' : 'opacity-0 h-0'}`}
-          />
+            <iframe
+              src={embedUrl}
+              width="100%"
+              height={embedUrl.includes('/track/') ? '152' : '352'}
+              frameBorder="0"
+              allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+              loading="eager"
+              onLoad={() => setIsIframeLoaded(true)}
+              className="w-full h-full border-none"
+            />
+          </div>
         </div>
       )}
     </div>

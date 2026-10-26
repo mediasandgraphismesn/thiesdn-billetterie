@@ -1074,9 +1074,9 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
             {/* Container Iframe YouTube 16:9 Lazy Loadé */}
             <div className="relative w-full pb-[56.25%] bg-black">
               <iframe
-                src={`https://www.youtube.com/embed/${youtubeVideoId}?autoplay=1&rel=0&modestbranding=1`}
+                src={`https://www.youtube.com/embed/${youtubeVideoId}?autoplay=0&mute=0&rel=0&modestbranding=1`}
                 title={`Teaser ${event.title}`}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                 allowFullScreen
                 className="absolute inset-0 w-full h-full border-none"
               />
