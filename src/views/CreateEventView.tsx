@@ -31,6 +31,8 @@ import {
   Scale,
   Lock,
   X,
+  Music2,
+  Clock,
 } from 'lucide-react';
 import { EventItem, EventCategory, EventCoproducer, CoproducerRole, UserProfile, CURRENT_TERMS_VERSION } from '../types';
 import { createEventInSupabase, createCoproducer, acceptTermsOfServiceInSupabase, getSupabaseClient } from '../services/supabase';
@@ -105,6 +107,8 @@ interface EventFormData {
   socialTiktok: string;
   socialYoutube: string;
   websiteUrl: string;
+  spotifyUrl: string;
+  salesOpenAt: string;
   pricePrevente: number;
   priceJourJ: number;
   priceVip: number;
@@ -141,6 +145,8 @@ const INITIAL_FORM_STATE: EventFormData = {
   socialTiktok: '',
   socialYoutube: '',
   websiteUrl: '',
+  spotifyUrl: '',
+  salesOpenAt: '',
   pricePrevente: 3500,
   priceJourJ: 5000,
   priceVip: 10000,
@@ -297,6 +303,8 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
     socialTiktok,
     socialYoutube,
     websiteUrl,
+    spotifyUrl,
+    salesOpenAt,
     pricePrevente,
     priceJourJ,
     priceVip,
@@ -314,6 +322,8 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
   const setCategory = (val: EventCategory) => updateField('category', val);
   const setStartDatetime = (val: string) => updateField('startDatetime', val);
   const setEndDatetime = (val: string) => updateField('endDatetime', val);
+  const setSalesOpenAt = (val: string) => updateField('salesOpenAt', val);
+  const setSpotifyUrl = (val: string) => updateField('spotifyUrl', val);
   const setVenue = (val: string) => updateField('venue', val);
   const setCity = (val: string) => updateField('city', val);
   const setQuartier = (val: string) => updateField('quartier', val);
@@ -508,6 +518,9 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
           socialTiktok: socialTiktok.trim() || undefined,
           socialYoutube: (socialYoutube.trim() || youtubeUrl.trim()) || undefined,
           websiteUrl: websiteUrl.trim() || undefined,
+          spotifyUrl: spotifyUrl.trim() || undefined,
+          salesOpenAt: salesOpenAt ? new Date(salesOpenAt).toISOString() : undefined,
+          videoSpotUrl: (youtubeUrl.trim() || socialYoutube.trim()) || undefined,
           promoCode: promoCode.trim().toUpperCase() || undefined,
           promoDiscountPercent: promoDiscountPercent ? Number(promoDiscountPercent) : undefined,
         },
@@ -887,6 +900,30 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
                 />
               </div>
             </div>
+          </div>
+
+          {/* Date d'ouverture des ventes (Compte à rebours & Pré-inscriptions) */}
+          <div className="p-4 rounded-xl bg-[#241A00]/40 border border-[#E9C349]/30 space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold uppercase tracking-wider text-[#E9C349] flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5" />
+                <span>Date d'Ouverture des Ventes (Optionnel - Compte à Rebours)</span>
+              </label>
+              <span className="text-[10px] text-gray-400">
+                Laisser vide = ventes ouvertes immédiatement
+              </span>
+            </div>
+            <div className="input-glass rounded-xl px-4 py-3">
+              <input
+                type="datetime-local"
+                value={salesOpenAt}
+                onChange={(e) => setSalesOpenAt(e.target.value)}
+                className="w-full bg-transparent border-none outline-none text-white text-sm focus:ring-0 p-0 [color-scheme:dark]"
+              />
+            </div>
+            <p className="text-[11px] text-gray-400">
+              Si une date future est renseignée, la carte affichera un compte à rebours et un formulaire de pré-inscription pour capturer les coordonnées des acheteurs.
+            </p>
           </div>
 
           {/* Short Description */}
@@ -1380,6 +1417,23 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
                   value={socialYoutube}
                   onChange={(e) => setSocialYoutube(e.target.value)}
                   placeholder="https://youtube.com/watch?v=..."
+                  className="w-full bg-transparent border-none outline-none text-white text-xs focus:ring-0 p-0 font-mono"
+                />
+              </div>
+            </div>
+
+            {/* Spotify Audio Player */}
+            <div className="flex flex-col gap-1.5 sm:col-span-2">
+              <label className="text-xs font-bold uppercase tracking-wider text-[#1DB954] flex items-center gap-1.5">
+                <Music2 className="w-3.5 h-3.5" />
+                <span>Lien Spotify (Album, Morceau ou Playlist pour le lecteur vinyle interactif)</span>
+              </label>
+              <div className="input-glass rounded-xl px-4 py-3 flex items-center gap-2">
+                <input
+                  type="url"
+                  value={spotifyUrl}
+                  onChange={(e) => setSpotifyUrl(e.target.value)}
+                  placeholder="https://open.spotify.com/album/... ou track/..."
                   className="w-full bg-transparent border-none outline-none text-white text-xs focus:ring-0 p-0 font-mono"
                 />
               </div>

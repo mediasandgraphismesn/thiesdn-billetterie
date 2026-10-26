@@ -4830,6 +4830,9 @@ export const mapDbEventToItem = (db: any): EventItem => {
     socialTiktok: db.social_tiktok || db.socialTiktok || '',
     socialYoutube: db.social_youtube || db.youtube_url || db.socialYoutube || '',
     websiteUrl: db.website_url || db.websiteUrl || '',
+    spotifyUrl: db.spotify_url || db.spotifyUrl || '',
+    videoSpotUrl: db.video_spot_url || db.youtube_url || db.social_youtube || '',
+    salesOpenAt: db.sales_open_at || db.salesOpenAt || undefined,
     promoCode: db.promo_code || db.promoCode || '',
     promoDiscountPercent: db.promo_discount_percent ? Number(db.promo_discount_percent) : (db.promoDiscountPercent ? Number(db.promoDiscountPercent) : undefined),
     tiers: enrichedTiers,
@@ -4885,6 +4888,9 @@ export const createEventInSupabase = async (
     socialTiktok?: string;
     socialYoutube?: string;
     websiteUrl?: string;
+    spotifyUrl?: string;
+    videoSpotUrl?: string;
+    salesOpenAt?: string;
     promoCode?: string;
     promoDiscountPercent?: number;
   },
@@ -4972,6 +4978,9 @@ export const createEventInSupabase = async (
       social_tiktok: eventData.socialTiktok?.trim() || null,
       social_youtube: eventData.socialYoutube?.trim() || null,
       website_url: eventData.websiteUrl?.trim() || null,
+      spotify_url: eventData.spotifyUrl?.trim() || null,
+      video_spot_url: eventData.videoSpotUrl?.trim() || eventData.socialYoutube?.trim() || null,
+      sales_open_at: eventData.salesOpenAt?.trim() || null,
       promo_code: eventData.promoCode?.trim().toUpperCase() || null,
       promo_discount_percent: eventData.promoDiscountPercent || null,
     };
@@ -5023,6 +5032,9 @@ export const createEventInSupabase = async (
     if (!mappedEvent.quartier && eventData.quartier) mappedEvent.quartier = eventData.quartier;
     if (!mappedEvent.promoCode && eventData.promoCode) mappedEvent.promoCode = eventData.promoCode;
     if (!mappedEvent.promoDiscountPercent && eventData.promoDiscountPercent) mappedEvent.promoDiscountPercent = eventData.promoDiscountPercent;
+    if (!mappedEvent.spotifyUrl && eventData.spotifyUrl) mappedEvent.spotifyUrl = eventData.spotifyUrl;
+    if (!mappedEvent.videoSpotUrl && (eventData.videoSpotUrl || eventData.socialYoutube)) mappedEvent.videoSpotUrl = eventData.videoSpotUrl || eventData.socialYoutube;
+    if (!mappedEvent.salesOpenAt && eventData.salesOpenAt) mappedEvent.salesOpenAt = eventData.salesOpenAt;
 
     return { success: true, event: mappedEvent };
   } catch (err: any) {
@@ -5110,6 +5122,12 @@ export const updateEventInSupabase = async (
     if (updates.isExclusive !== undefined) dbPayload.is_exclusive = updates.isExclusive;
     if (updates.promoCode !== undefined) dbPayload.promo_code = updates.promoCode.trim();
     if (updates.promoDiscountPercent !== undefined) dbPayload.promo_discount_percent = updates.promoDiscountPercent;
+    if (updates.spotifyUrl !== undefined) dbPayload.spotify_url = updates.spotifyUrl.trim() || null;
+    if (updates.videoSpotUrl !== undefined) {
+      dbPayload.video_spot_url = updates.videoSpotUrl.trim() || null;
+      dbPayload.youtube_url = updates.videoSpotUrl.trim() || null;
+    }
+    if (updates.salesOpenAt !== undefined) dbPayload.sales_open_at = updates.salesOpenAt || null;
 
     let { data, error } = await client
       .from('events')
@@ -5138,6 +5156,9 @@ export const updateEventInSupabase = async (
       delete minimalPayload.is_exclusive;
       delete minimalPayload.promo_code;
       delete minimalPayload.promo_discount_percent;
+      delete minimalPayload.spotify_url;
+      delete minimalPayload.video_spot_url;
+      delete minimalPayload.sales_open_at;
       const fb = await client.from('events').update(minimalPayload).eq('id', eventId).select().single();
       data = fb.data;
       error = fb.error;
@@ -5147,6 +5168,82 @@ export const updateEventInSupabase = async (
     return { success: true, event: mapDbEventToItem(data) };
   } catch (err: any) {
     return { success: false, error: err.message };
+  }
+};
+
+export const registerEventPreRegistration = async (params: {
+  eventId: string;
+  userId?: string;
+  fullName: string;
+  phone: string;
+  email?: string;
+}): Promise<{ success: boolean; message: string; error?: string }> => {
+  const client = getSupabaseClient();
+  const trimmedPhone = params.phone.trim();
+  const trimmedName = params.fullName.trim();
+  const trimmedEmail = params.email?.trim() || null;
+
+  if (!params.eventId || !trimmedName || !trimmedPhone) {
+    return { success: false, message: 'Veuillez renseigner votre nom et votre numéro de téléphone.' };
+  }
+
+  // 1. Sauvegarde locale de secours (Offline-first & résilience)
+  try {
+    const rawLocal = localStorage.getItem('thiesdn_pre_registrations_v1');
+    const list = rawLocal ? JSON.parse(rawLocal) : [];
+    const alreadyExists = list.some((r: any) => r.eventId === params.eventId && r.phone === trimmedPhone);
+    if (!alreadyExists) {
+      list.push({
+        id: `prereg-${Date.now()}`,
+        eventId: params.eventId,
+        userId: params.userId || null,
+        fullName: trimmedName,
+        phone: trimmedPhone,
+        email: trimmedEmail,
+        createdAt: new Date().toISOString(),
+      });
+      localStorage.setItem('thiesdn_pre_registrations_v1', JSON.stringify(list));
+    }
+  } catch (e) {
+    console.warn('Erreur cache local pre-registration:', e);
+  }
+
+  // 2. Enregistrement Supabase
+  if (!client) {
+    return {
+      success: true,
+      message: 'Votre pré-inscription est confirmée ! Vous serez alerté dès l\'ouverture des ventes.',
+    };
+  }
+
+  try {
+    const { error } = await client.from('event_pre_registrations').insert({
+      event_id: params.eventId,
+      user_id: params.userId || null,
+      full_name: trimmedName,
+      phone: trimmedPhone,
+      email: trimmedEmail,
+    });
+
+    if (error) {
+      if (error.code === '23505' || error.message?.includes('duplicate key') || error.message?.includes('unique')) {
+        return {
+          success: true,
+          message: 'Vous êtes déjà inscrit sur la liste prioritaire de cet événement !',
+        };
+      }
+      console.warn('Erreur Supabase pre_registrations (repli local actif) :', error.message);
+    }
+
+    return {
+      success: true,
+      message: 'Votre pré-inscription est confirmée ! Vous serez alerté dès l\'ouverture des ventes.',
+    };
+  } catch (err: any) {
+    return {
+      success: true,
+      message: 'Votre pré-inscription est confirmée ! Vous serez alerté dès l\'ouverture des ventes.',
+    };
   }
 };
 

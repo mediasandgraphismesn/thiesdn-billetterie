@@ -1,6 +1,7 @@
 import React from 'react';
-import { Calendar, MapPin, Sparkles, Crown, ShieldCheck } from 'lucide-react';
+import { Calendar, MapPin, Sparkles, Crown, ShieldCheck, Clock, Eye } from 'lucide-react';
 import { EventItem } from '../types';
+import { CountdownTimer } from './CountdownTimer';
 
 interface EventCardProps {
   event: EventItem;
@@ -13,6 +14,11 @@ export const EventCard: React.FC<EventCardProps> = ({
   variant = 'grid',
   onSelect,
 }) => {
+  // Vérifier si les ventes sont programmées dans le futur
+  const isSalesUpcoming = Boolean(
+    event.salesOpenAt && new Date(event.salesOpenAt).getTime() > Date.now()
+  );
+
   if (variant === 'featured') {
     return (
       <div
@@ -28,7 +34,7 @@ export const EventCard: React.FC<EventCardProps> = ({
 
         {/* Top Badges */}
         <div className="absolute top-3 inset-x-3 flex items-center justify-between z-10">
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
             <span className="bg-[#1C1B1B]/80 backdrop-blur-md text-[#E9C349] border border-[#E9C349]/30 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full shadow-md">
               {event.category}
             </span>
@@ -39,10 +45,19 @@ export const EventCard: React.FC<EventCardProps> = ({
             )}
           </div>
 
-          <span className="bg-[#E9C349] text-[#241A00] font-heading font-extrabold text-xs px-2.5 py-1 rounded-lg shadow-lg tabular-nums">
-            {event.priceLabel || `${event.price.toLocaleString('fr-FR')} FCFA`}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="bg-[#E9C349] text-[#241A00] font-heading font-extrabold text-xs px-2.5 py-1 rounded-lg shadow-lg tabular-nums">
+              {event.priceLabel || `${event.price.toLocaleString('fr-FR')} FCFA`}
+            </span>
+          </div>
         </div>
+
+        {/* Badge Ventes Ouvertes Dans si futur */}
+        {isSalesUpcoming && event.salesOpenAt && (
+          <div className="absolute top-12 left-3 z-10">
+            <CountdownTimer targetDate={event.salesOpenAt} size="sm" />
+          </div>
+        )}
 
         {/* Bottom Details */}
         <div className="absolute bottom-3 inset-x-4 z-10">
@@ -93,14 +108,32 @@ export const EventCard: React.FC<EventCardProps> = ({
             <MapPin className="w-3.5 h-3.5 text-[#E9C349]" />
             <span className="truncate">{event.venue}{event.quartier ? ` (${event.quartier})` : ''}, {event.city}</span>
           </div>
+          {isSalesUpcoming && event.salesOpenAt && (
+            <div className="mt-1.5">
+              <CountdownTimer targetDate={event.salesOpenAt} size="sm" />
+            </div>
+          )}
         </div>
 
         <div className="flex flex-col items-end gap-2 flex-shrink-0">
           <span className="font-heading font-extrabold text-xs sm:text-sm text-[#E9C349] tabular-nums">
             {event.price.toLocaleString('fr-FR')} FCFA
           </span>
-          <button className="btn-gold-glow px-3.5 py-1.5 rounded-xl font-heading font-bold text-xs tracking-wider uppercase">
-            Réserver
+          <button
+            className={
+              isSalesUpcoming
+                ? 'px-3 py-1.5 rounded-xl font-heading font-bold text-xs tracking-wider uppercase bg-[#8A2BE2]/20 text-[#DCB8FF] border border-[#8A2BE2]/40 hover:bg-[#8A2BE2]/40 transition-all flex items-center gap-1.5'
+                : 'btn-gold-glow px-3.5 py-1.5 rounded-xl font-heading font-bold text-xs tracking-wider uppercase'
+            }
+          >
+            {isSalesUpcoming ? (
+              <>
+                <Eye className="w-3.5 h-3.5" />
+                <span>Voir</span>
+              </>
+            ) : (
+              'Réserver'
+            )}
           </button>
         </div>
       </div>
@@ -129,6 +162,13 @@ export const EventCard: React.FC<EventCardProps> = ({
             {event.price.toLocaleString('fr-FR')} FCFA
           </span>
         </div>
+
+        {/* Badge Ventes Ouvertes Dans si futur */}
+        {isSalesUpcoming && event.salesOpenAt && (
+          <div className="absolute top-10 left-2.5 z-10">
+            <CountdownTimer targetDate={event.salesOpenAt} size="sm" />
+          </div>
+        )}
 
         <div className="absolute bottom-2 left-3 right-3 text-white">
           <p className="font-heading font-bold text-base line-clamp-1 group-hover:text-[#DCB8FF] transition-colors">
@@ -161,8 +201,21 @@ export const EventCard: React.FC<EventCardProps> = ({
             </span>
           </div>
 
-          <button className="btn-primary-glow px-3 py-1 rounded-lg text-xs font-bold font-heading">
-            Réserver
+          <button
+            className={
+              isSalesUpcoming
+                ? 'px-3 py-1 rounded-lg text-xs font-bold font-heading bg-[#8A2BE2]/20 text-[#DCB8FF] border border-[#8A2BE2]/40 hover:bg-[#8A2BE2]/40 transition-all flex items-center gap-1.5'
+                : 'btn-primary-glow px-3 py-1 rounded-lg text-xs font-bold font-heading'
+            }
+          >
+            {isSalesUpcoming ? (
+              <>
+                <Eye className="w-3.5 h-3.5" />
+                <span>Voir l'événement</span>
+              </>
+            ) : (
+              'Réserver'
+            )}
           </button>
         </div>
       </div>

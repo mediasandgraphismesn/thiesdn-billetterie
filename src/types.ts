@@ -99,6 +99,9 @@ export interface EventItem {
   socialTiktok?: string;
   socialYoutube?: string;
   websiteUrl?: string;
+  spotifyUrl?: string;
+  videoSpotUrl?: string;
+  salesOpenAt?: string; // Date & Heure ISO d'ouverture officielle des ventes (si future => mode compte a rebours et pre-inscription)
   promoCode?: string;
   promoDiscountPercent?: number;
   tiers?: TicketTier[];
@@ -292,6 +295,16 @@ export interface ScanStation {
   scansCount: number;
   lastScannedAt?: string;
   notes?: string;
+  createdAt: string;
+}
+
+export interface EventPreRegistration {
+  id: string;
+  eventId: string;
+  userId?: string;
+  fullName: string;
+  phone: string;
+  email?: string;
   createdAt: string;
 }
 

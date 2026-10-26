@@ -38,6 +38,7 @@ import {
   ShieldCheck,
   Star,
   Copy,
+  Music2,
 } from 'lucide-react';
 import {
   EventItem,
@@ -129,6 +130,9 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
     websiteUrl: '',
     salesActive: true,
     featured: false,
+    salesOpenAt: '',
+    spotifyUrl: '',
+    videoSpotUrl: '',
     waveLinkPrevente: '',
     waveLinkJourJ: '',
     waveLinkVip: '',
@@ -269,6 +273,9 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
       websiteUrl: event.websiteUrl || '',
       salesActive: event.salesActive !== undefined ? event.salesActive : true,
       featured: Boolean(event.featured),
+      salesOpenAt: event.salesOpenAt || '',
+      spotifyUrl: event.spotifyUrl || '',
+      videoSpotUrl: event.videoSpotUrl || event.youtubeUrl || event.socialYoutube || '',
       waveLinkPrevente: event.waveLinkPrevente || '',
       waveLinkJourJ: event.waveLinkJourJ || '',
       waveLinkVip: event.waveLinkVip || '',
@@ -306,6 +313,9 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
       socialTiktok: editForm.socialTiktok,
       socialYoutube: editForm.socialYoutube,
       websiteUrl: editForm.websiteUrl,
+      spotifyUrl: editForm.spotifyUrl,
+      salesOpenAt: editForm.salesOpenAt || undefined,
+      videoSpotUrl: editForm.videoSpotUrl || editForm.socialYoutube,
       salesActive: editForm.salesActive,
       featured: editForm.featured,
       promoter: {
@@ -896,6 +906,22 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                       </div>
                     </div>
 
+                    {/* Date d'ouverture des ventes */}
+                    <div className="p-3 rounded-xl bg-[#241A00]/30 border border-[#E9C349]/20 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-bold text-[#E9C349] uppercase tracking-wider flex items-center gap-1">
+                          <Clock className="w-3 h-3" /> Date d'ouverture des ventes (Optionnel - Compte à rebours)
+                        </label>
+                        <span className="text-[9px] text-gray-400">Vide = ventes ouvertes immédiatement</span>
+                      </div>
+                      <input
+                        type="datetime-local"
+                        value={editForm.salesOpenAt ? editForm.salesOpenAt.substring(0, 16) : ''}
+                        onChange={(e) => setEditForm({ ...editForm, salesOpenAt: e.target.value })}
+                        className="w-full bg-[#111111] border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-[#8A2BE2] [color-scheme:dark]"
+                      />
+                    </div>
+
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
                       <div className="space-y-1">
                         <label className="text-[10px] text-gray-400">Lieu / Salle *</label>
@@ -1105,6 +1131,19 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                           value={editForm.websiteUrl}
                           onChange={(e) => setEditForm({ ...editForm, websiteUrl: e.target.value })}
                           placeholder="https://mon-festival.sn"
+                          className="w-full bg-[#111111] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
+                        />
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <label className="text-[10px] text-[#1DB954] flex items-center gap-1 mb-1 font-bold">
+                          <Music2 className="w-3 h-3" /> Lien Spotify (Lecteur Vinyle Effet Wow)
+                        </label>
+                        <input
+                          type="url"
+                          value={editForm.spotifyUrl}
+                          onChange={(e) => setEditForm({ ...editForm, spotifyUrl: e.target.value })}
+                          placeholder="https://open.spotify.com/album/... ou track/..."
                           className="w-full bg-[#111111] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
                         />
                       </div>
