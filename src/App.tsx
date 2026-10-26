@@ -272,11 +272,19 @@ export default function App() {
     });
   }, []);
 
-  // Détection et ouverture automatique d'un événement partagé par lien WhatsApp (?event=ID ou ?id=ID)
+  // Détection et ouverture automatique d'un événement partagé par lien WhatsApp (?event=ID, ?id=ID ou /event/ID)
   useEffect(() => {
     if (typeof window === 'undefined' || events.length === 0) return;
     const searchParams = new URLSearchParams(window.location.search);
-    const targetId = searchParams.get('event') || searchParams.get('id');
+    let targetId = searchParams.get('event') || searchParams.get('id');
+
+    if (!targetId) {
+      const pathMatch = window.location.pathname.match(/\/event\/([a-zA-Z0-9_-]+)/i);
+      if (pathMatch && pathMatch[1]) {
+        targetId = pathMatch[1];
+      }
+    }
+
     if (targetId) {
       const matched = events.find((e) => e.id === targetId);
       if (matched) {

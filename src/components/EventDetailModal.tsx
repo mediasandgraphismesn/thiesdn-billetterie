@@ -135,8 +135,8 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
     setPromoError(null);
   };
 
-  // Lien officiel de prévisualisation WhatsApp (OG Dynamic Card)
-  const eventPreviewUrl = `https://billetterie.thiesdn.site/api/preview?id=${encodeURIComponent(event.id)}`;
+  // Lien officiel épuré pour WhatsApp (/event/:id)
+  const eventPreviewUrl = `https://billetterie.thiesdn.site/event/${encodeURIComponent(event.id)}`;
   const eventShareMessage = `🎟️ *${event.title}*\n📅 ${event.date} à ${event.time}\n📍 ${event.venue || event.city}\n\nDécouvrez l'affiche officielle et réservez vos places sur Thièsdn Billetterie :\n${eventPreviewUrl}`;
   const whatsappShareEventUrl = `https://wa.me/?text=${encodeURIComponent(eventShareMessage)}`;
 

@@ -28,7 +28,7 @@
       "destination": "/api/preview?id=:id"
     },
     {
-      "source": "/((?!api/).*)",
+      "source": "/((?!api/|event/).*)",
       "destination": "/index.html"
     }
   ]

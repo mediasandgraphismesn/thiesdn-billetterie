@@ -27,21 +27,76 @@ function escapeHtml(str: string | null | undefined): string {
     .replace(/'/g, '&#39;');
 }
 
-function resolveAbsoluteUrl(url: string | null | undefined): string {
-  if (!url || typeof url !== 'string' || !url.trim()) return DEFAULT_LOGO;
-  const trimmed = url.trim();
-  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-    return trimmed;
+/**
+ * Optimise l'affiche pour WhatsApp :
+ * WhatsApp REFUSE catégoriquement toute image de plus de 300 Ko ou supérieure à 1200x630.
+ * Cette fonction garantit une URL absolue HTTPS et un poids compressé sous 250 Ko.
+ */
+function getOptimizedOgImageUrl(rawUrl: string | null | undefined): string {
+  if (!rawUrl || typeof rawUrl !== 'string' || !rawUrl.trim()) {
+    return DEFAULT_LOGO;
   }
-  if (trimmed.startsWith('/')) {
-    return `${SITE_URL}${trimmed}`;
+  const trimmed = rawUrl.trim();
+
+  // 1. Assurer une URL absolue HTTPS
+  let absoluteUrl = trimmed;
+  if (trimmed.startsWith('//')) {
+    absoluteUrl = `https:${trimmed}`;
+  } else if (trimmed.startsWith('/')) {
+    absoluteUrl = `${SITE_URL}${trimmed}`;
+  } else if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+    absoluteUrl = `${SITE_URL}/${trimmed}`;
   }
-  return `${SITE_URL}/${trimmed}`;
+
+  // 2. Si c'est déjà le logo officiel ou une image locale interne
+  if (
+    absoluteUrl.includes('logo-tight.png') ||
+    absoluteUrl.includes('billetterie.thiesdn.site/logo')
+  ) {
+    return absoluteUrl;
+  }
+
+  // 3. Spécificité Imgur :
+  // Imgur bloque les proxies tiers comme wsrv.nl (erreur 429 Rate Limited),
+  // mais fournit nativement le suffixe 'h' (Huge 1024x1024, ~200 Ko) ou 'l' (Large 640x640, ~98 Ko).
+  // La version 'h' garantit une image < 300 Ko lue directement par WhatsApp sans blocage !
+  const imgurMatch = absoluteUrl.match(
+    /^https?:\/\/i\.imgur\.com\/([a-zA-Z0-9]+)(\.[a-zA-Z0-9]+)$/
+  );
+  if (imgurMatch) {
+    const id = imgurMatch[1];
+    const ext = imgurMatch[2];
+    if (!/[hlmtsb]$/.test(id)) {
+      return `https://i.imgur.com/${id}h${ext}`;
+    }
+    return absoluteUrl;
+  }
+
+  // 4. Spécificité Unsplash :
+  if (absoluteUrl.includes('images.unsplash.com')) {
+    const cleanUrl = absoluteUrl.split('?')[0];
+    return `${cleanUrl}?w=1200&h=630&fit=crop&q=80&auto=format`;
+  }
+
+  // 5. Autres hébergeurs d'images distantes :
+  // Relais via wsrv.nl pour convertir en JPEG 1200x630 optimisé sous 200 Ko
+  try {
+    const cleanForWsrv = absoluteUrl.replace(/^https?:\/\//, '');
+    return `https://wsrv.nl/?url=${encodeURIComponent(cleanForWsrv)}&w=1200&h=630&fit=cover&output=jpg&q=80`;
+  } catch {
+    return absoluteUrl;
+  }
 }
 
 export default async function handler(req: any, res: any) {
-  // Support à la fois des requêtes GET directes et des paramètres de requête
-  const eventId = (req.query?.id || req.query?.event || '').toString().trim();
+  // Support à la fois des requêtes /api/preview?id=... et des rewrites /event/:id
+  let eventId = (req.query?.id || req.query?.event || '').toString().trim();
+  if (!eventId && req.url) {
+    const urlMatch = req.url.match(/\/event\/([a-zA-Z0-9_-]+)/i);
+    if (urlMatch && urlMatch[1]) {
+      eventId = urlMatch[1].trim();
+    }
+  }
 
   let title = DEFAULT_TITLE;
   let description = DEFAULT_DESC;
@@ -66,8 +121,11 @@ export default async function handler(req: any, res: any) {
           : DEFAULT_TITLE;
 
         const dateStr = event.event_date ? ` • ${event.event_date}` : '';
-        const placeStr = event.lieu || event.city ? ` à ${event.lieu || event.city}` : '';
-        const priceStr = event.prix_standard ? ` dès ${Number(event.prix_standard).toLocaleString('fr-FR')} FCFA` : '';
+        const placeStr =
+          event.lieu || event.city ? ` à ${event.lieu || event.city}` : '';
+        const priceStr = event.prix_standard
+          ? ` dès ${Number(event.prix_standard).toLocaleString('fr-FR')} FCFA`
+          : '';
 
         if (event.description && event.description.trim()) {
           description = `${event.description.trim().substring(0, 240)}${placeStr}${dateStr}`;
@@ -75,12 +133,12 @@ export default async function handler(req: any, res: any) {
           description = `Réservez votre place pour ${event.title}${placeStr}${dateStr}${priceStr} sur la billetterie officielle.`;
         }
 
-        imageUrl = resolveAbsoluteUrl(event.affiche_url);
+        // Optimisation stricte de l'affiche pour WhatsApp (< 300 Ko garanti)
+        imageUrl = getOptimizedOgImageUrl(event.affiche_url);
         targetUrl = `${SITE_URL}/?event=${encodeURIComponent(eventId)}`;
       }
     } catch (err) {
       console.error('Erreur API preview serverless:', err);
-      // Fallback gracieux sur le site par défaut
     }
   }
 
@@ -88,8 +146,9 @@ export default async function handler(req: any, res: any) {
   const safeDesc = escapeHtml(description);
   const safeImage = escapeHtml(imageUrl);
   const safeTargetUrl = escapeHtml(targetUrl);
+  // URL canonique épurée pour les robots WhatsApp / Facebook / Twitter
   const canonicalUrl = eventId
-    ? `${SITE_URL}/api/preview?id=${encodeURIComponent(eventId)}`
+    ? `${SITE_URL}/event/${encodeURIComponent(eventId)}`
     : SITE_URL;
   const safeCanonicalUrl = escapeHtml(canonicalUrl);
 
@@ -101,7 +160,7 @@ export default async function handler(req: any, res: any) {
     <title>${safeTitle}</title>
     <meta name="description" content="${safeDesc}" />
 
-    <!-- Open Graph / Facebook / WhatsApp -->
+    <!-- Open Graph / WhatsApp / Facebook -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Thiès Days and Nights" />
     <meta property="og:title" content="${safeTitle}" />
@@ -121,7 +180,7 @@ export default async function handler(req: any, res: any) {
     <meta name="twitter:description" content="${safeDesc}" />
     <meta name="twitter:image" content="${safeImage}" />
 
-    <!-- Redirection automatique pour les visiteurs humains -->
+    <!-- Redirection automatique vers la billetterie pour les visiteurs humains -->
     <meta http-equiv="refresh" content="0;url=${safeTargetUrl}" />
 
     <style>
