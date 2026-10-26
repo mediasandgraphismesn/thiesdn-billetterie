@@ -14,6 +14,7 @@ import QRCode from 'qrcode';
 import { UserTicket } from '../types';
 import { AddToCalendarButton } from './AddToCalendarButton';
 import { CalendarEventData } from '../services/calendar';
+import { LOGO_TIGHT_DATA_URL } from '../assets/logoTightBase64';
 
 interface TicketPassModalProps {
   ticket: UserTicket | null;
@@ -49,7 +50,7 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
     }
   }, [isOpen]);
 
-  // Initialisation du canvas de grattage (Scratch Card)
+  // Initialisation du canvas de grattage (Scratch Card) avec Logo Officiel Thièsdn
   const initScratchCanvas = useCallback(() => {
     const sc = scratchCanvasRef.current;
     if (!sc) return;
@@ -59,32 +60,78 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
     sc.width = 260;
     sc.height = 260;
 
-    // Fond métallisé nocturne protecteur
+    // 1. Fond métallisé nocturne protecteur
     const grad = ctx.createLinearGradient(0, 0, sc.width, sc.height);
-    grad.addColorStop(0, '#26242C');
-    grad.addColorStop(0.5, '#393644');
-    grad.addColorStop(1, '#1C1A22');
+    grad.addColorStop(0, '#221F28');
+    grad.addColorStop(0.5, '#35323D');
+    grad.addColorStop(1, '#18161D');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, sc.width, sc.height);
 
-    // Liseré or de sécurité prestige (#E9C349)
+    // 2. Liseré or de sécurité prestige (#E9C349)
     ctx.strokeStyle = '#E9C349';
-    ctx.lineWidth = 4;
+    ctx.lineWidth = 3;
     ctx.strokeRect(4, 4, sc.width - 8, sc.height - 8);
 
-    // Typographie et instructions tactiles
-    ctx.font = 'bold 13px system-ui, sans-serif';
-    ctx.fillStyle = '#E9C349';
-    ctx.textAlign = 'center';
-    ctx.fillText('THIÈSDN PASS CERTIFIÉ', sc.width / 2, sc.height / 2 - 20);
+    // 3. Dessin du Logo Officiel Thièsdn au centre exact (SUR UN CARRÉ BLANC DE SÉCURITÉ)
+    const logoImg = new Image();
+    logoImg.crossOrigin = 'anonymous';
+    logoImg.onload = () => {
+      // Taille relative 24% de la largeur du canvas, cohérente avec le QR Code
+      const logoTargetW = Math.floor(sc.width * 0.28);
+      const aspectRatio = logoImg.naturalHeight / logoImg.naturalWidth;
+      const logoTargetH = Math.floor(logoTargetW * aspectRatio);
 
-    ctx.font = 'bold 11px system-ui, sans-serif';
-    ctx.fillStyle = '#DCB8FF';
-    ctx.fillText('✨ Frottez ici pour révéler ✨', sc.width / 2, sc.height / 2 + 5);
+      const padX = 8;
+      const padY = 6;
+      const badgeW = logoTargetW + padX * 2;
+      const badgeH = logoTargetH + padY * 2;
+      const badgeX = (sc.width - badgeW) / 2;
+      const badgeY = (sc.height - badgeH) / 2;
 
-    ctx.font = '10px system-ui, sans-serif';
-    ctx.fillStyle = '#A0A0A0';
-    ctx.fillText('(Protection anti-capture)', sc.width / 2, sc.height / 2 + 25);
+      ctx.save();
+      // Carré/badge blanc protecteur pour lisibilité optimale du logo
+      ctx.fillStyle = '#FFFFFF';
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+      ctx.shadowBlur = 12;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 2;
+
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 6);
+      } else {
+        ctx.rect(badgeX, badgeY, badgeW, badgeH);
+      }
+      ctx.fill();
+
+      // Liseré or prestige officiel (#E9C349)
+      ctx.shadowColor = 'transparent';
+      ctx.strokeStyle = '#E9C349';
+      ctx.lineWidth = 1.8;
+      ctx.stroke();
+
+      // Dessin de l'image officielle du logo au centre exact
+      ctx.drawImage(logoImg, badgeX + padX, badgeY + padY, logoTargetW, logoTargetH);
+      ctx.restore();
+
+      // Consignes tactiles sobres au-dessus et en-dessous
+      ctx.font = 'bold 10px system-ui, sans-serif';
+      ctx.fillStyle = '#E9C349';
+      ctx.textAlign = 'center';
+      ctx.fillText('PASS OFFICIEL SÉCURISÉ', sc.width / 2, badgeY - 14);
+
+      ctx.font = 'bold 11px system-ui, sans-serif';
+      ctx.fillStyle = '#DCB8FF';
+      ctx.fillText('✨ Frottez ici pour scanner ✨', sc.width / 2, badgeY + badgeH + 22);
+
+      ctx.font = '9px system-ui, sans-serif';
+      ctx.fillStyle = '#8E8E93';
+      ctx.fillText('(Protection anti-capture)', sc.width / 2, badgeY + badgeH + 36);
+    };
+
+    // Chargement garanti instantané via le base64 officiel
+    logoImg.src = LOGO_TIGHT_DATA_URL;
   }, []);
 
   // Détection du frottement (Touch & Mouse) avec globalCompositeOperation = 'destination-out'
@@ -173,10 +220,15 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
     const logo = new Image();
     logo.crossOrigin = 'anonymous';
 
-    const loadLogoPromise = new Promise<HTMLImageElement>((resolve, reject) => {
+    const loadLogoPromise = new Promise<HTMLImageElement>((resolve) => {
       logo.onload = () => resolve(logo);
-      logo.onerror = () => reject(new Error('Logo introuvable'));
-      logo.src = '/logo-tight.png';
+      logo.onerror = () => {
+        // Fallback immédiat et inaltérable sur la chaîne base64 certifiée
+        const fallback = new Image();
+        fallback.onload = () => resolve(fallback);
+        fallback.src = LOGO_TIGHT_DATA_URL;
+      };
+      logo.src = LOGO_TIGHT_DATA_URL;
     });
 
     loadLogoPromise

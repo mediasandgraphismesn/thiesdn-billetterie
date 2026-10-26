@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf';
 import QRCode from 'qrcode';
 import { EventItem, TicketTier, UserTicket } from '../types';
+import { LOGO_TIGHT_DATA_URL } from '../assets/logoTightBase64';
 
 export interface GeneratePdfOptions {
   batchName?: string;
@@ -98,8 +99,32 @@ export const generatePhysicalTicketsPdf = async (
     doc.setLineWidth(0.3);
     doc.roundedRect(marginX + 3, startY + 10, stubWidth - 6, ticketHeight - 13, 2, 2, 'FD');
 
-    // Image du QR Code
-    doc.addImage(qrDataUrl, 'PNG', marginX + 6.5, startY + 11.5, 33, 33);
+    // Image du QR Code haute définition
+    const qrX = marginX + 6.5;
+    const qrY = startY + 11.5;
+    const qrSize = 33;
+    doc.addImage(qrDataUrl, 'PNG', qrX, qrY, qrSize, qrSize);
+
+    // Dessin du badge blanc protecteur et du logo officiel Thièsdn au centre exact (~24% de largeur)
+    const logoW = qrSize * 0.24; // ~7.9 mm
+    const aspectRatio = 357 / 716; // ratio exact de logo-tight.png (716x357)
+    const logoH = logoW * aspectRatio; // ~3.9 mm
+
+    const padX = 1.0;
+    const padY = 0.8;
+    const badgeW = logoW + padX * 2;
+    const badgeH = logoH + padY * 2;
+    const badgeX = qrX + (qrSize - badgeW) / 2;
+    const badgeY = qrY + (qrSize - badgeH) / 2;
+
+    // Carré blanc protecteur pour lisibilité optimale du QR code
+    doc.setFillColor(255, 255, 255);
+    doc.setDrawColor(233, 195, 73); // Liseré or officiel Thièsdn
+    doc.setLineWidth(0.25);
+    doc.roundedRect(badgeX, badgeY, badgeW, badgeH, 0.6, 0.6, 'FD');
+
+    // Logo officiel Thièsdn (/logo-tight.png)
+    doc.addImage(LOGO_TIGHT_DATA_URL, 'PNG', badgeX + padX, badgeY + padY, logoW, logoH);
 
     // Texte sous le QR code
     doc.setTextColor(20, 20, 20);
