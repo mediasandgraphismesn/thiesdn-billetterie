@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Scan,
   QrCode,
@@ -16,7 +16,10 @@ import {
   Phone,
   Ticket,
   ArrowRight,
+  Camera,
+  CameraOff,
 } from 'lucide-react';
+import { Html5Qrcode } from 'html5-qrcode';
 import { ScanStation } from '../types';
 import {
   verifyScanStationAccess,
@@ -42,6 +45,12 @@ export const PublicScannerStationView: React.FC<PublicScannerStationViewProps> =
 
   const [inputCode, setInputCode] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
+
+  // Caméra arrière & Scanner Html5Qrcode
+  const [isCameraActive, setIsCameraActive] = useState<boolean>(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
+  const lastScannedRef = useRef<{ code: string; timestamp: number }>({ code: '', timestamp: 0 });
 
   // Connectivité réseau & synchronisation hors-ligne
   const [isOnline, setIsOnline] = useState<boolean>(
@@ -190,6 +199,97 @@ export const PublicScannerStationView: React.FC<PublicScannerStationViewProps> =
     setInputCode('');
   };
 
+  // Démarrage & cycle de vie du lecteur caméra Html5Qrcode
+  useEffect(() => {
+    let isMounted = true;
+    const scannerElementId = 'qr-reader';
+
+    const startCamera = async () => {
+      // Petite attente pour garantir le montage effectif du conteneur DOM
+      await new Promise((r) => setTimeout(r, 120));
+      if (!isMounted) return;
+
+      const element = document.getElementById(scannerElementId);
+      if (!element) return;
+
+      // Nettoyer toute instance active préalable
+      if (scannerRef.current) {
+        try {
+          if (scannerRef.current.isScanning) {
+            await scannerRef.current.stop();
+          }
+          scannerRef.current.clear();
+        } catch {
+          // Ignorer
+        }
+        scannerRef.current = null;
+      }
+
+      try {
+        setCameraError(null);
+        const html5Qr = new Html5Qrcode(scannerElementId);
+        scannerRef.current = html5Qr;
+
+        await html5Qr.start(
+          { facingMode: 'environment' },
+          {
+            fps: 10,
+            qrbox: (viewfinderWidth, viewfinderHeight) => {
+              const edge = Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.75);
+              return { width: edge, height: edge };
+            },
+            aspectRatio: 1.0,
+          },
+          (decodedText) => {
+            if (!isMounted) return;
+            const now = Date.now();
+            // Anti-rebond : éviter de rescanner en boucle le même billet en moins de 3s
+            if (
+              lastScannedRef.current.code === decodedText &&
+              now - lastScannedRef.current.timestamp < 3000
+            ) {
+              return;
+            }
+            lastScannedRef.current = { code: decodedText, timestamp: now };
+            handleVerify(decodedText);
+          },
+          () => {
+            // Frames vides ignorées pendant la recherche
+          }
+        );
+
+        if (isMounted) {
+          setIsCameraActive(true);
+        }
+      } catch (err: any) {
+        console.warn('Erreur activation caméra poste public:', err);
+        if (isMounted) {
+          setIsCameraActive(false);
+          setCameraError(
+            err?.message ||
+              "Impossible d'activer la caméra arrière. Vérifiez les autorisations de votre navigateur ou utilisez la saisie manuelle."
+          );
+        }
+      }
+    };
+
+    if (station) {
+      startCamera();
+    }
+
+    return () => {
+      isMounted = false;
+      if (scannerRef.current) {
+        if (scannerRef.current.isScanning) {
+          scannerRef.current.stop().catch(() => {});
+        }
+        scannerRef.current.clear();
+        scannerRef.current = null;
+      }
+      setIsCameraActive(false);
+    };
+  }, [station?.accessCode]);
+
   // 1. Écran de chargement
   if (isLoading) {
     return (
@@ -302,23 +402,60 @@ export const PublicScannerStationView: React.FC<PublicScannerStationViewProps> =
       {/* CONTENU PRINCIPAL */}
       <main className="flex-1 p-4 space-y-4 flex flex-col justify-between pb-8">
         <div className="space-y-4">
-          {/* SIMULATEUR VISEUR / ZONE CAMERA */}
-          <div className="relative h-56 rounded-3xl overflow-hidden bg-gradient-to-b from-[#181822] via-[#0E0E14] to-[#0A0A0C] border-2 border-[#8A2BE2]/40 flex flex-col items-center justify-center p-6 shadow-2xl">
-            {/* Coins Dorés */}
-            <div className="absolute top-4 left-4 w-6 h-6 border-t-2 border-l-2 border-[#E9C349]" />
-            <div className="absolute top-4 right-4 w-6 h-6 border-t-2 border-r-2 border-[#E9C349]" />
-            <div className="absolute bottom-4 left-4 w-6 h-6 border-b-2 border-l-2 border-[#E9C349]" />
-            <div className="absolute bottom-4 right-4 w-6 h-6 border-b-2 border-r-2 border-[#E9C349]" />
+          {/* ZONE CAMERA & VISEUR TEMPS RÉEL (HTML5QRCODE) */}
+          <div className="relative h-64 sm:h-72 rounded-3xl overflow-hidden bg-black border-2 border-[#8A2BE2]/50 flex flex-col items-center justify-center shadow-2xl">
+            {/* Conteneur DOM où html5-qrcode injecte le stream <video> */}
+            <div
+              id="qr-reader"
+              className="absolute inset-0 w-full h-full [&>video]:w-full [&>video]:h-full [&>video]:object-cover"
+            />
 
-            {/* Viseur QR Code animé */}
-            <div className="w-36 h-36 border border-[#8A2BE2]/50 rounded-2xl relative flex items-center justify-center">
-              <QrCode className="w-20 h-20 text-[#8A2BE2]/40 animate-pulse" />
-              <div className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-[#E9C349] to-transparent shadow-[0_0_12px_#E9C349] animate-bounce" />
+            {/* Overlay d'attente ou d'erreur caméra */}
+            {!isCameraActive && (
+              <div className="absolute inset-0 z-0 bg-gradient-to-b from-[#181822] via-[#0e0e13] to-[#0a0a0c] flex flex-col items-center justify-center p-6 text-center">
+                {cameraError ? (
+                  <div className="space-y-2 max-w-xs">
+                    <CameraOff className="w-10 h-10 text-amber-400 mx-auto" />
+                    <p className="text-xs text-amber-200 font-medium">{cameraError}</p>
+                    <p className="text-[11px] text-gray-400">
+                      Vous pouvez utiliser la saisie manuelle ci-dessous.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="w-12 h-12 rounded-2xl bg-[#8A2BE2]/20 border border-[#8A2BE2]/40 flex items-center justify-center mx-auto animate-pulse">
+                      <Camera className="w-6 h-6 text-[#DCB8FF]" />
+                    </div>
+                    <p className="text-xs text-gray-300 font-semibold">
+                      Activation de la caméra arrière...
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Coins Dorés */}
+            <div className="absolute top-4 left-4 w-6 h-6 border-t-2 border-l-2 border-[#E9C349] pointer-events-none z-10" />
+            <div className="absolute top-4 right-4 w-6 h-6 border-t-2 border-r-2 border-[#E9C349] pointer-events-none z-10" />
+            <div className="absolute bottom-4 left-4 w-6 h-6 border-b-2 border-l-2 border-[#E9C349] pointer-events-none z-10" />
+            <div className="absolute bottom-4 right-4 w-6 h-6 border-b-2 border-r-2 border-[#E9C349] pointer-events-none z-10" />
+
+            {/* Viseur & ligne laser animée */}
+            <div className="w-44 h-44 border border-[#8A2BE2]/60 rounded-2xl relative flex items-center justify-center pointer-events-none z-10 shadow-[0_0_15px_rgba(138,43,226,0.3)]">
+              {isCameraActive ? (
+                <div className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-[#E9C349] to-transparent shadow-[0_0_12px_#E9C349] animate-bounce" />
+              ) : (
+                <QrCode className="w-20 h-20 text-[#8A2BE2]/30 animate-pulse" />
+              )}
             </div>
 
-            <p className="text-[11px] text-[#DCB8FF] mt-3 font-semibold flex items-center gap-1.5">
-              <Scan className="w-3.5 h-3.5" /> Pointez le QR Code du visiteur
-            </p>
+            {/* Pastille Statut Caméra */}
+            <div className="absolute bottom-3 inset-x-4 z-10 flex items-center justify-center pointer-events-none">
+              <span className="px-3 py-1 rounded-full bg-black/75 backdrop-blur-md border border-white/10 text-[10px] font-semibold text-[#DCB8FF] flex items-center gap-1.5 shadow-lg">
+                <span className={`w-2 h-2 rounded-full ${isCameraActive ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+                <span>{isCameraActive ? 'Caméra Arrière Active • Visez le QR code' : 'Caméra en attente'}</span>
+              </span>
+            </div>
           </div>
 
           {/* FORMULAIRE DE SAISIE RAPIDE (MANUELLE OU DOUCHETTE SCANNER) */}
