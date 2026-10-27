@@ -4,6 +4,7 @@ import { Calendar, MapPin, Sparkles, Crown, ShieldCheck, Clock, Eye, Radio } fro
 import { EventItem } from '../types';
 import { CountdownTimer } from './CountdownTimer';
 import { getEventEndDatetime } from '../services/supabase';
+import { getOptimizedImageUrl } from '../utils/imageOptimizer';
 
 interface EventCardProps {
   event: EventItem;
@@ -39,8 +40,10 @@ export const EventCard: React.FC<EventCardProps> = ({
         className="relative group cursor-pointer flex-shrink-0 w-80 sm:w-96 h-64 rounded-2xl overflow-hidden border border-white/10 shadow-xl transition-shadow duration-300 hover:shadow-2xl hover:shadow-[#8A2BE2]/20"
       >
         <img
-          src={event.posterUrl}
+          src={getOptimizedImageUrl(event.posterUrl, 800, 80)}
           alt={event.title}
+          loading="lazy"
+          decoding="async"
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent" />
@@ -112,8 +115,10 @@ export const EventCard: React.FC<EventCardProps> = ({
       >
         <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden flex-shrink-0 relative">
           <img
-            src={event.posterUrl}
+            src={getOptimizedImageUrl(event.posterUrl, 400, 80)}
             alt={event.title}
+            loading="lazy"
+            decoding="async"
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
           />
           <div className="absolute top-1 left-1">
@@ -200,8 +205,10 @@ export const EventCard: React.FC<EventCardProps> = ({
     >
       <div className="h-44 sm:h-48 relative overflow-hidden">
         <img
-          src={event.posterUrl}
+          src={getOptimizedImageUrl(event.posterUrl, 800, 80)}
           alt={event.title}
+          loading="lazy"
+          decoding="async"
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-[#1A1A1A] via-transparent to-transparent" />
@@ -254,8 +261,10 @@ export const EventCard: React.FC<EventCardProps> = ({
             <div className="flex items-center gap-1.5">
               {event.promoter.avatar && (
                 <img
-                  src={event.promoter.avatar}
+                  src={getOptimizedImageUrl(event.promoter.avatar, 120, 80)}
                   alt={event.promoter.name}
+                  loading="lazy"
+                  decoding="async"
                   className="w-5 h-5 rounded-full object-cover"
                 />
               )}

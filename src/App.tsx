@@ -6,6 +6,7 @@ import { ShaderBackground } from './components/ShaderBackground';
 import { EventDetailModal } from './components/EventDetailModal';
 import { TicketPassModal } from './components/TicketPassModal';
 import { Footer } from './components/Footer';
+import { PWAInstallPrompt } from './components/PWAInstallPrompt';
 import { ShieldAlert, Eye, ArrowRight } from 'lucide-react';
 
 import { HomeView } from './views/HomeView';
@@ -1039,6 +1040,9 @@ export default function App() {
         isOpen={selectedTicketForPass !== null}
         onClose={() => setSelectedTicketForPass(null)}
       />
+
+      {/* Bannière PWA d'installation (mobile exclusif) */}
+      <PWAInstallPrompt />
     </div>
   );
 }

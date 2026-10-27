@@ -28,6 +28,7 @@ import {
   Send,
 } from 'lucide-react';
 import { EventItem, TicketTier, UserTicket, OrderRecord } from '../types';
+import { getOptimizedImageUrl } from '../utils/imageOptimizer';
 import { createOrderWithStockCheck, registerEventPreRegistration } from '../services/supabase';
 import { CountdownTimer } from './CountdownTimer';
 import { SpotifyVinylPlayer } from './SpotifyVinylPlayer';
@@ -321,8 +322,10 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
           {/* Poster Header */}
           <div className="relative h-48 sm:h-56 w-full flex-shrink-0">
             <img
-              src={event.posterUrl}
+              src={getOptimizedImageUrl(event.posterUrl, 1200, 85)}
               alt={event.title}
+              loading="lazy"
+              decoding="async"
               className="w-full h-full object-cover"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-[#171717] via-black/40 to-transparent" />
