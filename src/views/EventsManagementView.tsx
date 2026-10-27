@@ -47,7 +47,9 @@ import {
   SENEGAL_CITIES,
   EventCoproducer,
   CoproducerRole,
+  TicketTier,
 } from '../types';
+import { useAuth } from '../contexts/AuthContext';
 import {
   deleteEventFromSupabase,
   updateEventStatusInSupabase,
@@ -98,16 +100,30 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
   onNavigateCreate,
   onPreviewEvent,
 }) => {
+  const { userRole } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<'all' | EventStatus>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
 
-  // Modal d'édition avancée (4 Onglets)
+  // Modal d'édition avancée (5 Onglets)
   const [editingEvent, setEditingEvent] = useState<EventItem | null>(null);
-  const [activeModalTab, setActiveModalTab] = useState<'details' | 'coproducers' | 'stats' | 'settings'>('details');
+  const [activeModalTab, setActiveModalTab] = useState<'details' | 'tiers' | 'coproducers' | 'stats' | 'settings'>('details');
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [isPhysicalModalOpen, setIsPhysicalModalOpen] = useState(false);
+
+  // État des Catégories & Tarifs (Onglet Tarifs)
+  const [modalTiers, setModalTiers] = useState<TicketTier[]>([]);
+  const [tierDeleteError, setTierDeleteError] = useState<string | null>(null);
+  const [newTier, setNewTier] = useState({
+    name: '',
+    price: 3500,
+    available: 100,
+    description: '',
+    wavePaymentUrl: '',
+    perks: '',
+  });
+  const [newTierError, setNewTierError] = useState<string | null>(null);
 
   // État local du formulaire d'édition
   const [editForm, setEditForm] = useState({
@@ -285,9 +301,121 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
       waveLinkVip: event.waveLinkVip || '',
     });
 
+    // Initialisation des Catégories & Tarifs
+    const defaultTiers: TicketTier[] = event.tiers && event.tiers.length > 0 ? event.tiers : [
+      {
+        id: 't-prev',
+        name: 'Pass Prévente',
+        price: 3500,
+        description: 'Tarif promotionnel prévente limité',
+        perks: ['Accès dès 20h00', 'Pass QR Code unique'],
+        available: 150,
+        isActive: true,
+        wavePaymentUrl: event.waveLinkPrevente || '',
+      },
+      {
+        id: 't-jour',
+        name: 'Pass Jour J',
+        price: 5000,
+        description: 'Accès standard le jour de l’événement',
+        perks: ['Accès salle principale', 'Validation prioritaire'],
+        available: 200,
+        isActive: true,
+        wavePaymentUrl: event.waveLinkJourJ || '',
+      },
+      {
+        id: 't-vip',
+        name: 'Pass VIP Prestige',
+        price: 10000,
+        description: 'Salon VIP dédié & cocktail d’honneur',
+        perks: ['Table réservée', 'Cocktail offert', 'Coupe-file'],
+        available: 50,
+        isActive: true,
+        wavePaymentUrl: event.waveLinkVip || '',
+      },
+    ];
+    setModalTiers(defaultTiers.map((t) => ({ ...t, isActive: t.isActive !== false })));
+    setTierDeleteError(null);
+    setNewTierError(null);
+
     // Chargement dynamique des co-producteurs et statistiques
     loadEventCoproducers(event.id);
     loadEventStats(event.id);
+  };
+
+  // Actions sur les catégories de billets
+  const handleToggleTierActive = (tierId: string) => {
+    setModalTiers((prev) =>
+      prev.map((t) => (t.id === tierId ? { ...t, isActive: t.isActive === false ? true : false } : t))
+    );
+  };
+
+  const handleDeleteTier = (tier: TicketTier) => {
+    setTierDeleteError(null);
+    const hasOrders = (modalStats.orders || []).some(
+      (ord: any) => ord.tierId === tier.id || (ord.tierName && ord.tierName.toLowerCase() === tier.name.toLowerCase())
+    );
+    if (hasOrders) {
+      setTierDeleteError(
+        `Impossible de supprimer "${tier.name}" car des commandes ont déjà été enregistrées avec ce tarif. Veuillez plutôt la "Désactiver" pour conserver l'historique comptable.`
+      );
+      return;
+    }
+    setModalTiers((prev) => prev.filter((t) => t.id !== tier.id));
+  };
+
+  const handleAddTier = (e: React.FormEvent) => {
+    e.preventDefault();
+    setNewTierError(null);
+    if (modalTiers.length >= 8) {
+      setNewTierError('Limite atteinte : 8 catégories de billets maximum par événement.');
+      return;
+    }
+    const trimmedName = newTier.name.trim();
+    if (trimmedName.length < 2 || trimmedName.length > 40) {
+      setNewTierError('Le nom de la catégorie doit comporter entre 2 et 40 caractères.');
+      return;
+    }
+    const priceNum = Number(newTier.price);
+    if (isNaN(priceNum) || priceNum <= 0) {
+      setNewTierError('Le prix doit être un entier strictement supérieur à 0 FCFA.');
+      return;
+    }
+    const availNum = Number(newTier.available);
+    if (isNaN(availNum) || availNum < 0) {
+      setNewTierError('Le stock disponible doit être un entier supérieur ou égal à 0.');
+      return;
+    }
+    const trimmedDesc = newTier.description.trim();
+    if (trimmedDesc.length > 200) {
+      setNewTierError('La description ne doit pas dépasser 200 caractères.');
+      return;
+    }
+
+    const perksArray = newTier.perks
+      ? newTier.perks.split(',').map((p) => p.trim()).filter(Boolean)
+      : ['Accès garanti', 'Pass QR Code unique'];
+
+    const created: TicketTier = {
+      id: crypto.randomUUID(),
+      name: trimmedName,
+      price: Math.round(priceNum),
+      available: Math.round(availNum),
+      description: trimmedDesc || 'Accès à l’événement',
+      perks: perksArray,
+      isActive: true,
+      wavePaymentUrl: userRole === 'admin' && newTier.wavePaymentUrl ? newTier.wavePaymentUrl.trim() : undefined,
+    };
+
+    setModalTiers((prev) => [...prev, created]);
+    setNewTier({
+      name: '',
+      price: 3500,
+      available: 100,
+      description: '',
+      wavePaymentUrl: '',
+      perks: '',
+    });
   };
 
   // Sauvegarder la modification
@@ -337,7 +465,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
       waveLinkPrevente: editForm.waveLinkPrevente,
       waveLinkJourJ: editForm.waveLinkJourJ,
       waveLinkVip: editForm.waveLinkVip,
-      tiers: editingEvent.tiers,
+      tiers: modalTiers,
     });
 
     setIsSavingEdit(false);
@@ -787,6 +915,22 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
 
               <button
                 type="button"
+                onClick={() => setActiveModalTab('tiers')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 ${
+                  activeModalTab === 'tiers'
+                    ? 'bg-[#8A2BE2] text-white shadow-lg shadow-[#8A2BE2]/30'
+                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <Ticket className="w-3.5 h-3.5" />
+                <span>Tarifs & Billetterie</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/15 font-mono">
+                  {modalTiers.filter((t) => t.isActive !== false).length}
+                </span>
+              </button>
+
+              <button
+                type="button"
                 onClick={() => setActiveModalTab('coproducers')}
                 className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 ${
                   activeModalTab === 'coproducers'
@@ -1216,6 +1360,266 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                       </div>
                     </div>
                   </div>
+                </div>
+              )}
+
+              {/* ONGLET : GRILLE TARIFAIRE DYNAMIQUE */}
+              {activeModalTab === 'tiers' && (
+                <div className="space-y-6 animate-in fade-in duration-150">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-black/40 border border-white/10">
+                    <div>
+                      <h3 className="font-heading font-black text-sm text-white uppercase tracking-wider flex items-center gap-2">
+                        <Ticket className="w-4 h-4 text-[#E9C349]" />
+                        <span>Grille Tarifaire Dynamique & Billetterie</span>
+                      </h3>
+                      <p className="text-xs text-gray-400 mt-1">
+                        Activez, désactivez ou ajoutez des catégories de billets. Seules les formules actives avec places disponibles sont proposées à l'achat.
+                      </p>
+                    </div>
+                    <span className="self-start sm:self-center px-3 py-1 rounded-full text-xs font-mono font-bold bg-[#8A2BE2]/20 border border-[#8A2BE2]/40 text-[#DCB8FF]">
+                      {modalTiers.length} / 8 formules
+                    </span>
+                  </div>
+
+                  {tierDeleteError && (
+                    <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 shrink-0" />
+                      <span>{tierDeleteError}</span>
+                    </div>
+                  )}
+
+                  {/* Liste des formules existantes */}
+                  <div className="space-y-3">
+                    {modalTiers.map((tier) => {
+                      const isActive = tier.isActive !== false;
+                      const hasWaveUrl = Boolean(tier.wavePaymentUrl && tier.wavePaymentUrl.trim().startsWith('http'));
+
+                      return (
+                        <div
+                          key={tier.id}
+                          className={`p-4 rounded-2xl border transition-all ${
+                            isActive
+                              ? 'bg-[#181720] border-white/10 hover:border-white/20'
+                              : 'bg-black/40 border-white/5 opacity-60'
+                          }`}
+                        >
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/5 pb-3">
+                            <div className="flex items-center gap-3">
+                              <span
+                                className={`w-3 h-3 rounded-full shrink-0 ${
+                                  isActive ? 'bg-emerald-400 shadow-sm shadow-emerald-400/50' : 'bg-gray-500'
+                                }`}
+                              />
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <h4 className="font-heading font-bold text-sm text-white">{tier.name}</h4>
+                                  <span
+                                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                      isActive
+                                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                        : 'bg-gray-800 text-gray-400 border border-gray-700'
+                                    }`}
+                                  >
+                                    {isActive ? 'Active' : 'Désactivée'}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-gray-400 mt-0.5">{tier.description}</p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-4 self-end sm:self-center">
+                              <div className="text-right">
+                                <span className="font-heading font-black text-base text-[#E9C349]">
+                                  {tier.price.toLocaleString('fr-FR')} FCFA
+                                </span>
+                                <span className="block text-[11px] text-gray-400 font-mono">
+                                  {tier.available} place(s) dispo.
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Détails secondaires & Actions */}
+                          <div className="pt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                            <div className="flex flex-wrap items-center gap-2">
+                              {tier.perks && tier.perks.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5">
+                                  {tier.perks.map((p, idx) => (
+                                    <span
+                                      key={idx}
+                                      className="px-2 py-0.5 rounded-lg bg-white/5 text-gray-300 text-[10px]"
+                                    >
+                                      ✓ {p}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                              {hasWaveUrl ? (
+                                <span className="text-[10px] text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded-lg border border-sky-500/20">
+                                  Lien Wave direct configuré
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-gray-500 bg-white/5 px-2 py-0.5 rounded-lg">
+                                  Lien Wave événement par défaut
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-2 self-end sm:self-auto">
+                              <button
+                                type="button"
+                                onClick={() => handleToggleTierActive(tier.id)}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${
+                                  isActive
+                                    ? 'bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 border border-amber-500/30'
+                                    : 'bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 border border-emerald-500/30'
+                                }`}
+                              >
+                                {isActive ? 'Désactiver' : 'Réactiver'}
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteTier(tier)}
+                                className="px-3 py-1.5 rounded-xl text-xs font-bold text-rose-400 hover:bg-rose-500/10 border border-rose-500/20 hover:border-rose-500/40 transition-colors flex items-center gap-1.5"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                <span>Supprimer</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Formulaire d'ajout d'une nouvelle catégorie */}
+                  {modalTiers.length < 8 ? (
+                    <div className="p-4 sm:p-5 rounded-2xl bg-black/40 border border-white/10 space-y-4">
+                      <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                        <h4 className="font-heading font-bold text-sm text-white flex items-center gap-2">
+                          <Plus className="w-4 h-4 text-[#8A2BE2]" />
+                          <span>Ajouter une Nouvelle Catégorie de Billet</span>
+                        </h4>
+                        <span className="text-[10px] uppercase font-bold text-gray-400">
+                          {8 - modalTiers.length} emplacement(s) libre(s)
+                        </span>
+                      </div>
+
+                      {newTierError && (
+                        <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4 shrink-0" />
+                          <span>{newTierError}</span>
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="sm:col-span-1">
+                          <label className="text-[11px] font-bold text-gray-300 block mb-1">
+                            Nom de la formule *
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Ex: Pass Couple, Table VIP..."
+                            value={newTier.name}
+                            onChange={(e) => setNewTier({ ...newTier, name: e.target.value })}
+                            className="w-full bg-[#111111] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-[11px] font-bold text-gray-300 block mb-1">
+                            Prix (FCFA) *
+                          </label>
+                          <input
+                            type="number"
+                            min="500"
+                            step="500"
+                            placeholder="3500"
+                            value={newTier.price}
+                            onChange={(e) => setNewTier({ ...newTier, price: Number(e.target.value) })}
+                            className="w-full bg-[#111111] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-[11px] font-bold text-gray-300 block mb-1">
+                            Stock disponible (Places) *
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            placeholder="100"
+                            value={newTier.available}
+                            onChange={(e) => setNewTier({ ...newTier, available: Number(e.target.value) })}
+                            className="w-full bg-[#111111] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[11px] font-bold text-gray-300 block mb-1">
+                            Description courte (max 200 car.)
+                          </label>
+                          <input
+                            type="text"
+                            maxLength={200}
+                            placeholder="Description des prestations incluses..."
+                            value={newTier.description}
+                            onChange={(e) => setNewTier({ ...newTier, description: e.target.value })}
+                            className="w-full bg-[#111111] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-[11px] font-bold text-gray-300 block mb-1">
+                            Avantages / Perks (séparés par virgules)
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Ex: Coupe-file, Boisson offerte, Accès salon..."
+                            value={newTier.perks}
+                            onChange={(e) => setNewTier({ ...newTier, perks: e.target.value })}
+                            className="w-full bg-[#111111] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Champ Wave réservé à l'administrateur */}
+                      {userRole === 'admin' && (
+                        <div>
+                          <label className="text-[11px] font-bold text-[#1DC3F4] flex items-center gap-1.5 mb-1">
+                            <ExternalLink className="w-3.5 h-3.5" />
+                            <span>Lien Wave Direct Spécifique (Réservé Admin - Optionnel)</span>
+                          </label>
+                          <input
+                            type="url"
+                            placeholder="https://pay.wave.com/m/..."
+                            value={newTier.wavePaymentUrl}
+                            onChange={(e) => setNewTier({ ...newTier, wavePaymentUrl: e.target.value })}
+                            className="w-full bg-[#111111] border border-[#1DC3F4]/30 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-[#1DC3F4]"
+                          />
+                        </div>
+                      )}
+
+                      <div className="flex justify-end pt-2">
+                        <button
+                          type="button"
+                          onClick={handleAddTier}
+                          className="px-5 py-2.5 rounded-xl bg-[#8A2BE2] hover:bg-[#7823c7] text-white text-xs font-bold flex items-center gap-2 transition-all shadow-md shadow-[#8A2BE2]/30"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>Ajouter cette Formule</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 text-center text-xs text-gray-400">
+                      Nombre maximum de formules atteint (8/8). Supprimez ou modifiez une formule existante pour en ajouter une nouvelle.
+                    </div>
+                  )}
                 </div>
               )}
 

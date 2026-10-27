@@ -4911,7 +4911,7 @@ export const mapDbEventToItem = (db: any): EventItem => {
       else if (t.id === 't-vip' || t.name.toLowerCase().includes('vip')) url = waveLinkVip;
       else url = waveLinkPrevente;
     }
-    return { ...t, wavePaymentUrl: url };
+    return { ...t, wavePaymentUrl: url, isActive: t.isActive !== false };
   });
 
   return {

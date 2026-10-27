@@ -135,7 +135,14 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
 
   const youtubeVideoId = extractYouTubeId(event.videoSpotUrl || event.youtubeUrl || event.socialYoutube);
 
-  const tiers = event.tiers && event.tiers.length > 0 ? event.tiers : [defaultTier];
+  // Filtrage strict : seules les formules actives (isActive !== false) et avec stock > 0 sont proposées à la vente
+  const activeTiers = useMemo(() => {
+    const rawTiers = event.tiers && event.tiers.length > 0 ? event.tiers : [defaultTier];
+    const availableTiers = rawTiers.filter((t) => t.isActive !== false && t.available > 0);
+    return availableTiers.length > 0 ? availableTiers : rawTiers.filter((t) => t.isActive !== false);
+  }, [event.tiers, defaultTier]);
+
+  const tiers = activeTiers;
   const baseTotalPrice = selectedTier.price * quantity;
   const discountAmount = appliedPromo
     ? Math.round((baseTotalPrice * appliedPromo.discountPercent) / 100)
@@ -222,13 +229,13 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
       return tier.wavePaymentUrl.trim();
     }
     const nameLower = (tier.name || '').toLowerCase();
-    if (nameLower.includes('vip') && event.waveLinkVip) return event.waveLinkVip;
-    if (nameLower.includes('jour') && event.waveLinkJourJ) return event.waveLinkJourJ;
-    if ((nameLower.includes('prévente') || nameLower.includes('prevente')) && event.waveLinkPrevente) {
-      return event.waveLinkPrevente;
+    if (nameLower.includes('vip') && event.waveLinkVip && event.waveLinkVip.trim().startsWith('http')) return event.waveLinkVip.trim();
+    if (nameLower.includes('jour') && event.waveLinkJourJ && event.waveLinkJourJ.trim().startsWith('http')) return event.waveLinkJourJ.trim();
+    if ((nameLower.includes('prévente') || nameLower.includes('prevente')) && event.waveLinkPrevente && event.waveLinkPrevente.trim().startsWith('http')) {
+      return event.waveLinkPrevente.trim();
     }
-    if (event.waveLinkPrevente) return event.waveLinkPrevente;
-    return 'https://pay.wave.com/m/M_p1_xT73E21bN/c/sn/';
+    if (event.waveLinkPrevente && event.waveLinkPrevente.trim().startsWith('http')) return event.waveLinkPrevente.trim();
+    return '';
   };
 
   // Traitement Paiement Wave (avec Guest Checkout anonyme si non connecté)
@@ -1194,23 +1201,32 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                     </div>
 
                     <div className="w-full sm:flex-1 sm:max-w-sm flex flex-col items-stretch sm:items-end gap-1">
-                      <button
-                        onClick={handleWaveCheckout}
-                        disabled={isProcessing || selectedTier.available < quantity}
-                        className="w-full h-12 py-3 px-6 rounded-2xl font-heading font-extrabold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-2.5 transition-all shadow-lg bg-[#1DC3F4] hover:bg-[#1bb3e0] text-[#07131D] shadow-[#1DC3F4]/20 active:scale-95 disabled:opacity-50 cursor-pointer"
-                      >
-                        {isProcessing ? (
-                          <div className="flex items-center gap-2">
-                            <span className="w-4 h-4 border-2 border-[#07131D] border-t-transparent rounded-full animate-spin" />
-                            <span>Enregistrement...</span>
-                          </div>
-                        ) : (
-                          <>
-                            <Smartphone className="w-4 h-4 fill-current" />
-                            <span>Payer {totalPrice.toLocaleString('fr-FR')} FCFA avec Wave</span>
-                          </>
-                        )}
-                      </button>
+                      {(() => {
+                        const currentWaveUrl = resolveWaveUrl(selectedTier);
+                        const isWaveConfigured = Boolean(currentWaveUrl && currentWaveUrl.startsWith('http'));
+
+                        return (
+                          <button
+                            onClick={handleWaveCheckout}
+                            disabled={isProcessing || selectedTier.available < quantity || !isWaveConfigured}
+                            className="w-full h-12 py-3 px-6 rounded-2xl font-heading font-extrabold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-2.5 transition-all shadow-lg bg-[#1DC3F4] hover:bg-[#1bb3e0] text-[#07131D] shadow-[#1DC3F4]/20 active:scale-95 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+                          >
+                            {!isWaveConfigured ? (
+                              <span>Paiement bientôt disponible</span>
+                            ) : isProcessing ? (
+                              <div className="flex items-center gap-2">
+                                <span className="w-4 h-4 border-2 border-[#07131D] border-t-transparent rounded-full animate-spin" />
+                                <span>Enregistrement...</span>
+                              </div>
+                            ) : (
+                              <>
+                                <Smartphone className="w-4 h-4 fill-current" />
+                                <span>Payer {totalPrice.toLocaleString('fr-FR')} FCFA avec Wave</span>
+                              </>
+                            )}
+                          </button>
+                        );
+                      })()}
                       {!isAuthenticated && (
                         <span className="text-[10px] text-gray-400 text-center w-full">
                           ⚡ Achat direct instantané (sans mot de passe requis)
