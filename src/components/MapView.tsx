@@ -300,8 +300,8 @@ export const MapView: React.FC<MapViewProps> = ({
         </div>
       )}
 
-      {/* Conteneur de la Carte Leaflet */}
-      <div className="relative w-full h-[450px] sm:h-[520px] rounded-2xl overflow-hidden border border-white/10 shadow-inner z-10 group">
+      {/* Conteneur de la Carte Leaflet Isolé */}
+      <div className="relative isolate z-0 w-full h-[450px] sm:h-[520px] rounded-2xl overflow-hidden border border-white/10 shadow-inner group">
         {/* Bouton Flottant Rapide "Autour de moi" sur la carte */}
         <button
           type="button"
