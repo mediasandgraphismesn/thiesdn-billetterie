@@ -699,8 +699,8 @@ export default function App() {
           activeTab === 'showcase' || activeTab === 'presentation'
             ? 'p-0 m-0 max-w-none pt-0 pb-0'
             : isAuthenticated 
-            ? 'pt-24 pb-6 px-4 sm:px-6 lg:pl-80 lg:pr-10 max-w-7xl' 
-            : 'pt-24 pb-6 px-4 sm:px-8 lg:px-12 max-w-6xl'
+            ? 'pt-4 sm:pt-6 pb-[calc(var(--nav-h,72px)+env(safe-area-inset-bottom)+16px)] lg:pb-12 px-3 sm:px-6 lg:pl-80 lg:pr-10 max-w-7xl' 
+            : 'pt-4 sm:pt-6 pb-[calc(var(--nav-h,72px)+env(safe-area-inset-bottom)+16px)] lg:pb-12 px-3 sm:px-8 lg:px-12 max-w-6xl'
         }`}>
           {eventsError && (
             <div className="mb-6 p-4 rounded-2xl bg-rose-950/80 border border-rose-500/40 text-rose-200 flex items-center justify-between">

@@ -96,45 +96,47 @@ export const HomeView: React.FC<HomeViewProps> = ({
         })}
       </div>
 
-      {/* Featured Events Horizontal Scroll Section matching Image 2 */}
-      <section className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-[#E9C349]" />
-            <h2 className="font-heading text-xl sm:text-2xl font-bold text-white tracking-tight">
-              Événements à la Une
-            </h2>
+      {/* Featured Events Horizontal Scroll Section matching Image 2 : Masquée si 0 résultat */}
+      {(isLoading || featuredEvents.length > 0) && (
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-[#E9C349]" />
+              <h2 className="font-heading text-xl sm:text-2xl font-bold text-white tracking-tight">
+                Événements à la Une
+              </h2>
+            </div>
+            <button
+              onClick={onNavigateToExplore}
+              className="text-xs font-bold text-[#DCB8FF] hover:text-white flex items-center gap-1 transition-colors"
+            >
+              <span>Voir tout</span>
+              <ChevronRight className="w-4 h-4" />
+            </button>
           </div>
-          <button
-            onClick={onNavigateToExplore}
-            className="text-xs font-bold text-[#DCB8FF] hover:text-white flex items-center gap-1 transition-colors"
-          >
-            <span>Voir tout</span>
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
 
-        {/* Horizontal Carousel */}
-        <div className="flex gap-4 overflow-x-auto pb-3 pt-1 scrollbar-none snap-x snap-mandatory">
-          {isLoading ? (
-            Array.from({ length: 3 }).map((_, idx) => (
-              <div key={`featured-skel-${idx}`} className="snap-start flex-shrink-0">
-                <EventCardSkeleton variant="featured" />
-              </div>
-            ))
-          ) : (
-            featuredEvents.map((event) => (
-              <div key={event.id} className="snap-start flex-shrink-0">
-                <EventCard
-                  event={event}
-                  variant="featured"
-                  onSelect={onSelectEvent}
-                />
-              </div>
-            ))
-          )}
-        </div>
-      </section>
+          {/* Horizontal Carousel */}
+          <div className="flex gap-4 overflow-x-auto pb-3 pt-1 scrollbar-none snap-x snap-mandatory">
+            {isLoading ? (
+              Array.from({ length: 3 }).map((_, idx) => (
+                <div key={`featured-skel-${idx}`} className="snap-start flex-shrink-0">
+                  <EventCardSkeleton variant="featured" />
+                </div>
+              ))
+            ) : (
+              featuredEvents.map((event) => (
+                <div key={event.id} className="snap-start flex-shrink-0">
+                  <EventCard
+                    event={event}
+                    variant="featured"
+                    onSelect={onSelectEvent}
+                  />
+                </div>
+              ))
+            )}
+          </div>
+        </section>
+      )}
 
       {/* Upcoming Near You Section matching Image 2 */}
       <section className="space-y-4">

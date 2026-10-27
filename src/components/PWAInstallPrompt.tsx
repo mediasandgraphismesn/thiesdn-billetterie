@@ -86,7 +86,7 @@ export const PWAInstallPrompt: React.FC = () => {
     // STRICTEMENT MASQUÉ SUR DESKTOP (md:hidden) — Réservé exclusivement au mobile
     <aside
       aria-label="Installation de l'application Thièsdn"
-      className="md:hidden fixed bottom-20 left-4 right-4 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300 pointer-events-auto"
+      className="md:hidden fixed bottom-[calc(var(--nav-h,72px)+env(safe-area-inset-bottom)+12px)] inset-x-3 max-w-md mx-auto z-40 animate-in fade-in slide-in-from-bottom-4 duration-300 pointer-events-auto"
     >
       <div className="relative overflow-hidden rounded-2xl bg-[#121118]/95 backdrop-blur-xl border border-[#E9C349]/35 p-3.5 shadow-2xl shadow-black/80">
         {/* Glow discret */}

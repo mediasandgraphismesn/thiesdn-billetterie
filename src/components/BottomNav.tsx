@@ -94,46 +94,50 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 
   return (
     <nav
-      className="lg:hidden fixed bottom-3 left-3 right-3 h-16 max-w-lg mx-auto z-50 grid w-full gap-0 px-1 items-center bg-[#1C1B1B]/95 backdrop-blur-2xl rounded-full border border-white/10 shadow-2xl shadow-[#8A2BE2]/20"
-      style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
+      aria-label="Navigation mobile principale"
+      className="lg:hidden fixed inset-x-0 bottom-0 z-50 pointer-events-none pb-[env(safe-area-inset-bottom)] px-3"
     >
-      {tabs.map((tab) => {
-        const Icon = tab.icon;
-        const isActive = activeTab === tab.id;
+      <div
+        className="mx-auto w-full max-w-md h-[var(--nav-h,72px)] mb-2 bg-[#121118]/95 backdrop-blur-2xl rounded-full border border-white/10 shadow-2xl shadow-[#8A2BE2]/25 pointer-events-auto flex items-center justify-around px-2"
+      >
+        {tabs.map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
 
-        return (
-          <button
-            key={tab.id}
-            onClick={() => onTabChange(tab.id)}
-            aria-label={tab.label}
-            className={`relative flex flex-col items-center justify-center py-1 px-1 min-w-0 w-full rounded-2xl transition-all ${
-              isActive
-                ? 'bg-[#8A2BE2] text-white shadow-lg shadow-[#8A2BE2]/40 scale-[1.02]'
-                : 'text-[#CFC2D7] hover:text-white opacity-80'
-            }`}
-          >
-            <div className="relative">
-              <Icon className={`w-4 h-4 sm:w-5 sm:h-5 ${isActive ? 'stroke-[2.5]' : 'stroke-[1.8]'}`} />
-              {tab.badge !== undefined && (
-                <span
-                  className={`absolute -top-1.5 -right-2 text-[9px] font-extrabold px-1 py-0.1 rounded-full min-w-[14px] text-center ${
-                    tab.badgeColor || 'bg-[#8A2BE2] text-white'
-                  }`}
-                >
-                  {tab.badge}
-                </span>
-              )}
-            </div>
-            <span
-              className={`text-[10px] sm:text-xs font-semibold mt-0.5 tracking-tight truncate max-w-full text-center px-0.5 ${
-                isActive ? 'text-white' : 'text-[#CFC2D7]'
+          return (
+            <button
+              key={tab.id}
+              onClick={() => onTabChange(tab.id)}
+              aria-label={tab.label}
+              className={`relative flex flex-col items-center justify-center py-1 px-1 min-w-0 flex-1 h-12 rounded-2xl transition-all cursor-pointer ${
+                isActive
+                  ? 'bg-[#8A2BE2] text-white shadow-lg shadow-[#8A2BE2]/40'
+                  : 'text-[#CFC2D7] hover:text-white opacity-85'
               }`}
             >
-              {tab.label}
-            </span>
-          </button>
-        );
-      })}
+              <div className="relative">
+                <Icon className={`w-4 h-4 sm:w-5 sm:h-5 ${isActive ? 'stroke-[2.5]' : 'stroke-[1.8]'}`} />
+                {tab.badge !== undefined && (
+                  <span
+                    className={`absolute -top-1.5 -right-2 text-[9px] font-extrabold px-1 py-0.1 rounded-full min-w-[14px] text-center ${
+                      tab.badgeColor || 'bg-[#8A2BE2] text-white'
+                    }`}
+                  >
+                    {tab.badge}
+                  </span>
+                )}
+              </div>
+              <span
+                className={`text-[10px] sm:text-xs font-semibold mt-0.5 tracking-tight truncate max-w-full text-center px-0.5 ${
+                  isActive ? 'text-white' : 'text-[#CFC2D7]'
+                }`}
+              >
+                {tab.label}
+              </span>
+            </button>
+          );
+        })}
+      </div>
     </nav>
   );
 };
