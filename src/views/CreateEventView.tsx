@@ -416,8 +416,8 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
       return;
     }
 
-    if (!waveLinkPrevente.trim().startsWith('http') || !waveLinkJourJ.trim().startsWith('http') || !waveLinkVip.trim().startsWith('http')) {
-      setSubmitError('Veuillez renseigner les 3 liens de paiement Wave obligatoires (Prévente, Jour J, VIP).');
+    if (userRole === 'admin' && (!waveLinkPrevente.trim().startsWith('http') || !waveLinkJourJ.trim().startsWith('http') || !waveLinkVip.trim().startsWith('http'))) {
+      setSubmitError('En tant qu’administrateur, veuillez renseigner les 3 liens de paiement Wave obligatoires.');
       return;
     }
 
@@ -439,6 +439,11 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
     });
     const eventIsoString = validDate.toISOString();
 
+    const isAdmin = userRole === 'admin';
+    const resolvedWavePrevente = isAdmin && waveLinkPrevente ? waveLinkPrevente.trim() : undefined;
+    const resolvedWaveJourJ = isAdmin && waveLinkJourJ ? waveLinkJourJ.trim() : undefined;
+    const resolvedWaveVip = isAdmin && waveLinkVip ? waveLinkVip.trim() : undefined;
+
     const standardTiers = [
       {
         id: 't-prev',
@@ -447,7 +452,8 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
         description: 'Tarif promotionnel prévente limité',
         perks: ['Entrée garantie dès 20h00', 'Pass QR Code unique'],
         available: 150,
-        wavePaymentUrl: waveLinkPrevente.trim(),
+        isActive: true,
+        wavePaymentUrl: resolvedWavePrevente,
       },
       {
         id: 't-jour',
@@ -456,7 +462,8 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
         description: 'Accès standard le jour de l’événement',
         perks: ['Accès salle principale', 'Validation prioritaire'],
         available: 200,
-        wavePaymentUrl: waveLinkJourJ.trim(),
+        isActive: true,
+        wavePaymentUrl: resolvedWaveJourJ,
       },
       {
         id: 't-vip',
@@ -465,7 +472,8 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
         description: 'Salon VIP dédié & cocktail d’honneur',
         perks: ['Table réservée', 'Cocktail offert', 'Coupe-file exclusif'],
         available: 50,
-        wavePaymentUrl: waveLinkVip.trim(),
+        isActive: true,
+        wavePaymentUrl: resolvedWaveVip,
       },
     ];
 
@@ -513,9 +521,9 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
           posterUrl: posterUrl || PRESET_POSTERS[0].url,
           whatsappContact: whatsappContact || '+221 77 458 74 74',
           tiers: standardTiers,
-          waveLinkPrevente: waveLinkPrevente.trim(),
-          waveLinkJourJ: waveLinkJourJ.trim(),
-          waveLinkVip: waveLinkVip.trim(),
+          waveLinkPrevente: resolvedWavePrevente,
+          waveLinkJourJ: resolvedWaveJourJ,
+          waveLinkVip: resolvedWaveVip,
           socialFacebook: socialFacebook.trim() || undefined,
           socialInstagram: socialInstagram.trim() || undefined,
           socialTiktok: socialTiktok.trim() || undefined,
@@ -1209,20 +1217,26 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
                   <span className="text-xs text-[#E9C349] font-bold">FCFA</span>
                 </div>
               </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[11px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
-                  <ExternalLink className="w-3.5 h-3.5 text-[#1DC3F4]" />
-                  Lien de paiement Wave - Prévente (Obligatoire)
-                </label>
-                <input
-                  type="url"
-                  required
-                  value={waveLinkPrevente}
-                  onChange={(e) => setWaveLinkPrevente(e.target.value)}
-                  placeholder="https://pay.wave.com/m/..."
-                  className="w-full bg-[#1F1F1F] border border-white/10 focus:border-[#1DC3F4] rounded-xl px-3.5 py-2.5 text-xs text-white font-mono outline-none"
-                />
-              </div>
+              {userRole === 'admin' ? (
+                <div className="flex flex-col gap-1">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+                    <ExternalLink className="w-3.5 h-3.5 text-[#1DC3F4]" />
+                    Lien de paiement Wave - Prévente (Admin)
+                  </label>
+                  <input
+                    type="url"
+                    value={waveLinkPrevente}
+                    onChange={(e) => setWaveLinkPrevente(e.target.value)}
+                    placeholder="https://pay.wave.com/m/..."
+                    className="w-full bg-[#1F1F1F] border border-white/10 focus:border-[#1DC3F4] rounded-xl px-3.5 py-2.5 text-xs text-white font-mono outline-none"
+                  />
+                </div>
+              ) : (
+                <div className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-[11px] text-gray-400 flex items-center gap-2">
+                  <Smartphone className="w-3.5 h-3.5 text-[#1DC3F4] shrink-0" />
+                  <span>Lien Wave assigné par l'administrateur lors de l'approbation de l'événement.</span>
+                </div>
+              )}
             </div>
 
             {/* Formule 2 : Jour J */}
@@ -1246,20 +1260,26 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
                   <span className="text-xs text-[#E9C349] font-bold">FCFA</span>
                 </div>
               </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[11px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
-                  <ExternalLink className="w-3.5 h-3.5 text-[#1DC3F4]" />
-                  Lien de paiement Wave - Jour J (Obligatoire)
-                </label>
-                <input
-                  type="url"
-                  required
-                  value={waveLinkJourJ}
-                  onChange={(e) => setWaveLinkJourJ(e.target.value)}
-                  placeholder="https://pay.wave.com/m/..."
-                  className="w-full bg-[#1F1F1F] border border-white/10 focus:border-[#1DC3F4] rounded-xl px-3.5 py-2.5 text-xs text-white font-mono outline-none"
-                />
-              </div>
+              {userRole === 'admin' ? (
+                <div className="flex flex-col gap-1">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+                    <ExternalLink className="w-3.5 h-3.5 text-[#1DC3F4]" />
+                    Lien de paiement Wave - Jour J (Admin)
+                  </label>
+                  <input
+                    type="url"
+                    value={waveLinkJourJ}
+                    onChange={(e) => setWaveLinkJourJ(e.target.value)}
+                    placeholder="https://pay.wave.com/m/..."
+                    className="w-full bg-[#1F1F1F] border border-white/10 focus:border-[#1DC3F4] rounded-xl px-3.5 py-2.5 text-xs text-white font-mono outline-none"
+                  />
+                </div>
+              ) : (
+                <div className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-[11px] text-gray-400 flex items-center gap-2">
+                  <Smartphone className="w-3.5 h-3.5 text-[#1DC3F4] shrink-0" />
+                  <span>Lien Wave assigné par l'administrateur lors de l'approbation de l'événement.</span>
+                </div>
+              )}
             </div>
 
             {/* Formule 3 : VIP */}
@@ -1283,20 +1303,26 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
                   <span className="text-xs text-[#E9C349] font-bold">FCFA</span>
                 </div>
               </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[11px] font-bold uppercase tracking-wider text-[#E9C349] flex items-center gap-1.5">
-                  <ExternalLink className="w-3.5 h-3.5 text-[#E9C349]" />
-                  Lien de paiement Wave - VIP (Obligatoire)
-                </label>
-                <input
-                  type="url"
-                  required
-                  value={waveLinkVip}
-                  onChange={(e) => setWaveLinkVip(e.target.value)}
-                  placeholder="https://pay.wave.com/m/..."
-                  className="w-full bg-[#1F1F1F] border border-[#E9C349]/30 focus:border-[#E9C349] rounded-xl px-3.5 py-2.5 text-xs text-white font-mono outline-none"
-                />
-              </div>
+              {userRole === 'admin' ? (
+                <div className="flex flex-col gap-1">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-[#E9C349] flex items-center gap-1.5">
+                    <ExternalLink className="w-3.5 h-3.5 text-[#E9C349]" />
+                    Lien de paiement Wave - VIP (Admin)
+                  </label>
+                  <input
+                    type="url"
+                    value={waveLinkVip}
+                    onChange={(e) => setWaveLinkVip(e.target.value)}
+                    placeholder="https://pay.wave.com/m/..."
+                    className="w-full bg-[#1F1F1F] border border-[#E9C349]/30 focus:border-[#E9C349] rounded-xl px-3.5 py-2.5 text-xs text-white font-mono outline-none"
+                  />
+                </div>
+              ) : (
+                <div className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-[11px] text-gray-400 flex items-center gap-2">
+                  <Smartphone className="w-3.5 h-3.5 text-[#E9C349] shrink-0" />
+                  <span>Lien Wave assigné par l'administrateur lors de l'approbation de l'événement.</span>
+                </div>
+              )}
             </div>
           </div>
         </section>

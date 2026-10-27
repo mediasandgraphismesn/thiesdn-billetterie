@@ -1338,44 +1338,47 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                     </div>
                   </div>
 
-                  {/* Liens Mobile Money Wave */}
-                  <div className="p-4 rounded-2xl bg-black/30 border border-white/5 space-y-3">
-                    <p className="text-[11px] font-bold uppercase tracking-wider text-[#E9C349]">
-                      Liens de Paiement Mobile Money Wave
-                    </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <div>
-                        <label className="text-[10px] text-gray-400 block mb-1">Pass Prévente</label>
-                        <input
-                          type="url"
-                          placeholder="https://pay.wave.com/..."
-                          value={editForm.waveLinkPrevente}
-                          onChange={(e) => setEditForm({ ...editForm, waveLinkPrevente: e.target.value })}
-                          className="w-full bg-[#111111] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] text-gray-400 block mb-1">Pass Jour J</label>
-                        <input
-                          type="url"
-                          placeholder="https://pay.wave.com/..."
-                          value={editForm.waveLinkJourJ}
-                          onChange={(e) => setEditForm({ ...editForm, waveLinkJourJ: e.target.value })}
-                          className="w-full bg-[#111111] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] text-gray-400 block mb-1">Pass VIP Prestige</label>
-                        <input
-                          type="url"
-                          placeholder="https://pay.wave.com/..."
-                          value={editForm.waveLinkVip}
-                          onChange={(e) => setEditForm({ ...editForm, waveLinkVip: e.target.value })}
-                          className="w-full bg-[#111111] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
-                        />
+                  {/* Liens Mobile Money Wave (Réservé Admin) */}
+                  {userRole === 'admin' && (
+                    <div className="p-4 rounded-2xl bg-black/30 border border-[#1DC3F4]/20 space-y-3">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-[#1DC3F4] flex items-center gap-1.5">
+                        <Smartphone className="w-3.5 h-3.5" />
+                        <span>Liens de Paiement Mobile Money Wave (Réservé Admin)</span>
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label className="text-[10px] text-gray-400 block mb-1">Pass Prévente</label>
+                          <input
+                            type="url"
+                            placeholder="https://pay.wave.com/..."
+                            value={editForm.waveLinkPrevente}
+                            onChange={(e) => setEditForm({ ...editForm, waveLinkPrevente: e.target.value })}
+                            className="w-full bg-[#111111] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-gray-400 block mb-1">Pass Jour J</label>
+                          <input
+                            type="url"
+                            placeholder="https://pay.wave.com/..."
+                            value={editForm.waveLinkJourJ}
+                            onChange={(e) => setEditForm({ ...editForm, waveLinkJourJ: e.target.value })}
+                            className="w-full bg-[#111111] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-gray-400 block mb-1">Pass VIP Prestige</label>
+                          <input
+                            type="url"
+                            placeholder="https://pay.wave.com/..."
+                            value={editForm.waveLinkVip}
+                            onChange={(e) => setEditForm({ ...editForm, waveLinkVip: e.target.value })}
+                            className="w-full bg-[#111111] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8A2BE2]"
+                          />
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               )}
 
