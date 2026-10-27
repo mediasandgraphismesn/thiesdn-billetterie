@@ -243,7 +243,7 @@ export const VigileSessionsView: React.FC = () => {
                         <div className="text-[10px] text-gray-400 font-mono mt-0.5 flex items-center gap-1">
                           <span className="text-[#E9C349] font-bold">{session.stationCode}</span>
                           <span>•</span>
-                          <span className="truncate max-w-[150px]">{session.eventTitle || 'Soirée Thiès'}</span>
+                          <span className="truncate max-w-full min-w-0">{session.eventTitle || 'Soirée Thiès'}</span>
                         </div>
                       </td>
 

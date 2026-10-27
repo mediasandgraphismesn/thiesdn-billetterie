@@ -257,7 +257,7 @@ export const LoginHistoryView: React.FC = () => {
                       </td>
 
                       {/* Utilisateur (Email) */}
-                      <td className="py-3 px-4 font-medium text-white max-w-[200px] truncate">
+                      <td className="py-3 px-4 font-medium text-white max-w-full min-w-0 truncate">
                         <div className="flex items-center gap-2">
                           <div className="w-6 h-6 rounded-full bg-[#8A2BE2]/20 border border-[#8A2BE2]/40 flex items-center justify-center text-[10px] text-[#DCB8FF] shrink-0 font-bold">
                             {log.email.charAt(0).toUpperCase()}

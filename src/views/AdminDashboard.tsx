@@ -202,14 +202,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
           <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <span className="bg-[#8A2BE2]/20 text-[#DCB8FF] border border-[#8A2BE2]/40 text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full flex items-center gap-1.5 shadow-sm">
-                <ShieldCheck className="w-3.5 h-3.5 text-[#E9C349]" />
-                Console Supabase Active
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="bg-[#8A2BE2]/20 text-[#DCB8FF] border border-[#8A2BE2]/40 text-xs font-bold uppercase tracking-wider px-2.5 sm:px-3 py-1 rounded-full flex items-center gap-1.5 shadow-sm max-w-full truncate">
+                <ShieldCheck className="w-3.5 h-3.5 text-[#E9C349] shrink-0" />
+                <span className="truncate">Console Supabase Active</span>
               </span>
-              <span className="bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-xs font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                Live PostgreSQL
+              <span className="bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-xs font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1 max-w-full truncate">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                <span className="truncate">Live PostgreSQL</span>
               </span>
             </div>
 

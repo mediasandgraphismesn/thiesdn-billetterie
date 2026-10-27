@@ -580,7 +580,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                     <div className="p-2.5 rounded-xl bg-black/40 border border-white/5 space-y-1 text-xs">
                       <div className="flex justify-between">
                         <span className="text-gray-400">Événement :</span>
-                        <span className="font-bold text-white truncate max-w-[200px]">
+                        <span className="font-bold text-white truncate max-w-full min-w-0">
                           {pendingTicketForConfirm.eventTitle}
                         </span>
                       </div>

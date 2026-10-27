@@ -314,7 +314,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               e.stopPropagation();
               fileInputRef.current?.click();
             }}
-            className="absolute bottom-0 right-0 bg-[#8A2BE2] hover:bg-[#7822c9] text-white p-2.5 rounded-full shadow-lg border-2 border-[#171717] transition-all hover:scale-110 active:scale-95 disabled:opacity-50"
+            className="absolute bottom-0 right-0 bg-[#8A2BE2] hover:bg-[#7822c9] text-white p-2.5 rounded-full shadow-lg border-2 border-[#0A0A0A] transition-all hover:scale-110 active:scale-95 disabled:opacity-50 min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer"
             title="Modifier la photo"
           >
             {uploadingAvatar ? (
@@ -348,13 +348,13 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               </span>
             )}
           </div>
-          <p className="text-sm text-[#CFC2D7] font-medium flex items-center justify-center md:justify-start gap-2">
-            <span>{user.email || 'Client Thièsdn Billetterie'}</span>
-            <span className="text-gray-500">•</span>
-            <span className="text-[#E9C349] font-bold uppercase text-xs">
+          <div className="text-sm text-[#CFC2D7] font-medium flex flex-wrap items-center justify-center md:justify-start gap-1.5 sm:gap-2">
+            <span className="break-all">{user.email || 'Client Thièsdn Billetterie'}</span>
+            <span className="text-gray-500 hidden sm:inline">•</span>
+            <span className="text-[#E9C349] font-bold uppercase text-xs px-2 py-0.5 rounded-md bg-[#E9C349]/10 border border-[#E9C349]/30">
               {user.role === 'admin' ? 'Administrateur' : user.role === 'promoter' ? 'Promoteur Officiel' : 'Espace Client'}
             </span>
-          </p>
+          </div>
 
           {/* Action buttons : Suppression Share Profile + Traduction */}
           <div className="pt-3 flex flex-wrap justify-center md:justify-start gap-3">
