@@ -172,7 +172,8 @@ export const AccreditationBadgeModal: React.FC<AccreditationBadgeModalProps> = (
         {/* Bouton Fermer */}
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 p-2 rounded-full bg-white/10 hover:bg-white/20 text-gray-300 transition-all z-10"
+          aria-label="Fermer"
+          className="absolute top-4 right-4 w-11 h-11 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white transition-all z-10 cursor-pointer"
         >
           <X className="w-5 h-5" />
         </button>

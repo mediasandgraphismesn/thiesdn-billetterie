@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import confetti from 'canvas-confetti';
+import { SafeImage } from './SafeImage';
 import {
   X,
   MapPin,
@@ -446,54 +447,54 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
   if (!isOpen || !ticket) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
       <motion.div
         initial={{ opacity: 0, y: 50, scale: 0.95 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-        className="relative w-full max-w-sm sm:max-w-md bg-gradient-to-b from-[#221F28] via-[#171717] to-[#121212] border border-[#8A2BE2]/40 rounded-3xl overflow-hidden shadow-2xl my-6"
+        className="relative w-full max-w-sm sm:max-w-md bg-gradient-to-b from-[#1C1824] via-[#0A0A0A] to-[#121118] border border-[#8A2BE2]/40 rounded-3xl overflow-hidden shadow-2xl my-4 sm:my-6"
       >
         
         {/* TOP BAR AVEC LOGO OFFICIEL THIÈSDN */}
-        <div className="p-4 flex items-center justify-between border-b border-white/10 bg-black/40">
-          <div className="flex items-center gap-2.5">
+        <div className="p-3.5 sm:p-4 flex items-center justify-between border-b border-white/10 bg-black/50">
+          <div className="flex items-center gap-2.5 min-w-0">
             {/* Logo officiel en haut du billet */}
-            <div className="h-7 px-2 py-0.5 rounded-lg bg-white/10 border border-white/10 flex items-center justify-center">
+            <div className="h-8 px-2 py-0.5 rounded-lg bg-white/10 border border-white/10 flex items-center justify-center shrink-0">
               <img
                 src="/logo-tight.png"
                 alt="Thièsdn Logo"
-                className="h-4 w-auto object-contain"
+                className="h-5 w-auto object-contain"
               />
             </div>
-            <span className="font-heading font-extrabold text-xs text-[#E9C349] flex items-center gap-1.5 uppercase tracking-wider">
-              <ShieldCheck className="w-3.5 h-3.5 text-[#E9C349]" /> Pass Billet Officiel
+            <span className="font-heading font-extrabold text-xs text-[#E9C349] flex items-center gap-1.5 uppercase tracking-wider truncate">
+              <ShieldCheck className="w-3.5 h-3.5 text-[#E9C349] shrink-0" /> Pass Billet Officiel
             </span>
           </div>
 
           <button
             onClick={onClose}
             aria-label="Fermer le pass"
-            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+            className="w-11 h-11 min-h-[44px] min-w-[44px] rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors cursor-pointer shrink-0"
           >
-            <X className="w-4 h-4" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Corps Visuel du Billet */}
-        <div className="p-6 space-y-5">
+        <div className="p-4 sm:p-6 space-y-4 sm:space-y-5">
           {/* Bannière de l'affiche */}
           <div className="relative h-36 rounded-2xl overflow-hidden border border-white/10">
-            <img
+            <SafeImage
               src={ticket.eventPoster}
               alt={ticket.eventTitle}
               className="w-full h-full object-cover"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent" />
-            <div className="absolute bottom-3 inset-x-3">
+            <div className="absolute bottom-3 inset-x-3 min-w-0">
               <span className="bg-[#E9C349] text-[#241A00] text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full mb-1 inline-block">
                 {ticket.tierName}
               </span>
-              <h3 className="font-heading text-lg font-bold text-white leading-tight">
+              <h3 className="font-heading text-base sm:text-lg font-bold text-white leading-tight truncate">
                 {ticket.eventTitle}
               </h3>
             </div>
@@ -657,7 +658,7 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
             {isPendingPayment ? (
               <button
                 onClick={handleDownloadReceipt}
-                className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white font-heading font-extrabold text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-amber-600/30 active:scale-[0.98]"
+                className="flex-1 h-12 min-h-[48px] px-4 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white font-heading font-extrabold text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-amber-600/30 active:scale-95 cursor-pointer"
               >
                 <FileText className="w-4 h-4" />
                 <span>📄 Télécharger mon reçu de commande</span>
@@ -665,7 +666,7 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
             ) : (
               <button
                 onClick={handleDownloadPass}
-                className="flex-1 py-3 px-4 rounded-xl bg-[#8A2BE2] hover:bg-[#7822c9] text-white font-heading font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-[#8A2BE2]/30 active:scale-[0.98]"
+                className="flex-1 h-12 min-h-[48px] px-4 rounded-xl bg-[#8A2BE2] hover:bg-[#7822c9] text-white font-heading font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-[#8A2BE2]/30 active:scale-95 cursor-pointer"
               >
                 <Download className="w-4 h-4" />
                 <span>Télécharger Pass</span>
@@ -685,7 +686,8 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
                   alert('Code du pass copié dans le presse-papier !');
                 }
               }}
-              className="py-3 px-4 rounded-xl bg-[#1F1F1F] hover:bg-[#2A2A2A] text-[#DCB8FF] border border-white/10 font-heading font-bold text-xs flex items-center justify-center gap-2 transition-all"
+              aria-label="Partager le billet"
+              className="w-12 h-12 min-h-[48px] min-w-[48px] rounded-xl bg-[#1F1F1F] hover:bg-[#2A2A2A] text-[#DCB8FF] border border-white/10 font-heading font-bold text-xs flex items-center justify-center transition-all cursor-pointer shrink-0"
             >
               <Share2 className="w-4 h-4" />
             </button>

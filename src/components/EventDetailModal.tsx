@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { SafeImage } from './SafeImage';
 import confetti from 'canvas-confetti';
 import {
   X,
@@ -356,57 +357,56 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.2 }}
-        className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md overflow-y-auto"
+        className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto"
       >
         <motion.div
           initial={{ opacity: 0, y: 35, scale: 0.96 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-          className="relative w-full h-full sm:h-auto sm:max-h-[90vh] max-w-2xl bg-[#171717] border-0 sm:border sm:border-white/10 rounded-none sm:rounded-3xl overflow-hidden shadow-2xl my-0 sm:my-8 flex flex-col"
+          className="relative w-full h-full sm:h-auto sm:max-h-[90dvh] max-w-2xl bg-[#0A0A0A] border-0 sm:border sm:border-white/10 rounded-none sm:rounded-3xl overflow-hidden shadow-2xl my-0 sm:my-8 flex flex-col pt-[env(safe-area-inset-top)]"
         >
           {/* Poster Header */}
           <div className="relative h-48 sm:h-56 w-full flex-shrink-0">
-            <img
+            <SafeImage
               src={getOptimizedImageUrl(event.posterUrl, 1200, 85)}
+              rawSrc={event.posterUrl}
               alt={event.title}
-              loading="lazy"
-              decoding="async"
               className="w-full h-full object-cover"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-[#171717] via-black/40 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-[#0A0A0A] via-black/40 to-transparent" />
 
             {/* Top Controls */}
-            <div className="absolute top-4 inset-x-4 flex items-center justify-between z-10">
-              <div className="flex items-center gap-2">
-                <span className="bg-[#1C1B1B]/80 backdrop-blur-md text-[#E9C349] border border-[#E9C349]/30 text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full shadow-lg flex items-center gap-1.5">
+            <div className="absolute top-3 inset-x-3 sm:top-4 sm:inset-x-4 flex items-center justify-between z-10 gap-2">
+              <div className="flex items-center gap-1.5 flex-wrap min-w-0 flex-1">
+                <span className="bg-[#121118]/85 backdrop-blur-md text-[#E9C349] border border-[#E9C349]/30 text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-full shadow-lg flex items-center gap-1.5 shrink-0">
                   <Tag className="w-3.5 h-3.5" />
                   {event.category}
                 </span>
-                <span className="bg-[#8A2BE2]/90 backdrop-blur-md text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg flex items-center gap-1">
-                  <MapPin className="w-3 h-3" />
-                  {event.city}{event.quartier ? ` • ${event.quartier}` : ''}
+                <span className="bg-[#8A2BE2]/90 backdrop-blur-md text-white text-xs font-bold px-2.5 py-1 rounded-full shadow-lg flex items-center gap-1 max-w-full min-w-0 truncate">
+                  <MapPin className="w-3 h-3 shrink-0" />
+                  <span className="truncate">{event.city}{event.quartier ? ` • ${event.quartier}` : ''}</span>
                 </span>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 flex-shrink-0">
                 <a
                   href={whatsappShareEventUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-9 h-9 rounded-full bg-emerald-600/80 hover:bg-emerald-500 backdrop-blur-md text-white flex items-center justify-center border border-emerald-400/30 transition-all hover:scale-105 shadow-lg"
+                  className="w-11 h-11 min-h-[44px] min-w-[44px] rounded-full bg-emerald-600/80 hover:bg-emerald-500 backdrop-blur-md text-white flex items-center justify-center border border-emerald-400/30 transition-all hover:scale-105 shadow-lg"
                   title="Partager cet événement sur WhatsApp"
                 >
                   <Share2 className="w-4 h-4" />
                 </a>
                 <button
                   onClick={() => setIsLiked(!isLiked)}
-                  className="w-9 h-9 rounded-full bg-black/60 backdrop-blur-md text-white hover:text-red-400 flex items-center justify-center border border-white/10 transition-colors"
+                  className="w-11 h-11 min-h-[44px] min-w-[44px] rounded-full bg-black/60 backdrop-blur-md text-white hover:text-red-400 flex items-center justify-center border border-white/10 transition-colors"
                 >
                   <Heart className={`w-4 h-4 ${isLiked ? 'fill-red-500 text-red-500' : ''}`} />
                 </button>
                 <button
                   onClick={onClose}
-                  className="w-9 h-9 rounded-full bg-black/60 backdrop-blur-md text-white hover:bg-white/20 flex items-center justify-center border border-white/10 transition-colors"
+                  className="w-11 h-11 min-h-[44px] min-w-[44px] rounded-full bg-black/60 backdrop-blur-md text-white hover:bg-white/20 flex items-center justify-center border border-white/10 transition-colors"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -1155,7 +1155,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
           </div>
 
           {/* Footer Bar */}
-          <div className="p-4 sm:p-5 bg-[#141414] border-t border-white/10 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
+          <div className="p-4 sm:p-5 bg-[#0A0A0A] border-t border-white/10 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
             {step === 'select' && (
               <>
                 {isSalesUpcoming ? (
@@ -1168,7 +1168,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                     <button
                       type="button"
                       onClick={onClose}
-                      className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-heading font-bold text-xs uppercase tracking-wider transition-all"
+                      className="w-full sm:w-auto min-h-[48px] px-6 py-3 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-heading font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center cursor-pointer"
                     >
                       Fermer
                     </button>
@@ -1194,7 +1194,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                       <button
                         onClick={handleWaveCheckout}
                         disabled={isProcessing || selectedTier.available < quantity}
-                        className="w-full py-3.5 px-6 rounded-2xl font-heading font-extrabold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-2.5 transition-all shadow-lg bg-[#1DC3F4] hover:bg-[#1bb3e0] text-[#07131D] shadow-[#1DC3F4]/20 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
+                        className="w-full h-12 py-3 px-6 rounded-2xl font-heading font-extrabold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-2.5 transition-all shadow-lg bg-[#1DC3F4] hover:bg-[#1bb3e0] text-[#07131D] shadow-[#1DC3F4]/20 active:scale-95 disabled:opacity-50 cursor-pointer"
                       >
                         {isProcessing ? (
                           <div className="flex items-center gap-2">

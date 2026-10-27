@@ -122,10 +122,10 @@ export const AssignTicketModal: React.FC<AssignTicketModalProps> = ({
   const smsUrl = `sms:${waPhone}?body=${encodeURIComponent(shareMessage)}`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
-      <div className="relative w-full max-w-md bg-gradient-to-b from-[#221F28] via-[#171717] to-[#121212] border border-[#8A2BE2]/40 rounded-3xl overflow-hidden shadow-2xl my-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
+      <div className="relative w-full max-w-md bg-gradient-to-b from-[#1C1824] via-[#0A0A0A] to-[#121118] border border-[#8A2BE2]/40 rounded-3xl overflow-hidden shadow-2xl my-4 sm:my-6">
         {/* Header */}
-        <div className="p-4 flex items-center justify-between border-b border-white/10 bg-black/40">
+        <div className="p-4 flex items-center justify-between border-b border-white/10 bg-black/50">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-xl bg-[#8A2BE2]/20 border border-[#8A2BE2]/40 flex items-center justify-center">
               <UserPlus className="w-4 h-4 text-[#E9C349]" />
@@ -142,7 +142,8 @@ export const AssignTicketModal: React.FC<AssignTicketModalProps> = ({
 
           <button
             onClick={handleClose}
-            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+            aria-label="Fermer"
+            className="w-11 h-11 min-h-[44px] min-w-[44px] rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
