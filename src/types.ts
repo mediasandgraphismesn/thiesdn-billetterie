@@ -59,6 +59,7 @@ export interface TicketTier {
   perks: string[];
   available: number;
   wavePaymentUrl?: string; // Lien de paiement Wave direct
+  isActive?: boolean; // Statut actif/désactivé (défaut true)
 }
 
 export interface EventItem {

@@ -50,6 +50,7 @@ interface EventDetailModalProps {
   onClose: () => void;
   onOrderCreated?: (order: OrderRecord) => void;
   onPurchaseSuccess?: (ticket: UserTicket) => void;
+  onNavigateToTickets?: () => void;
   userName: string;
   isEmailConfirmed?: boolean;
   isAuthenticated?: boolean;
@@ -61,6 +62,8 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
   isOpen,
   onClose,
   onOrderCreated,
+  onPurchaseSuccess,
+  onNavigateToTickets,
   userName,
   isEmailConfirmed = true,
   isAuthenticated = true,
@@ -135,7 +138,14 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
 
   const youtubeVideoId = extractYouTubeId(event.videoSpotUrl || event.youtubeUrl || event.socialYoutube);
 
-  const tiers = event.tiers && event.tiers.length > 0 ? event.tiers : [defaultTier];
+  // Filtrage strict : seules les formules actives (isActive !== false) et avec stock > 0 sont proposées à la vente
+  const activeTiers = useMemo(() => {
+    const rawTiers = event.tiers && event.tiers.length > 0 ? event.tiers : [defaultTier];
+    const availableTiers = rawTiers.filter((t) => t.isActive !== false && t.available > 0);
+    return availableTiers.length > 0 ? availableTiers : rawTiers.filter((t) => t.isActive !== false);
+  }, [event.tiers, defaultTier]);
+
+  const tiers = activeTiers;
   const baseTotalPrice = selectedTier.price * quantity;
   const discountAmount = appliedPromo
     ? Math.round((baseTotalPrice * appliedPromo.discountPercent) / 100)
@@ -222,13 +232,13 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
       return tier.wavePaymentUrl.trim();
     }
     const nameLower = (tier.name || '').toLowerCase();
-    if (nameLower.includes('vip') && event.waveLinkVip) return event.waveLinkVip;
-    if (nameLower.includes('jour') && event.waveLinkJourJ) return event.waveLinkJourJ;
-    if ((nameLower.includes('prévente') || nameLower.includes('prevente')) && event.waveLinkPrevente) {
-      return event.waveLinkPrevente;
+    if (nameLower.includes('vip') && event.waveLinkVip && event.waveLinkVip.trim().startsWith('http')) return event.waveLinkVip.trim();
+    if (nameLower.includes('jour') && event.waveLinkJourJ && event.waveLinkJourJ.trim().startsWith('http')) return event.waveLinkJourJ.trim();
+    if ((nameLower.includes('prévente') || nameLower.includes('prevente')) && event.waveLinkPrevente && event.waveLinkPrevente.trim().startsWith('http')) {
+      return event.waveLinkPrevente.trim();
     }
-    if (event.waveLinkPrevente) return event.waveLinkPrevente;
-    return 'https://pay.wave.com/m/M_p1_xT73E21bN/c/sn/';
+    if (event.waveLinkPrevente && event.waveLinkPrevente.trim().startsWith('http')) return event.waveLinkPrevente.trim();
+    return '';
   };
 
   // Traitement Paiement Wave (avec Guest Checkout anonyme si non connecté)
@@ -236,13 +246,25 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
     setIsProcessing(true);
     setErrorMessage(null);
 
-    // Guest Checkout automatique via Supabase Auth Anonyme
+    // Guest Checkout automatique via Supabase Auth Anonyme (une seule fois par visiteur)
     const supabase = getSupabaseClient();
     if (!isAuthenticated && supabase) {
       try {
-        await supabase.auth.signInAnonymously();
-      } catch (anonErr) {
-        console.warn('Guest checkout anonymous session notice:', anonErr);
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (!sessionData?.session?.user) {
+          const { error: anonErr } = await supabase.auth.signInAnonymously();
+          if (anonErr) {
+            console.error('Guest checkout anonymous session error:', anonErr);
+            setErrorMessage("Impossible d'initialiser l'accès invité pour l'achat. Veuillez réessayer ou vous connecter.");
+            setIsProcessing(false);
+            return;
+          }
+        }
+      } catch (anonErr: any) {
+        console.error('Guest checkout anonymous exception:', anonErr);
+        setErrorMessage("Impossible d'initialiser l'accès invité pour l'achat. Veuillez réessayer ou vous connecter.");
+        setIsProcessing(false);
+        return;
       }
     }
 
@@ -1084,55 +1106,45 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                   </div>
                 )}
 
-                {/* Boutons d'Action Post-Achat */}
+                {/* Boutons d'Action Post-Achat : message d'attente pour pending, bouton direct pour confirmed */}
                 <div className="max-w-md mx-auto pt-1 space-y-2.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      confetti({
-                        particleCount: 110,
-                        spread: 80,
-                        origin: { y: 0.6 },
-                        colors: ['#8A2BE2', '#E9C349', '#DCB8FF', '#FFFFFF'],
-                      });
-                      if (onPurchaseSuccess && activeOrder) {
-                        const pseudoTicket: UserTicket = {
-                          id: activeOrder.id,
-                          eventId: event.id,
-                          eventTitle: event.title,
-                          eventDate: event.date,
-                          eventTime: event.time,
-                          eventVenue: event.venue,
-                          eventPoster: event.posterUrl,
-                          tierName: activeOrder.tierName,
-                          price: activeOrder.totalAmount,
-                          qrCode: activeOrder.reference,
-                          holderName: activeOrder.customerName,
-                          status: 'valid',
-                          isExclusive: event.isExclusive,
-                          purchasedAt: new Date().toISOString(),
-                        };
-                        onPurchaseSuccess(pseudoTicket);
-                      }
-                      onClose();
-                    }}
-                    className="w-full py-3.5 px-5 rounded-2xl font-heading font-extrabold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-2.5 transition-all shadow-lg bg-gradient-to-r from-[#8A2BE2] via-[#E9C349] to-[#8A2BE2] text-white shadow-[#8A2BE2]/30 hover:scale-[1.02] active:scale-[0.98]"
-                  >
-                    <Ticket className="w-4 h-4 text-white" />
-                    <span>Voir mon billet</span>
-                  </button>
+                  {activeOrder && (activeOrder.status === 'pending' || (activeOrder.status as string) === 'payment_signaled') ? (
+                    <div className="p-4 rounded-2xl bg-amber-950/40 border border-[#E9C349]/40 text-center space-y-2">
+                      <div className="flex items-center justify-center gap-2 text-[#E9C349] font-bold text-xs uppercase tracking-wider">
+                        <Clock className="w-4 h-4 animate-pulse" />
+                        <span>Paiement en cours de vérification</span>
+                      </div>
+                      <p className="text-xs text-gray-300 leading-relaxed">
+                        ⏳ Paiement en cours de vérification. Votre billet sera disponible après validation par l'administrateur.
+                      </p>
+                    </div>
+                  ) : activeOrder?.status === 'confirmed' ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        if (onNavigateToTickets) onNavigateToTickets();
+                      }}
+                      className="w-full py-3.5 px-5 rounded-2xl font-heading font-extrabold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-2.5 transition-all shadow-lg bg-gradient-to-r from-[#8A2BE2] via-[#E9C349] to-[#8A2BE2] text-white shadow-[#8A2BE2]/30 hover:scale-[1.02] active:scale-[0.98]"
+                    >
+                      <Ticket className="w-4 h-4 text-white" />
+                      <span>Voir mon billet</span>
+                    </button>
+                  ) : null}
 
-                  <a
-                    href={generateWhatsAppConfirmationUrl(activeOrder)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full py-3 px-5 rounded-2xl font-heading font-extrabold text-xs tracking-wider uppercase flex items-center justify-center gap-2.5 transition-all shadow-md bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30 active:scale-[0.98]"
-                  >
-                    <MessageSquare className="w-4 h-4 fill-current" />
-                    <span>Envoyer mon billet par WhatsApp</span>
-                  </a>
+                  {activeOrder && (
+                    <a
+                      href={generateWhatsAppConfirmationUrl(activeOrder)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full py-3 px-5 rounded-2xl font-heading font-extrabold text-xs tracking-wider uppercase flex items-center justify-center gap-2.5 transition-all shadow-md bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30 active:scale-[0.98]"
+                    >
+                      <MessageSquare className="w-4 h-4 fill-current" />
+                      <span>Conserver mon reçu sur WhatsApp</span>
+                    </a>
+                  )}
                   <p className="text-[11px] text-gray-400">
-                    Recevez immédiatement une copie certifiée de votre reçu sur WhatsApp.
+                    Conservez votre référence de commande pour toute assistance ou retrait.
                   </p>
                 </div>
 
@@ -1194,23 +1206,32 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                     </div>
 
                     <div className="w-full sm:flex-1 sm:max-w-sm flex flex-col items-stretch sm:items-end gap-1">
-                      <button
-                        onClick={handleWaveCheckout}
-                        disabled={isProcessing || selectedTier.available < quantity}
-                        className="w-full h-12 py-3 px-6 rounded-2xl font-heading font-extrabold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-2.5 transition-all shadow-lg bg-[#1DC3F4] hover:bg-[#1bb3e0] text-[#07131D] shadow-[#1DC3F4]/20 active:scale-95 disabled:opacity-50 cursor-pointer"
-                      >
-                        {isProcessing ? (
-                          <div className="flex items-center gap-2">
-                            <span className="w-4 h-4 border-2 border-[#07131D] border-t-transparent rounded-full animate-spin" />
-                            <span>Enregistrement...</span>
-                          </div>
-                        ) : (
-                          <>
-                            <Smartphone className="w-4 h-4 fill-current" />
-                            <span>Payer {totalPrice.toLocaleString('fr-FR')} FCFA avec Wave</span>
-                          </>
-                        )}
-                      </button>
+                      {(() => {
+                        const currentWaveUrl = resolveWaveUrl(selectedTier);
+                        const isWaveConfigured = Boolean(currentWaveUrl && currentWaveUrl.startsWith('http'));
+
+                        return (
+                          <button
+                            onClick={handleWaveCheckout}
+                            disabled={isProcessing || selectedTier.available < quantity || !isWaveConfigured}
+                            className="w-full h-12 py-3 px-6 rounded-2xl font-heading font-extrabold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-2.5 transition-all shadow-lg bg-[#1DC3F4] hover:bg-[#1bb3e0] text-[#07131D] shadow-[#1DC3F4]/20 active:scale-95 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+                          >
+                            {!isWaveConfigured ? (
+                              <span>Paiement bientôt disponible</span>
+                            ) : isProcessing ? (
+                              <div className="flex items-center gap-2">
+                                <span className="w-4 h-4 border-2 border-[#07131D] border-t-transparent rounded-full animate-spin" />
+                                <span>Enregistrement...</span>
+                              </div>
+                            ) : (
+                              <>
+                                <Smartphone className="w-4 h-4 fill-current" />
+                                <span>Payer {totalPrice.toLocaleString('fr-FR')} FCFA avec Wave</span>
+                              </>
+                            )}
+                          </button>
+                        );
+                      })()}
                       {!isAuthenticated && (
                         <span className="text-[10px] text-gray-400 text-center w-full">
                           ⚡ Achat direct instantané (sans mot de passe requis)
@@ -1224,47 +1245,36 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
 
             {step === 'confirmation' && (
               <div className="w-full flex flex-col sm:flex-row gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    confetti({
-                      particleCount: 100,
-                      spread: 75,
-                      origin: { y: 0.6 },
-                      colors: ['#8A2BE2', '#E9C349', '#DCB8FF', '#FFFFFF'],
-                    });
-                    if (onPurchaseSuccess && activeOrder) {
-                      const pseudoTicket: UserTicket = {
-                        id: activeOrder.id,
-                        eventId: event.id,
-                        eventTitle: event.title,
-                        eventDate: event.date,
-                        eventTime: event.time,
-                        eventVenue: event.venue,
-                        eventPoster: event.posterUrl,
-                        tierName: activeOrder.tierName,
-                        price: activeOrder.totalAmount,
-                        qrCode: activeOrder.reference,
-                        holderName: activeOrder.customerName,
-                        status: 'valid',
-                        isExclusive: event.isExclusive,
-                        purchasedAt: new Date().toISOString(),
-                      };
-                      onPurchaseSuccess(pseudoTicket);
-                    }
-                    onClose();
-                  }}
-                  className="flex-1 py-3.5 px-6 rounded-2xl font-heading font-extrabold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-2 transition-all shadow-lg bg-gradient-to-r from-[#8A2BE2] via-[#E9C349] to-[#8A2BE2] text-white shadow-[#8A2BE2]/30 hover:scale-[1.02] active:scale-[0.98]"
-                >
-                  <Ticket className="w-4 h-4 text-white" />
-                  <span>Voir mon billet</span>
-                </button>
-                <button
-                  onClick={onClose}
-                  className="sm:w-auto px-6 py-3.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-heading font-bold text-xs uppercase tracking-wider transition-all"
-                >
-                  Fermer
-                </button>
+                {activeOrder?.status === 'confirmed' ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      if (onNavigateToTickets) onNavigateToTickets();
+                    }}
+                    className="flex-1 py-3.5 px-6 rounded-2xl font-heading font-extrabold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-2 transition-all shadow-lg bg-gradient-to-r from-[#8A2BE2] via-[#E9C349] to-[#8A2BE2] text-white shadow-[#8A2BE2]/30 hover:scale-[1.02] active:scale-[0.98]"
+                  >
+                    <Ticket className="w-4 h-4 text-white" />
+                    <span>Voir mon billet</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="flex-1 py-3.5 px-6 rounded-2xl font-heading font-extrabold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-2 transition-all bg-white/10 hover:bg-white/20 text-white"
+                  >
+                    Fermer la fenêtre
+                  </button>
+                )}
+                {activeOrder?.status === 'confirmed' && (
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="sm:w-auto px-6 py-3.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-heading font-bold text-xs uppercase tracking-wider transition-all"
+                  >
+                    Fermer
+                  </button>
+                )}
               </div>
             )}
           </div>

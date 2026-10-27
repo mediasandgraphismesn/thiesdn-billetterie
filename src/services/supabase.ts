@@ -4911,7 +4911,7 @@ export const mapDbEventToItem = (db: any): EventItem => {
       else if (t.id === 't-vip' || t.name.toLowerCase().includes('vip')) url = waveLinkVip;
       else url = waveLinkPrevente;
     }
-    return { ...t, wavePaymentUrl: url };
+    return { ...t, wavePaymentUrl: url, isActive: t.isActive !== false };
   });
 
   return {
@@ -5260,24 +5260,26 @@ export const updateEventInSupabase = async (
     }
     if (updates.estimatedEndTime !== undefined) dbPayload.estimated_end_time = updates.estimatedEndTime ? updates.estimatedEndTime.trim() : null;
 
-    // Synchronisation de ticket_tiers avec les nouveaux liens Wave pour cohérence totale
+    // Synchronisation de tiers et ticket_tiers avec les nouveaux liens Wave pour cohérence totale
     if (Array.isArray(updates.tiers) && updates.tiers.length > 0) {
-      dbPayload.ticket_tiers = updates.tiers.map((t) => {
+      const mappedTiers = updates.tiers.map((t) => {
         let waveUrl = t.wavePaymentUrl;
         const nameLower = (t.name || '').toLowerCase();
         if (nameLower.includes('vip') && updates.waveLinkVip) waveUrl = updates.waveLinkVip.trim();
         else if (nameLower.includes('jour') && updates.waveLinkJourJ) waveUrl = updates.waveLinkJourJ.trim();
         else if ((nameLower.includes('prévente') || nameLower.includes('prevente')) && updates.waveLinkPrevente) waveUrl = updates.waveLinkPrevente.trim();
-        return { ...t, wavePaymentUrl: waveUrl };
+        return { ...t, wavePaymentUrl: waveUrl, isActive: t.isActive !== false };
       });
+      dbPayload.tiers = mappedTiers;
+      dbPayload.ticket_tiers = mappedTiers;
     }
 
     let { data, error } = await client
       .from('events')
       .update(dbPayload)
       .eq('id', eventId)
-      .select()
-      .single();
+      .select('id, title, category, description, long_description, event_date, event_time, datetime_iso, venue, city, quartier, price, affiche_url, status, wave_link_prevente, wave_link_jour_j, wave_link_vip, tiers, ticket_tiers, promoter_id, promoter_name, whatsapp_contact, social_facebook, social_instagram, social_tiktok, social_youtube, website_url, sales_active, featured, vip_available, is_exclusive, promo_code, promo_discount_percent, spotify_url, video_spot_url, sales_open_at, estimated_end_time')
+      .maybeSingle();
 
     // Repli adaptatif et chirurgical si une colonne spécifique est absente dans le schéma PostgreSQL
     // ATTENTION : Ne JAMAIS supprimer les liens Wave, Spotify, Vidéo Spot, Réseaux Sociaux ou Sales Open At !
@@ -5305,6 +5307,8 @@ export const updateEventInSupabase = async (
           'wave_link_prevente',
           'wave_link_jour_j',
           'wave_link_vip',
+          'tiers',
+          'ticket_tiers',
           'spotify_url',
           'video_spot_url',
           'social_facebook',
@@ -5340,7 +5344,7 @@ export const updateEventInSupabase = async (
           }
         }
 
-        const retryRes = await client.from('events').update(retryPayload).eq('id', eventId).select().single();
+        const retryRes = await client.from('events').update(retryPayload).eq('id', eventId).select('id, title, category, description, long_description, event_date, event_time, datetime_iso, venue, city, quartier, price, affiche_url, status, wave_link_prevente, wave_link_jour_j, wave_link_vip, tiers, ticket_tiers, promoter_id, promoter_name, whatsapp_contact, social_facebook, social_instagram, social_tiktok, social_youtube, website_url, sales_active, featured, vip_available, is_exclusive, promo_code, promo_discount_percent, spotify_url, video_spot_url, sales_open_at, estimated_end_time').maybeSingle();
         data = retryRes.data;
         currentError = retryRes.error;
       }
@@ -5356,7 +5360,35 @@ export const updateEventInSupabase = async (
 
     if (!data) {
       console.warn('Aucune donnée retournée par update event (RLS bloque la mise à jour).');
-      return { success: false, error: 'Erreur : modification non persistée. Vérifiez les permissions RLS.' };
+      return { success: false, error: 'Mise à jour refusée ou événement introuvable (vérifiez les autorisations RLS).' };
+    }
+
+    // Contrôle strict de persistance pour les administrateurs
+    try {
+      const { data: sessionData } = await client.auth.getSession();
+      const currentUserId = sessionData?.session?.user?.id;
+      if (currentUserId) {
+        const { data: profile } = await client
+          .from('profiles')
+          .select('role')
+          .eq('id', currentUserId)
+          .maybeSingle();
+        const isAdmin = profile?.role === 'admin';
+
+        if (isAdmin) {
+          if (dbPayload.wave_link_prevente !== undefined && (data.wave_link_prevente || '') !== dbPayload.wave_link_prevente) {
+            return { success: false, error: 'Échec de persistance : le lien Wave Prévente enregistré diffère de la valeur soumise.' };
+          }
+          if (dbPayload.wave_link_jour_j !== undefined && (data.wave_link_jour_j || '') !== dbPayload.wave_link_jour_j) {
+            return { success: false, error: 'Échec de persistance : le lien Wave Jour J enregistré diffère de la valeur soumise.' };
+          }
+          if (dbPayload.wave_link_vip !== undefined && (data.wave_link_vip || '') !== dbPayload.wave_link_vip) {
+            return { success: false, error: 'Échec de persistance : le lien Wave VIP enregistré diffère de la valeur soumise.' };
+          }
+        }
+      }
+    } catch (checkErr) {
+      console.warn('Contrôle relecture admin Wave notice:', checkErr);
     }
 
     return { success: true, event: mapDbEventToItem(data) };
