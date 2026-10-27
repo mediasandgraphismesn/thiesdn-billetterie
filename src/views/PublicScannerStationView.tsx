@@ -413,10 +413,6 @@ export const PublicScannerStationView: React.FC<PublicScannerStationViewProps> =
     );
   }
 
-  // Obtenir quelques billets et accréditations pour raccourcis de test rapide sur mobile
-  const sampleTickets = getStoredTickets().filter((t) => t.status !== 'used').slice(0, 3);
-  const sampleAccreds = getStoredAccreditations().filter((a) => a.status === 'validated').slice(0, 2);
-
   // 3. Écran Principal du Scanner Mobile Autonome
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-white flex flex-col max-w-md mx-auto relative select-none">
@@ -580,85 +576,6 @@ export const PublicScannerStationView: React.FC<PublicScannerStationViewProps> =
                   'Scanner'
                 )}
               </button>
-            </div>
-
-            {/* Raccourcis de test sur mobile pour validation immédiate */}
-            <div className="pt-2 border-t border-white/5 space-y-2">
-              <div>
-                <p className="text-[9px] text-amber-300 uppercase font-bold flex items-center gap-1">
-                  <ShieldCheck className="w-3 h-3 text-amber-400" />
-                  Tests Règle Validation par Vente :
-                </p>
-                <div className="flex flex-wrap gap-1 mt-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setInputCode('BPT-PHY-THS-UNSOLD');
-                      handleVerify('BPT-PHY-THS-UNSOLD');
-                    }}
-                    title="Billet imprimé non vendu : doit afficher un écran rouge"
-                    className="px-2 py-0.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-[10px] text-rose-300 border border-rose-500/40 font-mono"
-                  >
-                    Non Vendu (Refus)
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setInputCode('BPT-PHY-THS-SOLDOK');
-                      handleVerify('BPT-PHY-THS-SOLDOK');
-                    }}
-                    title="Billet vendu par collaborateur : doit afficher un écran vert"
-                    className="px-2 py-0.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-[10px] text-emerald-300 border border-emerald-500/40 font-mono"
-                  >
-                    Vendu (Autorisé)
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setInputCode('BPT-PHY-THS-SCANNED');
-                      handleVerify('BPT-PHY-THS-SCANNED');
-                    }}
-                    title="Billet déjà scanné : doit afficher un écran rouge"
-                    className="px-2 py-0.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-[10px] text-amber-200 border border-amber-500/40 font-mono"
-                  >
-                    Déjà Scanné
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <p className="text-[9px] text-gray-400 uppercase font-bold">
-                  Autres Pass (Digitaux & Accréditations) :
-                </p>
-                <div className="flex flex-wrap gap-1 mt-1">
-                  {sampleTickets.map((t) => (
-                    <button
-                      key={t.id}
-                      onClick={() => {
-                        setInputCode(t.qrCode);
-                        handleVerify(t.qrCode);
-                      }}
-                      className="px-2 py-0.5 rounded-lg bg-white/5 hover:bg-white/10 text-[10px] text-purple-200 border border-white/5 font-mono"
-                    >
-                      {t.holderName} ({t.tierName})
-                    </button>
-                  ))}
-                  {sampleAccreds.map((a) => (
-                    <button
-                      key={a.id}
-                      onClick={() => {
-                        setInputCode(a.qrCode);
-                        handleVerify(a.qrCode);
-                      }}
-                      className="px-2 py-0.5 rounded-lg bg-[#E9C349]/20 hover:bg-[#E9C349]/30 text-[10px] text-amber-200 border border-[#E9C349]/30 font-mono"
-                    >
-                      {a.type.toUpperCase()}: {a.holderName}
-                    </button>
-                  ))}
-                </div>
-              </div>
             </div>
           </div>
 

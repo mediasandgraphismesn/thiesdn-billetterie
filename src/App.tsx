@@ -108,6 +108,7 @@ export default function App() {
   const [events, setEvents] = useState<EventItem[]>([]);
   const [isLoadingEvents, setIsLoadingEvents] = useState<boolean>(true);
   const [eventsError, setEventsError] = useState<string | null>(null);
+  const [paymentBannerMessage, setPaymentBannerMessage] = useState<string | null>(null);
   const [tickets, setTickets] = useState<UserTicket[]>(INITIAL_TICKETS);
   const [notifications, setNotifications] = useState<NotificationItem[]>(INITIAL_NOTIFICATIONS);
 
@@ -181,6 +182,21 @@ export default function App() {
         setActiveTab('profile');
       }
 
+      // 8. Retour de paiement Wave ?payment=success ou ?payment=error
+      const urlParams = new URLSearchParams(search);
+      if (urlParams.get('payment') === 'success') {
+        setPaymentBannerMessage('Paiement Wave initié ! Votre pass est en cours de validation.');
+        setActiveTab('tickets');
+        urlParams.delete('payment');
+        const newSearch = urlParams.toString() ? `?${urlParams.toString()}` : '';
+        window.history.replaceState(null, '', `${window.location.pathname}${newSearch}`);
+      } else if (urlParams.get('payment') === 'error') {
+        setPaymentBannerMessage('Le paiement Wave a été interrompu ou n’a pas abouti.');
+        urlParams.delete('payment');
+        const newSearch = urlParams.toString() ? `?${urlParams.toString()}` : '';
+        window.history.replaceState(null, '', `${window.location.pathname}${newSearch}`);
+      }
+
       // Écouter la navigation arrière/avant du navigateur
       const handlePopState = () => {
         const scanCode = getInitialScanCode();
@@ -231,7 +247,7 @@ export default function App() {
       return true; // Accès complet
     }
     if (role === 'promoter') {
-      return ['home', 'explore', 'create', 'finances', 'artist', 'profile', 'accreditations', 'stations', 'cgv'].includes(tab);
+      return ['home', 'explore', 'create', 'finances', 'points_de_vente', 'artist', 'profile', 'accreditations', 'stations', 'cgv'].includes(tab);
     }
     if (role === 'artist') {
       return ['home', 'explore', 'create', 'artist', 'profile', 'accreditations', 'cgv'].includes(tab);
@@ -698,6 +714,41 @@ export default function App() {
             </div>
           )}
 
+          {paymentBannerMessage && (
+            <div className="mb-6 p-4 rounded-2xl bg-[#1C1B1B] border-2 border-[#1DC3F4] text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xl animate-in slide-in-from-top-4 duration-300">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#1DC3F4]/20 text-[#1DC3F4] flex items-center justify-center font-black flex-shrink-0">
+                  Wave
+                </div>
+                <div>
+                  <h4 className="font-heading font-extrabold text-xs sm:text-sm text-white">
+                    Paiement Wave initié avec succès !
+                  </h4>
+                  <p className="text-xs text-gray-300">
+                    {paymentBannerMessage}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 self-end sm:self-auto">
+                <button
+                  onClick={() => {
+                    setActiveTab('tickets');
+                    setPaymentBannerMessage(null);
+                  }}
+                  className="px-3.5 py-1.5 rounded-xl bg-[#1DC3F4] hover:bg-[#1bb3e0] text-[#07131D] font-heading font-extrabold text-xs uppercase tracking-wider transition-all"
+                >
+                  Voir mon billet
+                </button>
+                <button
+                  onClick={() => setPaymentBannerMessage(null)}
+                  className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-gray-400 hover:text-white"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Condition 1 : Requiert une connexion et visiteur non connecté */}
           {requiresAuth && !isAuthenticated ? (
             <div className="max-w-md mx-auto py-8">
@@ -898,6 +949,16 @@ export default function App() {
                   currentRole={effectiveRole}
                   events={events}
                   promoterName={user.name}
+                />
+              )}
+
+              {/* POINTS DE VENTE DU RÉSEAU PHYSIQUE */}
+              {activeTab === 'points_de_vente' && (effectiveRole === 'promoter' || effectiveRole === 'admin') && (
+                <FinancesView
+                  currentRole={effectiveRole}
+                  events={events}
+                  promoterName={user.name}
+                  initialTab="network"
                 />
               )}
 

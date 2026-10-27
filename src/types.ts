@@ -193,6 +193,9 @@ export interface UserTicket {
   purchasedAt: string;
   status:
     | 'valid'
+    | 'confirmed'
+    | 'pending'
+    | 'payment_signaled'
     | 'sold_valid'
     | 'printed_not_sold'
     | 'scanned'

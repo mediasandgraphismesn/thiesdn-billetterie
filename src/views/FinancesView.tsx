@@ -84,12 +84,14 @@ interface FinancesViewProps {
   currentRole: 'user' | 'promoter' | 'admin';
   events?: EventItem[];
   promoterName?: string;
+  initialTab?: 'stats' | 'finances' | 'network' | 'unsold' | 'coprod' | 'accreditations' | 'stations';
 }
 
 export const FinancesView: React.FC<FinancesViewProps> = ({
   currentRole,
   events = [],
   promoterName,
+  initialTab,
 }) => {
   const [transactions, setTransactions] = useState<TransactionRecord[]>(getStoredTransactions());
   const [orders, setOrders] = useState<OrderRecord[]>(getStoredOrders());
@@ -117,7 +119,15 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
   const [settingsSaved, setSettingsSaved] = useState(false);
 
   // Pour le promoteur : choix entre "stats", "finances", "network", "unsold", "coprod", "accreditations" et "stations"
-  const [promoterTab, setPromoterTab] = useState<'stats' | 'finances' | 'network' | 'unsold' | 'coprod' | 'accreditations' | 'stations'>('stats');
+  const [promoterTab, setPromoterTab] = useState<'stats' | 'finances' | 'network' | 'unsold' | 'coprod' | 'accreditations' | 'stations'>(
+    initialTab || 'stats'
+  );
+
+  useEffect(() => {
+    if (initialTab) {
+      setPromoterTab(initialTab);
+    }
+  }, [initialTab]);
   const [selectedEventId, setSelectedEventId] = useState<string>('all');
 
   // ====================================================================

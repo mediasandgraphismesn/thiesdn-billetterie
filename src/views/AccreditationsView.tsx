@@ -40,6 +40,7 @@ import {
   createAccreditation,
   createBulkAccreditations,
 } from '../services/supabase';
+import { AccreditationBadgeModal } from '../components/AccreditationBadgeModal';
 
 interface AccreditationsViewProps {
   currentRole: 'user' | 'promoter' | 'admin' | 'sales_agent' | 'artist';
@@ -812,143 +813,14 @@ export const AccreditationsView: React.FC<AccreditationsViewProps> = ({
       )}
 
       {/* ==================================================================== */}
-      {/* MODALE PRÉVISUALISATION DU BADGE NOCTURNAL ELEGANCE                  */}
+      {/* MODALE PRÉVISUALISATION DU BADGE NOCTURNAL ELEGANCE AVEC LOGO CENTRÉ */}
       {/* ==================================================================== */}
-      {previewAccreditation && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
-          <div className="relative w-full max-w-md bg-[#0A0A0A] border-2 border-white/20 rounded-3xl p-6 sm:p-8 space-y-6 shadow-2xl overflow-hidden">
-            {/* Effet Neon Ambient selon type */}
-            <div
-              className={`absolute -top-24 -left-24 w-56 h-56 rounded-full blur-3xl opacity-30 pointer-events-none ${
-                previewAccreditation.type === 'staff'
-                  ? 'bg-[#8A2BE2]'
-                  : previewAccreditation.type === 'invite'
-                  ? 'bg-[#E9C349]'
-                  : 'bg-[#0284C7]'
-              }`}
-            />
-            <div
-              className={`absolute -bottom-24 -right-24 w-56 h-56 rounded-full blur-3xl opacity-30 pointer-events-none ${
-                previewAccreditation.type === 'staff'
-                  ? 'bg-[#8A2BE2]'
-                  : previewAccreditation.type === 'invite'
-                  ? 'bg-[#E9C349]'
-                  : 'bg-[#0284C7]'
-              }`}
-            />
-
-            {/* Bouton Fermer */}
-            <button
-              onClick={() => setPreviewAccreditation(null)}
-              className="absolute top-5 right-5 p-2 rounded-full bg-white/10 hover:bg-white/20 text-gray-300 transition-all z-10"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            {/* CARTE BADGE IMPRIMABLE */}
-            <div
-              id="printable-badge"
-              className={`relative bg-gradient-to-b from-[#141414] via-[#0E0E0E] to-[#0A0A0A] rounded-2xl p-6 border-2 text-center space-y-4 shadow-2xl ${
-                previewAccreditation.type === 'staff'
-                  ? 'border-[#8A2BE2] shadow-[0_0_30px_rgba(138,43,226,0.3)]'
-                  : previewAccreditation.type === 'invite'
-                  ? 'border-[#E9C349] shadow-[0_0_30px_rgba(233,195,73,0.3)]'
-                  : 'border-[#0284C7] shadow-[0_0_30px_rgba(2,132,199,0.3)]'
-              }`}
-            >
-              {/* En-tête Badge */}
-              <div className="flex items-center justify-between border-b border-white/10 pb-3">
-                <div className="text-left">
-                  <span className="font-heading text-xs font-black tracking-widest text-[#E9C349] uppercase">
-                    THIÈSDN BILLETTERIE
-                  </span>
-                  <p className="text-[10px] text-gray-400">Pass Officiel de Sécurité</p>
-                </div>
-                <div className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-white/10 text-white font-mono">
-                  ÉDITION 2027
-                </div>
-              </div>
-
-              {/* Grand Bandeau Rôle */}
-              <div>
-                <div
-                  className={`py-2 px-4 rounded-xl font-heading font-black text-sm uppercase tracking-wider text-white shadow-lg ${
-                    previewAccreditation.type === 'staff'
-                      ? 'bg-gradient-to-r from-purple-700 to-[#8A2BE2]'
-                      : previewAccreditation.type === 'invite'
-                      ? 'bg-gradient-to-r from-amber-600 to-[#E9C349] text-black font-extrabold'
-                      : 'bg-gradient-to-r from-sky-700 to-[#0284C7]'
-                  }`}
-                >
-                  {previewAccreditation.type === 'staff' && 'ACCÈS STAFF TECHNIQUE'}
-                  {previewAccreditation.type === 'invite' && 'INVITÉ VIP / GUEST LIST'}
-                  {previewAccreditation.type === 'presse' && 'ACCRÉDITATION PRESSE OFFICIELLE'}
-                </div>
-              </div>
-
-              {/* Titulaire & Rôle */}
-              <div className="space-y-1">
-                <h2 className="font-heading text-xl sm:text-2xl font-black text-white uppercase tracking-tight">
-                  {previewAccreditation.holderName}
-                </h2>
-                {previewAccreditation.organization && (
-                  <p className="text-xs font-bold text-[#E9C349] uppercase tracking-wide">
-                    {previewAccreditation.organization}
-                  </p>
-                )}
-                <p className="text-xs text-gray-400">{previewAccreditation.holderPhone}</p>
-              </div>
-
-              {/* Image QR Code Haute Définition */}
-              <div className="p-3 bg-white rounded-2xl w-48 h-48 mx-auto flex items-center justify-center shadow-xl">
-                {badgeQrDataUrl ? (
-                  <img
-                    src={badgeQrDataUrl}
-                    alt={previewAccreditation.qrCode}
-                    className="w-full h-full object-contain"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <QrCode className="w-16 h-16 text-gray-400 animate-pulse" />
-                  </div>
-                )}
-              </div>
-
-              {/* Code Unique & Consignes */}
-              <div className="space-y-1.5 pt-1">
-                <p className="font-mono font-black text-sm text-white tracking-widest bg-white/5 py-1.5 px-3 rounded-lg border border-white/10 inline-block">
-                  {previewAccreditation.qrCode}
-                </p>
-                <p className="text-[10px] text-gray-400 uppercase font-semibold">
-                  Événement : {previewAccreditation.eventTitle}
-                </p>
-                <p className="text-[9px] text-gray-500 italic max-w-xs mx-auto">
-                  Présentation obligatoire à l'entrée. Badge strictement nominatif et infalsifiable.
-                </p>
-              </div>
-            </div>
-
-            {/* Actions sur le Badge */}
-            <div className="grid grid-cols-2 gap-3 pt-2">
-              <button
-                onClick={handlePrintBadge}
-                className="py-3 px-4 rounded-xl bg-white/10 hover:bg-white/20 text-white font-heading font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all"
-              >
-                <Printer className="w-4 h-4 text-[#E9C349]" />
-                Imprimer
-              </button>
-
-              <button
-                onClick={() => handleSendWhatsApp(previewAccreditation)}
-                className="py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-heading font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-lg"
-              >
-                <Send className="w-4 h-4" />
-                Envoyer WhatsApp
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <AccreditationBadgeModal
+        accreditation={previewAccreditation}
+        isOpen={!!previewAccreditation}
+        onClose={() => setPreviewAccreditation(null)}
+        onSendWhatsApp={handleSendWhatsApp}
+      />
 
       {/* ==================================================================== */}
       {/* MODALE D'AJOUT INDIVIDUEL                                            */}

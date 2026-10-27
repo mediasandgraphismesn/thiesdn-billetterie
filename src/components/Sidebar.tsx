@@ -85,6 +85,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { id: 'home', label: 'Mes Événements', icon: LayoutDashboard, badge: totalEventsCount > 0 ? `${totalEventsCount}` : undefined },
         { id: 'explore', label: 'Explorer la Carte', icon: Compass },
         { id: 'create', label: 'Créer un Événement', icon: PlusCircle },
+        { id: 'points_de_vente', label: 'Points de Vente', icon: Store, badge: 'Physique', badgeStyle: 'bg-[#E9C349]/20 text-[#E9C349]' },
         { id: 'finances', label: 'Cockpit & Réseau Vente', icon: BarChart3, badge: 'Direct', badgeStyle: 'bg-[#E9C349]/20 text-[#E9C349]' },
         { id: 'accreditations', label: 'Accréditations Staff/Presse', icon: ShieldCheck, badge: 'Badges', badgeStyle: 'bg-[#8A2BE2]/20 text-[#DCB8FF]' },
         { id: 'stations', label: 'Postes de Contrôle (Scanners)', icon: Smartphone, badge: 'Multi-Entrées', badgeStyle: 'bg-emerald-500/20 text-emerald-400' },

@@ -73,11 +73,12 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
 
     setLoading(true);
     const hasSupabase = isSupabaseConfigured();
+    const cleanEmail = email.trim().toLowerCase();
 
     if (hasSupabase) {
       try {
         if (isRegister) {
-          await signUpWithSupabase(email, password, {
+          await signUpWithSupabase(cleanEmail, password, {
             name: name.trim() || 'Client Thièsdn',
             phone: phone.trim(),
             city: city,
@@ -90,10 +91,10 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
           });
 
           // Écran de confirmation par email
-          setRegisteredEmail(email);
+          setRegisteredEmail(cleanEmail);
           setEmailConfirmationSent(true);
         } else {
-          const res = await signInWithSupabase(email, password);
+          const res = await signInWithSupabase(cleanEmail, password);
           // Attribution du rôle authentique selon la table `profiles`
           let userRole: 'user' | 'promoter' | 'admin' | 'sales_agent' | 'artist' = 'user';
           if (res.user?.id) {
@@ -107,7 +108,22 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
           onLoginSuccess(userRole);
         }
       } catch (err: any) {
-        setAuthError(err.message || 'Erreur lors de l\'authentification.');
+        const rawMsg = err.message || '';
+        let userFriendlyMsg = 'Erreur lors de l\'authentification.';
+
+        if (rawMsg.includes('Email not confirmed') || rawMsg.includes('email_not_confirmed')) {
+          userFriendlyMsg = 'Votre adresse email n\'a pas encore été confirmée. Veuillez vérifier votre boîte de réception ou vos spams.';
+        } else if (rawMsg.includes('Invalid login credentials') || rawMsg.includes('invalid_grant')) {
+          userFriendlyMsg = 'Adresse email ou mot de passe incorrect. Veuillez vérifier vos identifiants.';
+        } else if (rawMsg.includes('User already registered') || rawMsg.includes('user_already_exists')) {
+          userFriendlyMsg = 'Un compte existe déjà avec cette adresse email. Veuillez vous connecter.';
+        } else if (rawMsg.includes('Password should be at least')) {
+          userFriendlyMsg = 'Le mot de passe doit comporter au moins 6 caractères.';
+        } else if (rawMsg) {
+          userFriendlyMsg = rawMsg;
+        }
+
+        setAuthError(userFriendlyMsg);
       } finally {
         setLoading(false);
       }
@@ -121,7 +137,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
   };
 
   const handleResend = async () => {
-    const targetEmail = registeredEmail || email;
+    const targetEmail = (registeredEmail || email).trim().toLowerCase();
     if (!targetEmail) return;
 
     setIsResending(true);

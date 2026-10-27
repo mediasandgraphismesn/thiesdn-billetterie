@@ -9,8 +9,11 @@ import {
   ShieldCheck,
   CheckCircle,
   Sparkles,
+  FileText,
+  Clock,
 } from 'lucide-react';
 import QRCode from 'qrcode';
+import jsPDF from 'jspdf';
 import { UserTicket } from '../types';
 import { AddToCalendarButton } from './AddToCalendarButton';
 import { CalendarEventData } from '../services/calendar';
@@ -320,6 +323,107 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
     };
   }, [isOpen, ticket]);
 
+  const isPendingPayment =
+    ticket?.status === 'pending' || ticket?.status === 'payment_signaled';
+
+  // Génération d'un reçu PDF propre (sans QR code, format A4 sobre) via jsPDF
+  const handleDownloadReceipt = () => {
+    if (!ticket) return;
+    try {
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
+
+      // En-tête sobre
+      doc.setFillColor(23, 23, 23);
+      doc.rect(0, 0, 210, 40, 'F');
+
+      doc.setTextColor(233, 195, 73); // #E9C349
+      doc.setFontSize(20);
+      doc.setFont('helvetica', 'bold');
+      doc.text('THIÈSDN BILLETTERIE', 20, 24);
+
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text('REÇU PROVISOIRE DE COMMANDE', 135, 24);
+
+      // Ligne dorée
+      doc.setDrawColor(233, 195, 73);
+      doc.setLineWidth(0.8);
+      doc.line(20, 46, 190, 46);
+
+      // Statut et Référence
+      doc.setTextColor(40, 40, 40);
+      doc.setFontSize(11);
+
+      doc.setFont('helvetica', 'bold');
+      doc.text('Statut de la commande :', 20, 60);
+      doc.setTextColor(217, 119, 6); // Orange foncé
+      doc.text('EN ATTENTE DE VÉRIFICATION PAIEMENT WAVE', 75, 60);
+
+      doc.setTextColor(40, 40, 40);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Référence de commande :', 20, 72);
+      doc.setFont('helvetica', 'normal');
+      doc.text(ticket.qrCode || `CMD-${ticket.id}`, 75, 72);
+
+      doc.setFont('helvetica', 'bold');
+      doc.text('Date d\'émission :', 20, 84);
+      doc.setFont('helvetica', 'normal');
+      doc.text(new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' }), 75, 84);
+
+      doc.setFont('helvetica', 'bold');
+      doc.text('Bénéficiaire / Client :', 20, 96);
+      doc.setFont('helvetica', 'normal');
+      doc.text(ticket.holderName, 75, 96);
+
+      // Bloc Récapitulatif Événement
+      doc.setFillColor(245, 245, 248);
+      doc.roundedRect(20, 108, 170, 52, 3, 3, 'F');
+
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(20, 20, 20);
+      doc.setFontSize(12);
+      doc.text('Détails de la réservation', 26, 119);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10.5);
+      doc.text(`Événement : ${ticket.eventTitle}`, 26, 129);
+      doc.text(`Date & Heure : ${ticket.eventDate} à ${ticket.eventTime}`, 26, 137);
+      doc.text(`Lieu : ${ticket.eventVenue}`, 26, 145);
+      doc.text(`Formule : ${ticket.tierName}`, 26, 153);
+
+      // Encadré Montant
+      doc.setFillColor(23, 23, 23);
+      doc.roundedRect(20, 170, 170, 22, 3, 3, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(12);
+      doc.text('Total Réglé (Wave) :', 28, 184);
+      doc.setTextColor(233, 195, 73);
+      doc.setFontSize(13);
+      doc.text(`${ticket.price.toLocaleString('fr-FR')} FCFA`, 140, 184);
+
+      // Note de bas de page
+      doc.setTextColor(110, 110, 110);
+      doc.setFontSize(8.5);
+      doc.setFont('helvetica', 'italic');
+      doc.text('Ce reçu officiel certifie l\'enregistrement de votre réservation sur Thièsdn Billetterie.', 20, 208);
+      doc.text('Votre Pass Officiel définitif avec QR Code de scan sera activé dès rapprochement Wave.', 20, 214);
+      doc.text('Support & Renseignements : contact@thiesdn.site | +221 77 123 45 67', 20, 220);
+
+      doc.save(`Recu-Commande-${ticket.qrCode || ticket.id}.pdf`);
+      setDownloadSuccess(true);
+      setTimeout(() => setDownloadSuccess(false), 3000);
+    } catch (pdfErr) {
+      console.error('Erreur génération reçu PDF:', pdfErr);
+      alert('Impossible de générer le reçu PDF pour le moment.');
+    }
+  };
+
   // Téléchargement réel du pass officiel avec QR Code et Logo
   const handleDownloadPass = () => {
     if (!canvasRef.current || !ticket) return;
@@ -433,81 +537,99 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
             <span className="truncate">{ticket.eventVenue}</span>
           </div>
 
-          {/* SECTION QR CODE AVEC EFFET SCRATCH CARD INTERACTIF */}
-          <div className="p-5 rounded-2xl bg-white text-black flex flex-col items-center justify-center text-center shadow-2xl relative">
-            
-            {/* Texte et indicateur Scratch Card */}
-            {!isRevealed ? (
-              <div className="mb-2.5 flex flex-col items-center gap-1">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#8A2BE2]/10 border border-[#8A2BE2]/30 text-[#8A2BE2] text-xs font-heading font-extrabold tracking-wide uppercase animate-pulse">
-                  <Sparkles className="w-3.5 h-3.5 text-[#E9C349]" />
-                  <span>Frottez pour révéler votre billet</span>
+          {/* SECTION QR CODE OU ATTESTATION EN COURS DE VÉRIFICATION */}
+          {isPendingPayment ? (
+            <div className="p-6 rounded-2xl bg-[#1C1B1B] text-white flex flex-col items-center justify-center text-center shadow-xl border-2 border-amber-500/40 space-y-3">
+              <div className="w-14 h-14 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center animate-pulse">
+                <Clock className="w-7 h-7" />
+              </div>
+              <h4 className="font-heading font-extrabold text-base text-[#E9C349]">
+                Paiement en cours de vérification
+              </h4>
+              <p className="text-xs text-gray-300 max-w-xs leading-relaxed">
+                ⏳ Paiement en cours de vérification. Votre pass sera disponible dès confirmation de la transaction Wave.
+              </p>
+              <div className="bg-white/5 px-3 py-1.5 rounded-xl border border-white/10">
+                <span className="text-[11px] font-mono font-bold text-gray-300">
+                  Réf. commande : <strong className="text-[#1DC3F4]">{ticket.qrCode}</strong>
                 </span>
-                <p className="text-[10px] text-gray-500 font-medium">
-                  Glissez votre doigt ou la souris sur la surface dorée
+              </div>
+            </div>
+          ) : (
+            <div className="p-5 rounded-2xl bg-white text-black flex flex-col items-center justify-center text-center shadow-2xl relative">
+              {/* Texte et indicateur Scratch Card */}
+              {!isRevealed ? (
+                <div className="mb-2.5 flex flex-col items-center gap-1">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#8A2BE2]/10 border border-[#8A2BE2]/30 text-[#8A2BE2] text-xs font-heading font-extrabold tracking-wide uppercase animate-pulse">
+                    <Sparkles className="w-3.5 h-3.5 text-[#E9C349]" />
+                    <span>Frottez pour révéler votre billet</span>
+                  </span>
+                  <p className="text-[10px] text-gray-500 font-medium">
+                    Glissez votre doigt ou la souris sur la surface dorée
+                  </p>
+                </div>
+              ) : (
+                <div className="mb-2 flex items-center gap-1.5 text-emerald-600 text-xs font-bold animate-in fade-in">
+                  <CheckCircle className="w-4 h-4" />
+                  <span>Billet révélé et prêt pour le scan d'entrée</span>
+                </div>
+              )}
+
+              {/* Conteneur Superposé QR Code + Scratch Canvas */}
+              <div className="relative p-2 rounded-xl bg-gray-50 border border-gray-200 mb-2 flex items-center justify-center overflow-hidden touch-none select-none">
+                {/* Canvas du QR Code certifié */}
+                <canvas
+                  ref={canvasRef}
+                  className={`w-52 h-52 sm:w-56 sm:h-56 transition-opacity duration-300 ${
+                    isQrReady ? 'opacity-100' : 'opacity-20'
+                  }`}
+                />
+
+                {/* Canvas à gratter (Scratch Card) superposé */}
+                {!isRevealed && isQrReady && (
+                  <canvas
+                    ref={scratchCanvasRef}
+                    onMouseDown={onMouseDown}
+                    onMouseMove={onMouseMove}
+                    onMouseUp={onMouseUp}
+                    onMouseLeave={onMouseUp}
+                    onTouchStart={onTouchStart}
+                    onTouchMove={onTouchMove}
+                    onTouchEnd={onTouchEnd}
+                    className="absolute inset-0 w-full h-full cursor-crosshair z-20 rounded-xl shadow-inner transition-opacity duration-300"
+                    style={{ touchAction: 'none' }}
+                  />
+                )}
+              </div>
+
+              {/* Bouton de secours rapide en cas de rush à l'entrée */}
+              {!isRevealed && isQrReady && (
+                <button
+                  type="button"
+                  onClick={() => setIsRevealed(true)}
+                  className="mt-1 text-[11px] font-bold text-[#8A2BE2] hover:text-[#7822c9] underline transition-colors cursor-pointer"
+                >
+                  Passer le grattage et afficher directement
+                </button>
+              )}
+
+              <div className="flex items-center gap-1.5 justify-center mt-2">
+                <Sparkles className="w-3.5 h-3.5 text-[#8A2BE2]" />
+                <p className="font-mono text-xs font-bold tracking-widest text-[#241A00]">
+                  {ticket.qrCode}
                 </p>
               </div>
-            ) : (
-              <div className="mb-2 flex items-center gap-1.5 text-emerald-600 text-xs font-bold animate-in fade-in">
-                <CheckCircle className="w-4 h-4" />
-                <span>Billet révélé et prêt pour le scan d'entrée</span>
-              </div>
-            )}
 
-            {/* Conteneur Superposé QR Code + Scratch Canvas */}
-            <div className="relative p-2 rounded-xl bg-gray-50 border border-gray-200 mb-2 flex items-center justify-center overflow-hidden touch-none select-none">
-              {/* Canvas du QR Code certifié */}
-              <canvas
-                ref={canvasRef}
-                className={`w-52 h-52 sm:w-56 sm:h-56 transition-opacity duration-300 ${
-                  isQrReady ? 'opacity-100' : 'opacity-20'
-                }`}
-              />
-
-              {/* Canvas à gratter (Scratch Card) superposé */}
-              {!isRevealed && isQrReady && (
-                <canvas
-                  ref={scratchCanvasRef}
-                  onMouseDown={onMouseDown}
-                  onMouseMove={onMouseMove}
-                  onMouseUp={onMouseUp}
-                  onMouseLeave={onMouseUp}
-                  onTouchStart={onTouchStart}
-                  onTouchMove={onTouchMove}
-                  onTouchEnd={onTouchEnd}
-                  className="absolute inset-0 w-full h-full cursor-crosshair z-20 rounded-xl shadow-inner transition-opacity duration-300"
-                  style={{ touchAction: 'none' }}
-                />
-              )}
-            </div>
-
-            {/* Bouton de secours rapide en cas de rush à l'entrée */}
-            {!isRevealed && isQrReady && (
-              <button
-                type="button"
-                onClick={() => setIsRevealed(true)}
-                className="mt-1 text-[11px] font-bold text-[#8A2BE2] hover:text-[#7822c9] underline transition-colors cursor-pointer"
-              >
-                Passer le grattage et afficher directement
-              </button>
-            )}
-
-            <div className="flex items-center gap-1.5 justify-center mt-2">
-              <Sparkles className="w-3.5 h-3.5 text-[#8A2BE2]" />
-              <p className="font-mono text-xs font-bold tracking-widest text-[#241A00]">
-                {ticket.qrCode}
+              <p className="text-[10px] text-gray-500 mt-1 flex items-center gap-1 font-sans">
+                <CheckCircle className="w-3 h-3 text-emerald-600" />
+                QR Code certifié avec signature visuelle Thièsdn
               </p>
             </div>
-
-            <p className="text-[10px] text-gray-500 mt-1 flex items-center gap-1 font-sans">
-              <CheckCircle className="w-3 h-3 text-emerald-600" />
-              QR Code certifié avec signature visuelle Thièsdn
-            </p>
-          </div>
+          )}
 
           {downloadSuccess && (
             <div className="p-2.5 rounded-xl bg-emerald-950/70 border border-emerald-500/40 text-emerald-300 text-xs text-center font-bold animate-in fade-in">
-              Pass téléchargé avec succès !
+              {isPendingPayment ? 'Reçu téléchargé avec succès !' : 'Pass téléchargé avec succès !'}
             </div>
           )}
 
@@ -532,13 +654,23 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
 
           {/* Boutons d'Action */}
           <div className="flex gap-2">
-            <button
-              onClick={handleDownloadPass}
-              className="flex-1 py-3 px-4 rounded-xl bg-[#8A2BE2] hover:bg-[#7822c9] text-white font-heading font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-[#8A2BE2]/30 active:scale-[0.98]"
-            >
-              <Download className="w-4 h-4" />
-              Télécharger Pass
-            </button>
+            {isPendingPayment ? (
+              <button
+                onClick={handleDownloadReceipt}
+                className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white font-heading font-extrabold text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-amber-600/30 active:scale-[0.98]"
+              >
+                <FileText className="w-4 h-4" />
+                <span>📄 Télécharger mon reçu de commande</span>
+              </button>
+            ) : (
+              <button
+                onClick={handleDownloadPass}
+                className="flex-1 py-3 px-4 rounded-xl bg-[#8A2BE2] hover:bg-[#7822c9] text-white font-heading font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-[#8A2BE2]/30 active:scale-[0.98]"
+              >
+                <Download className="w-4 h-4" />
+                <span>Télécharger Pass</span>
+              </button>
+            )}
             <button
               onClick={() => {
                 if (navigator.share) {

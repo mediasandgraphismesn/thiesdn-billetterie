@@ -28,8 +28,8 @@ export const PlatformSettingsView: React.FC<PlatformSettingsViewProps> = ({
   onBackToDashboard,
 }) => {
   const initialSettings = getStoredPaymentSettings();
-  const [waveNumber, setWaveNumber] = useState(initialSettings.waveNumber || '+221 77 458 74 74');
-  const [waveBeneficiary, setWaveBeneficiary] = useState(initialSettings.waveBeneficiary || 'Thièsdn Billetterie Officiel');
+  const [waveNumber, setWaveNumber] = useState(initialSettings.waveNumber || 'SN 85 71 88 49');
+  const [waveBeneficiary, setWaveBeneficiary] = useState(initialSettings.waveBeneficiary || 'Wave Business — ThièsDN');
   const [omNumber, setOmNumber] = useState(initialSettings.omNumber || '+221 77 458 74 74');
   const [omBeneficiary, setOmBeneficiary] = useState(initialSettings.omBeneficiary || 'Thièsdn Billetterie SARL');
 

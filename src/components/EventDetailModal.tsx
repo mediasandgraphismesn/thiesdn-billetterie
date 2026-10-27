@@ -26,10 +26,12 @@ import {
   Play,
   Bell,
   Send,
+  Copy,
+  Lock,
 } from 'lucide-react';
 import { EventItem, TicketTier, UserTicket, OrderRecord } from '../types';
 import { getOptimizedImageUrl } from '../utils/imageOptimizer';
-import { createOrderWithStockCheck, registerEventPreRegistration } from '../services/supabase';
+import { createOrderWithStockCheck, registerEventPreRegistration, getSupabaseClient } from '../services/supabase';
 import { CountdownTimer } from './CountdownTimer';
 import { SpotifyVinylPlayer } from './SpotifyVinylPlayer';
 
@@ -84,6 +86,14 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
   // Active Order state once created in Supabase
   const [activeOrder, setActiveOrder] = useState<OrderRecord | null>(null);
   const [openedWaveUrl, setOpenedWaveUrl] = useState<string | null>(null);
+  const [copiedRef, setCopiedRef] = useState(false);
+
+  // Guest Checkout Conversion
+  const [guestEmail, setGuestEmail] = useState('');
+  const [guestPassword, setGuestPassword] = useState('');
+  const [isConvertingAccount, setIsConvertingAccount] = useState(false);
+  const [accountConverted, setAccountConverted] = useState(false);
+  const [accountConvertError, setAccountConvertError] = useState<string | null>(null);
 
   // Gestion des Codes Promo & Remises
   const [promoInput, setPromoInput] = useState('');
@@ -218,15 +228,20 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
     return 'https://pay.wave.com/m/M_p1_xT73E21bN/c/sn/';
   };
 
-  // Traitement Paiement Wave
+  // Traitement Paiement Wave (avec Guest Checkout anonyme si non connecté)
   const handleWaveCheckout = async () => {
-    if (!isAuthenticated || !isEmailConfirmed) {
-      setErrorMessage('Veuillez confirmer votre adresse email pour continuer.');
-      return;
-    }
-
     setIsProcessing(true);
     setErrorMessage(null);
+
+    // Guest Checkout automatique via Supabase Auth Anonyme
+    const supabase = getSupabaseClient();
+    if (!isAuthenticated && supabase) {
+      try {
+        await supabase.auth.signInAnonymously();
+      } catch (anonErr) {
+        console.warn('Guest checkout anonymous session notice:', anonErr);
+      }
+    }
 
     const cleanName = customerName.trim() || 'Client Thièsdn';
     const cleanPhone = phoneNumber.trim().startsWith('+221')
@@ -259,7 +274,13 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
 
       if (onOrderCreated) onOrderCreated(order);
 
-      const waveUrl = resolveWaveUrl(selectedTier);
+      let waveUrl = resolveWaveUrl(selectedTier);
+      if (waveUrl && waveUrl.startsWith('http')) {
+        const sep = waveUrl.includes('?') ? '&' : '?';
+        const successUrl = encodeURIComponent('https://billetterie.thiesdn.site/?payment=success');
+        const errorUrl = encodeURIComponent('https://billetterie.thiesdn.site/?payment=error');
+        waveUrl = `${waveUrl}${sep}success_url=${successUrl}&error_url=${errorUrl}`;
+      }
       setOpenedWaveUrl(waveUrl);
 
       if (typeof window !== 'undefined') {
@@ -271,6 +292,30 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
       setErrorMessage(err.message || 'Erreur lors du traitement de votre commande.');
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  // Conversion du compte invité anonyme en compte permanent
+  const handleConvertGuestAccount = async () => {
+    if (!guestEmail.trim() || guestPassword.length < 6) {
+      setAccountConvertError('Veuillez saisir un email valide et un mot de passe d’au moins 6 caractères.');
+      return;
+    }
+    setIsConvertingAccount(true);
+    setAccountConvertError(null);
+    try {
+      const supabase = getSupabaseClient();
+      if (!supabase) throw new Error('Service Supabase indisponible');
+      const { error } = await supabase.auth.updateUser({
+        email: guestEmail.trim().toLowerCase(),
+        password: guestPassword,
+      });
+      if (error) throw error;
+      setAccountConverted(true);
+    } catch (err: any) {
+      setAccountConvertError(err.message || 'Impossible d’associer le compte.');
+    } finally {
+      setIsConvertingAccount(false);
     }
   };
 
@@ -772,14 +817,14 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
 
                     {/* Quantité & Coordonnées Client */}
                     <div className="space-y-3">
-                      {(!isAuthenticated || !isEmailConfirmed) && (
-                        <div className="p-4 rounded-2xl bg-[#241A00]/80 border border-[#E9C349]/50 text-[#E9C349] flex items-center justify-between gap-3 animate-in fade-in">
+                      {!isAuthenticated && (
+                        <div className="p-3.5 rounded-2xl bg-[#1C1A24] border border-[#8A2BE2]/40 text-[#DCB8FF] flex items-center justify-between gap-3 animate-in fade-in">
                           <div className="flex items-center gap-2.5">
-                            <AlertCircle className="w-5 h-5 text-[#E9C349] shrink-0" />
+                            <Sparkles className="w-5 h-5 text-[#E9C349] shrink-0" />
                             <div>
-                              <p className="font-bold text-xs">Vérification de compte requise</p>
+                              <p className="font-bold text-xs text-white">Achat Express sans Compte</p>
                               <p className="text-[11px] text-gray-300">
-                                Veuillez confirmer votre adresse email pour continuer et recevoir vos billets officiels.
+                                Vos billets seront émis instantanément. Vous pourrez créer un mot de passe après le paiement.
                               </p>
                             </div>
                           </div>
@@ -787,9 +832,9 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                             <button
                               type="button"
                               onClick={onRequireAuth}
-                              className="px-3 py-1.5 rounded-xl bg-[#E9C349] text-[#131313] font-bold text-xs uppercase tracking-wider whitespace-nowrap hover:bg-[#d4ad39] transition-colors"
+                              className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs uppercase tracking-wider whitespace-nowrap transition-colors"
                             >
-                              Se connecter
+                              Connexion
                             </button>
                           )}
                         </div>
@@ -928,8 +973,33 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                   <h3 className="font-heading text-xl sm:text-2xl font-extrabold text-white">
                     Paiement en cours de vérification
                   </h3>
-                  <p className="text-xs text-gray-300 max-w-md mx-auto leading-relaxed">
-                    Votre commande <strong className="text-[#E9C349] font-mono text-sm">{activeOrder.reference}</strong> a bien été enregistrée.
+                </div>
+
+                {/* Référence Wave XXL & Bouton Copier */}
+                <div className="p-4 rounded-2xl bg-[#1C1B1B] border-2 border-[#1DC3F4]/40 text-center max-w-md mx-auto space-y-2.5 shadow-lg shadow-[#1DC3F4]/10">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                    Référence de Commande
+                  </p>
+                  <div className="flex items-center justify-center gap-3">
+                    <span className="font-mono text-2xl sm:text-3xl font-black text-[#1DC3F4] tracking-wider selection:bg-[#1DC3F4] selection:text-black">
+                      {activeOrder.reference}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(activeOrder.reference);
+                        setCopiedRef(true);
+                        setTimeout(() => setCopiedRef(false), 2500);
+                      }}
+                      className="p-2 px-3 rounded-xl bg-[#1DC3F4]/20 hover:bg-[#1DC3F4]/30 text-[#1DC3F4] transition-all active:scale-95 flex items-center gap-1.5 text-xs font-bold"
+                      title="Copier la référence"
+                    >
+                      <Copy className="w-4 h-4" />
+                      <span>{copiedRef ? 'Copié !' : 'Copier'}</span>
+                    </button>
+                  </div>
+                  <p className="text-xs text-[#E9C349] font-medium leading-relaxed bg-[#241A00]/60 p-2.5 rounded-xl border border-[#E9C349]/20">
+                    💡 <strong>Important :</strong> Indiquez cette référence dans le motif de votre transfert Wave pour une validation automatique instantanée.
                   </p>
                 </div>
 
@@ -960,6 +1030,56 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                     </span>
                   </div>
                 </div>
+
+                {/* Proposition sécurisation de compte invité */}
+                {!isAuthenticated && (
+                  <div className="p-4 rounded-2xl bg-[#201F1F] border border-white/10 text-left max-w-md mx-auto space-y-3">
+                    <div>
+                      <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                        <Lock className="w-3.5 h-3.5 text-[#E9C349]" />
+                        Créer un mot de passe pour retrouver vos billets facilement
+                      </h4>
+                      <p className="text-[11px] text-gray-400 mt-1">
+                        Conservez l'accès à tous vos billets sur n'importe quel appareil en sécurisant votre compte.
+                      </p>
+                    </div>
+
+                    {accountConverted ? (
+                      <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-semibold flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                        <span>Votre compte a été sécurisé avec succès !</span>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <input
+                          type="email"
+                          placeholder="Votre adresse email"
+                          value={guestEmail}
+                          onChange={(e) => setGuestEmail(e.target.value)}
+                          className="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white text-xs outline-none focus:border-[#E9C349]"
+                        />
+                        <input
+                          type="password"
+                          placeholder="Définir un mot de passe (min 6 car.)"
+                          value={guestPassword}
+                          onChange={(e) => setGuestPassword(e.target.value)}
+                          className="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white text-xs outline-none focus:border-[#E9C349]"
+                        />
+                        {accountConvertError && (
+                          <p className="text-[11px] text-red-400 font-medium">{accountConvertError}</p>
+                        )}
+                        <button
+                          type="button"
+                          disabled={isConvertingAccount}
+                          onClick={handleConvertGuestAccount}
+                          className="w-full py-2.5 px-4 rounded-xl bg-[#E9C349] hover:bg-[#F3D779] text-[#241A00] font-heading font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-50"
+                        >
+                          {isConvertingAccount ? 'Sécurisation...' : 'Enregistrer mon compte'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Boutons d'Action Post-Achat */}
                 <div className="max-w-md mx-auto pt-1 space-y-2.5">
@@ -1070,26 +1190,11 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                       </div>
                     </div>
 
-                    {!isAuthenticated || !isEmailConfirmed ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (onRequireAuth) {
-                            onRequireAuth();
-                          } else {
-                            setErrorMessage('Veuillez confirmer votre adresse email pour continuer.');
-                          }
-                        }}
-                        className="flex-1 max-w-sm py-3.5 px-6 rounded-2xl font-heading font-extrabold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-2.5 transition-all shadow-lg bg-[#241A00] hover:bg-[#362700] text-[#E9C349] border border-[#E9C349]/40 hover:scale-[1.02] active:scale-[0.98]"
-                      >
-                        <AlertCircle className="w-4 h-4 text-[#E9C349]" />
-                        <span>Veuillez confirmer votre email</span>
-                      </button>
-                    ) : (
+                    <div className="flex-1 max-w-sm flex flex-col items-end gap-1">
                       <button
                         onClick={handleWaveCheckout}
                         disabled={isProcessing || selectedTier.available < quantity}
-                        className="flex-1 max-w-sm py-3.5 px-6 rounded-2xl font-heading font-extrabold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-2.5 transition-all shadow-lg bg-[#1DC3F4] hover:bg-[#1bb3e0] text-[#07131D] shadow-[#1DC3F4]/20 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
+                        className="w-full py-3.5 px-6 rounded-2xl font-heading font-extrabold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-2.5 transition-all shadow-lg bg-[#1DC3F4] hover:bg-[#1bb3e0] text-[#07131D] shadow-[#1DC3F4]/20 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
                       >
                         {isProcessing ? (
                           <div className="flex items-center gap-2">
@@ -1103,7 +1208,12 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                           </>
                         )}
                       </button>
-                    )}
+                      {!isAuthenticated && (
+                        <span className="text-[10px] text-gray-400 text-center w-full">
+                          ⚡ Achat direct instantané (sans mot de passe requis)
+                        </span>
+                      )}
+                    </div>
                   </>
                 )}
               </>

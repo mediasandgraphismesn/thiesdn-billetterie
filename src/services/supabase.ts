@@ -417,7 +417,7 @@ let inMemoryGuestTickets: GuestTicket[] = [...INITIAL_GUEST_TICKETS];
 let inMemoryAccreditations: Accreditation[] = [...INITIAL_ACCREDITATIONS];
 let inMemoryScanStations: ScanStation[] = [...INITIAL_SCAN_STATIONS];
 let inMemorySettings: PlatformPaymentSettings = {
-  waveNumber: '+221 77 458 74 74',
+  waveNumber: 'SN 85 71 88 49',
   waveBeneficiary: 'Wave Business — ThièsDN',
   omNumber: '+221 77 458 74 74',
   omBeneficiary: 'ThièsDN Billetterie',
@@ -1008,7 +1008,7 @@ const fileToDataUrl = (file: File): Promise<string> => {
 // PARAMÈTRES OFFICIELS DE PAIEMENT MANUEL (WAVE & ORANGE MONEY)
 // ====================================================================
 export const DEFAULT_PAYMENT_SETTINGS: PlatformPaymentSettings = {
-  waveNumber: '+221 77 458 74 74',
+  waveNumber: 'SN 85 71 88 49',
   waveBeneficiary: 'Wave Business — ThièsDN',
   omNumber: '+221 77 458 74 74',
   omBeneficiary: 'ThièsDN Billetterie',
