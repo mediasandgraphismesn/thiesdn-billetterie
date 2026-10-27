@@ -9,7 +9,8 @@ import {
   Share2,
   ShieldCheck,
   CheckCircle,
-  Sparkles,
+  Ticket,
+  QrCode,
   FileText,
   Clock,
 } from 'lucide-react';
@@ -127,7 +128,7 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
 
       ctx.font = 'bold 11px system-ui, sans-serif';
       ctx.fillStyle = '#DCB8FF';
-      ctx.fillText('✨ Frottez ici pour scanner ✨', sc.width / 2, badgeY + badgeH + 22);
+      ctx.fillText('🎟️ Frottez ici pour scanner 🎟️', sc.width / 2, badgeY + badgeH + 22);
 
       ctx.font = '9px system-ui, sans-serif';
       ctx.fillStyle = '#8E8E93';
@@ -562,7 +563,7 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
               {!isRevealed ? (
                 <div className="mb-2.5 flex flex-col items-center gap-1">
                   <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#8A2BE2]/10 border border-[#8A2BE2]/30 text-[#8A2BE2] text-xs font-heading font-extrabold tracking-wide uppercase animate-pulse">
-                    <Sparkles className="w-3.5 h-3.5 text-[#E9C349]" />
+                    <Ticket className="w-3.5 h-3.5 text-[#E9C349]" />
                     <span>Frottez pour révéler votre billet</span>
                   </span>
                   <p className="text-[10px] text-gray-500 font-medium">
@@ -615,7 +616,7 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
               )}
 
               <div className="flex items-center gap-1.5 justify-center mt-2">
-                <Sparkles className="w-3.5 h-3.5 text-[#8A2BE2]" />
+                <QrCode className="w-3.5 h-3.5 text-[#8A2BE2]" />
                 <p className="font-mono text-xs font-bold tracking-widest text-[#241A00]">
                   {ticket.qrCode}
                 </p>

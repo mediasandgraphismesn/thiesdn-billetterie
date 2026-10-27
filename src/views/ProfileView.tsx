@@ -8,7 +8,6 @@ import {
   Edit3,
   CheckCircle2,
   LogOut,
-  Sparkles,
   Crown,
   Ticket,
   ExternalLink,

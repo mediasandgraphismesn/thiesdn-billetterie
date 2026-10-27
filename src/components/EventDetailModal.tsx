@@ -19,7 +19,9 @@ import {
   Youtube,
   Globe,
   Share2,
-  Sparkles,
+  Zap,
+  AlignLeft,
+  Ticket,
   Info,
   MessageSquare,
   Percent,
@@ -200,8 +202,8 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
     const message =
       `🎉 *CONFIRMATION DE COMMANDE — THIÈS DAYS AND NIGHTS*\n` +
       `━━━━━━━━━━━━━━━━━━━━\n` +
-      `✨ *Événement :* ${order.eventTitle}\n` +
-      `🎟️ *Formule :* ${order.tierName} (x${order.quantity} place${order.quantity > 1 ? 's' : ''})\n` +
+      `🎟️ *Événement :* ${order.eventTitle}\n` +
+      `📋 *Formule :* ${order.tierName} (x${order.quantity} place${order.quantity > 1 ? 's' : ''})\n` +
       promoLine +
       `💳 *Montant Réglé :* ${order.totalAmount.toLocaleString('fr-FR')} FCFA via Wave 1-Clic\n` +
       `📋 *Réf. Commande :* ${order.reference}\n` +
@@ -602,8 +604,9 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                 {(event.description || event.longDescription || event.socialFacebook || event.socialInstagram || event.socialTiktok || event.socialYoutube || event.youtubeUrl || event.websiteUrl) && (
                   <div className="bg-[#201F1F] p-4 sm:p-5 rounded-2xl border border-white/5 space-y-4">
                     <div className="flex items-center justify-between">
-                      <h3 className="font-heading text-xs font-bold text-[#DCB8FF] uppercase tracking-wider">
-                        À Propos de l'Événement
+                      <h3 className="font-heading text-xs font-bold text-[#DCB8FF] uppercase tracking-wider flex items-center gap-1.5">
+                        <AlignLeft className="w-3.5 h-3.5 text-[#E9C349]" />
+                        <span>À Propos de l'Événement</span>
                       </h3>
                       {event.promoter?.name && event.promoter.name.trim().toLowerCase() !== 'utilisateur' && (
                         <span className="text-[11px] text-[#E9C349] font-medium">
@@ -820,7 +823,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                       {!isAuthenticated && (
                         <div className="p-3.5 rounded-2xl bg-[#1C1A24] border border-[#8A2BE2]/40 text-[#DCB8FF] flex items-center justify-between gap-3 animate-in fade-in">
                           <div className="flex items-center gap-2.5">
-                            <Sparkles className="w-5 h-5 text-[#E9C349] shrink-0" />
+                            <Zap className="w-5 h-5 text-[#E9C349] shrink-0" />
                             <div>
                               <p className="font-bold text-xs text-white">Achat Express sans Compte</p>
                               <p className="text-[11px] text-gray-300">
@@ -929,7 +932,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                         ) : (
                           <div className="flex items-center justify-between p-2 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-xs">
                             <div className="flex items-center gap-2 text-emerald-300 font-medium">
-                              <Sparkles className="w-4 h-4 text-[#E9C349]" />
+                              <Tag className="w-4 h-4 text-[#E9C349]" />
                               <span>Code <strong>{appliedPromo.code}</strong> : -{discountAmount.toLocaleString('fr-FR')} FCFA</span>
                             </div>
                             <button
@@ -1115,7 +1118,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                     }}
                     className="w-full py-3.5 px-5 rounded-2xl font-heading font-extrabold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-2.5 transition-all shadow-lg bg-gradient-to-r from-[#8A2BE2] via-[#E9C349] to-[#8A2BE2] text-white shadow-[#8A2BE2]/30 hover:scale-[1.02] active:scale-[0.98]"
                   >
-                    <Sparkles className="w-4 h-4 text-white" />
+                    <Ticket className="w-4 h-4 text-white" />
                     <span>Voir mon billet</span>
                   </button>
 
@@ -1253,7 +1256,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                   }}
                   className="flex-1 py-3.5 px-6 rounded-2xl font-heading font-extrabold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-2 transition-all shadow-lg bg-gradient-to-r from-[#8A2BE2] via-[#E9C349] to-[#8A2BE2] text-white shadow-[#8A2BE2]/30 hover:scale-[1.02] active:scale-[0.98]"
                 >
-                  <Sparkles className="w-4 h-4 text-white" />
+                  <Ticket className="w-4 h-4 text-white" />
                   <span>Voir mon billet</span>
                 </button>
                 <button

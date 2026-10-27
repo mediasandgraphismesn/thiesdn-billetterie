@@ -18,7 +18,6 @@ import {
   Eye,
   ExternalLink,
   Layers,
-  Sparkles,
   FileText,
   Users,
   BarChart3,

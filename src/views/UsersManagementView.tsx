@@ -13,7 +13,6 @@ import {
   Mail,
   MapPin,
   RefreshCw,
-  Sparkles,
   Scale,
   FileText,
 } from 'lucide-react';

@@ -14,7 +14,6 @@ import {
   RefreshCw,
   Plus,
   Minus,
-  Sparkles,
   Calendar,
   MapPin,
   Clock,
@@ -563,7 +562,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                 {pendingTicketForConfirm && (
                   <div className="p-4 rounded-2xl bg-[#241A00] border-2 border-[#E9C349] space-y-3 animate-in zoom-in-95 duration-200 shadow-xl">
                     <div className="flex items-center gap-2 text-[#E9C349]">
-                      <Sparkles className="w-5 h-5 shrink-0" />
+                      <AlertCircle className="w-5 h-5 shrink-0" />
                       <h4 className="font-heading font-black text-sm uppercase">
                         Confirmation Requise
                       </h4>

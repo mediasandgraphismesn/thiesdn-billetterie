@@ -12,7 +12,7 @@ import {
   AlertCircle,
   TrendingUp,
   MapPin,
-  Sparkles,
+  LayoutGrid,
   ArrowRight,
   CreditCard,
   Users,
@@ -287,7 +287,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {/* MODULES DE GESTION RAPIDE SUPER ADMIN */}
       <section className="glass-panel p-6 rounded-3xl border border-white/10 space-y-4">
         <h2 className="text-base font-heading font-bold text-[#E9C349] flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-[#8A2BE2]" />
+          <LayoutGrid className="w-4 h-4 text-[#8A2BE2]" />
           <span>Accès Direct aux Modules de Gestion</span>
         </h2>
 

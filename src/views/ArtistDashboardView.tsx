@@ -5,7 +5,6 @@ import {
   Ticket,
   QrCode,
   CheckCircle2,
-  Sparkles,
   Clock,
   Send,
   Plus,
@@ -205,7 +204,7 @@ export const ArtistDashboardView: React.FC<ArtistDashboardViewProps> = ({
         `📍 *Lieu :* ${activeEvent.venue}, ${activeEvent.city}\n\n` +
         `🎫 *Votre Pass Invité Unique :* ${res.ticket.qrCode}\n` +
         `Présentez ce code à la porte "Accès Invités & VIP" pour entrer.\n\n` +
-        `Au plaisir de vous accueillir ! ✨`;
+        `Au plaisir de vous accueillir ! 🎭`;
 
       const waUrl = cleanPhone.length >= 9
         ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`

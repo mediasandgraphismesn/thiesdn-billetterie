@@ -9,7 +9,7 @@ import {
   Users,
   RefreshCw,
   BadgeAlert,
-  Sparkles,
+  Crown,
   Newspaper,
   UserCheck,
   AlertTriangle,
@@ -606,7 +606,7 @@ export const CheckInScannerView: React.FC<CheckInScannerViewProps> = ({
                         )}
                         {scanResult.accreditation.type === 'invite' && (
                           <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-[#E9C349] text-black shadow-md flex items-center gap-1.5">
-                            <Sparkles className="w-3.5 h-3.5" />
+                            <Crown className="w-3.5 h-3.5" />
                             INVITÉ VIP - GUEST LIST
                           </span>
                         )}

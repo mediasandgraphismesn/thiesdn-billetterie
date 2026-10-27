@@ -12,7 +12,7 @@ import {
   AlertCircle,
   Copy,
   Youtube,
-  Sparkles,
+  BadgeCheck,
   ExternalLink,
   Film,
   Play,
@@ -423,7 +423,7 @@ export const TicketsWalletView: React.FC<TicketsWalletViewProps> = ({
                     </div>
                   </div>
                   <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-[#E9C349] bg-[#E9C349]/10 px-2.5 py-1 rounded-full border border-[#E9C349]/20">
-                    <Sparkles className="w-3 h-3" /> Chaîne Officielle
+                    <BadgeCheck className="w-3 h-3" /> Chaîne Officielle
                   </span>
                 </div>
 

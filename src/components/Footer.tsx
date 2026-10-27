@@ -11,7 +11,6 @@ import {
   FileText,
   HelpCircle,
   X,
-  Sparkles,
 } from 'lucide-react';
 
 // Icônes vectorielles légères pour TikTok et Snapchat
@@ -273,7 +272,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateAdmin, onNavigateCGV }
                 className="font-heading font-bold text-[#E9C349] hover:text-[#DCB8FF] transition-colors inline-flex items-center gap-1"
               >
                 <span>DAW Digital Arts Work by MG</span>
-                <Sparkles className="w-3 h-3 text-[#E9C349]" />
+                <Globe className="w-3 h-3 text-[#E9C349]" />
               </a>
             </div>
           </div>

@@ -24,7 +24,6 @@ import {
   MessageSquare,
   Users,
   QrCode,
-  Sparkles,
   Calendar,
   MapPin,
   Send,
@@ -379,7 +378,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
       `• Votre pass officiel est accessible en direct sur https://thiesdn.mgartswork.site/ (onglet "Mes Billets").\n` +
       `• L'accueil prioritaire débutera dès l'ouverture des portes.\n\n` +
       `Toute l'équipe vous attend pour vivre un moment d'exception !\n` +
-      `✨ *Production & Thièsdn Billetterie*`;
+      `🏛️ *Production & Thièsdn Billetterie*`;
 
     return `https://wa.me/?text=${encodeURIComponent(message)}`;
   };
@@ -1032,7 +1031,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                 <div className="p-4 rounded-2xl bg-black/40 border border-[#E9C349]/30 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-[#E9C349] uppercase tracking-wider flex items-center gap-1">
-                      <Sparkles className="w-3.5 h-3.5" />
+                      <Crown className="w-3.5 h-3.5" />
                       Pass VIP Prestige
                     </span>
                     <span className="text-xs font-bold text-white font-heading">

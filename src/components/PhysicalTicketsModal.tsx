@@ -8,7 +8,6 @@ import {
   AlertTriangle,
   Download,
   Loader2,
-  Sparkles,
   Layers,
   ShieldCheck,
   Building2,

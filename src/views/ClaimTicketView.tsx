@@ -14,7 +14,6 @@ import {
   RefreshCw,
   Gift,
   X,
-  Sparkles,
 } from 'lucide-react';
 import { UserTicket, UserProfile } from '../types';
 import { getTicketByClaimToken, claimTicketWithIdentity, declineTicketAssignment } from '../services/supabase';

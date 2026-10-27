@@ -16,7 +16,7 @@ import {
   Phone,
   Mail,
   Building,
-  Sparkles,
+  Crown,
   Newspaper,
   Copy,
   Check,
@@ -698,7 +698,7 @@ export const AccreditationsView: React.FC<AccreditationsViewProps> = ({
                     }`}
                   >
                     {acc.type === 'staff' && <ShieldCheck className="w-6 h-6 text-[#8A2BE2]" />}
-                    {acc.type === 'invite' && <Sparkles className="w-6 h-6 text-[#E9C349]" />}
+                    {acc.type === 'invite' && <Crown className="w-6 h-6 text-[#E9C349]" />}
                     {acc.type === 'presse' && <Newspaper className="w-6 h-6 text-sky-400" />}
                   </div>
 
@@ -903,7 +903,7 @@ export const AccreditationsView: React.FC<AccreditationsViewProps> = ({
                         : 'bg-[#181818] border-white/10 text-gray-400 hover:text-white'
                     }`}
                   >
-                    <Sparkles className="w-4 h-4 text-[#E9C349]" />
+                    <Crown className="w-4 h-4 text-[#E9C349]" />
                     Invité VIP
                   </button>
 

@@ -6,7 +6,7 @@ import {
   Calendar,
   Clock,
   MapPin,
-  Sparkles,
+  Crown,
   Ticket,
   ArrowRight,
   Maximize2,
@@ -381,7 +381,7 @@ export const MapView: React.FC<MapViewProps> = ({
                       </div>
                       {isVip && (
                         <div className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-[#E9C349] text-[#241A00] text-[10px] font-extrabold shadow-sm flex items-center gap-1">
-                          <Sparkles className="w-2.5 h-2.5" />
+                          <Crown className="w-2.5 h-2.5" />
                           <span>VIP</span>
                         </div>
                       )}

@@ -7,7 +7,6 @@ import {
   Copy,
   MessageSquare,
   Smartphone,
-  Sparkles,
   ShieldCheck,
   Send,
   Ticket,

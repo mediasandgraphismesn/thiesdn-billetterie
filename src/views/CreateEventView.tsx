@@ -19,7 +19,6 @@ import {
   Youtube,
   Globe,
   FileText,
-  Sparkles,
   Share2,
   Tag,
   Percent,
@@ -1357,7 +1356,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
 
           {promoCode && promoDiscountPercent && (
             <div className="p-3 rounded-xl bg-[#241A00] border border-[#E9C349]/30 text-xs text-[#E9C349] flex items-center gap-2">
-              <Sparkles className="w-4 h-4 shrink-0" />
+              <Tag className="w-4 h-4 shrink-0" />
               <span>
                 Offre active : Les acheteurs entrant le code <strong>{promoCode}</strong> bénéficieront de <strong>{promoDiscountPercent}% de remise immédiate</strong> sur leur commande Wave.
               </span>

@@ -13,7 +13,6 @@ import {
   RefreshCw,
   Send,
   ShieldCheck,
-  Sparkles,
   MapPin,
   Navigation,
 } from 'lucide-react';
