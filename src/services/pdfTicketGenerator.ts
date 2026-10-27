@@ -93,14 +93,24 @@ async function loadEventPosterDataUrl(event: EventItem): Promise<string | null> 
   if (typeof window !== 'undefined') {
     const candidateUrls: string[] = [];
     if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
-      // Priorité 1 : Proxy CDN weserv.nl avec compression et redimensionnement
-      candidateUrls.push(
-        `https://images.weserv.nl/?url=${encodeURIComponent(rawUrl)}&w=900&q=82&output=jpg`
-      );
-      // Priorité 2 : Proxy universel secondaire allorigins.win
-      candidateUrls.push(`https://api.allorigins.win/raw?url=${encodeURIComponent(rawUrl)}`);
-      // Priorité 3 : Téléchargement direct
-      candidateUrls.push(rawUrl);
+      // Priorité 0 : Si Imgur, utiliser le suffixe 'h' (1024px) ou 'l' (640px) ou direct (weserv renvoie 429)
+      const imgurMatch = rawUrl.match(/^https?:\/\/(?:i\.)?imgur\.com\/([a-zA-Z0-9]+)(\.[a-zA-Z0-9]+)?$/i);
+      if (imgurMatch) {
+        const rawId = imgurMatch[1];
+        const ext = imgurMatch[2] || '.jpg';
+        const baseId = rawId.length === 8 && /[smlhtb]$/i.test(rawId) ? rawId.slice(0, 7) : rawId;
+        candidateUrls.push(`https://i.imgur.com/${baseId}h${ext}`);
+        candidateUrls.push(rawUrl);
+      } else {
+        // Priorité 1 : Proxy CDN weserv.nl avec compression et redimensionnement
+        candidateUrls.push(
+          `https://images.weserv.nl/?url=${encodeURIComponent(rawUrl)}&w=900&q=82&output=jpg`
+        );
+        // Priorité 2 : Proxy universel secondaire allorigins.win
+        candidateUrls.push(`https://api.allorigins.win/raw?url=${encodeURIComponent(rawUrl)}`);
+        // Priorité 3 : Téléchargement direct
+        candidateUrls.push(rawUrl);
+      }
     } else {
       candidateUrls.push(rawUrl);
     }

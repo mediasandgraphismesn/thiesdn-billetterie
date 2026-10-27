@@ -1,8 +1,13 @@
 @import "tailwindcss";
 
-html, body {
-  overflow-x: hidden;
-  max-width: 100vw;
+:root {
+  --nav-h: 72px;
+  --header-h: 60px;
+}
+
+html, body, #root {
+  max-width: 100%;
+  overflow-x: clip;
 }
 
 * {
