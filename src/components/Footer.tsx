@@ -75,9 +75,9 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateAdmin, onNavigateCGV }
   return (
     <>
       <footer className="mt-auto border-t border-white/5 bg-[#0A0A0A]/95 text-gray-400 transition-all">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-20 md:pb-6">
-          {/* Grille principale épurée 3 colonnes */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4 items-start">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8 pb-24 md:pb-6">
+          {/* Grille principale responsive : flex vertical sur mobile, colonnes sur desktop */}
+          <div className="flex flex-col gap-4 sm:grid sm:grid-cols-3 sm:gap-8 mb-4 items-start">
             
             {/* COLONNE 1 : IDENTITÉ */}
             <div className="space-y-2">
@@ -139,7 +139,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateAdmin, onNavigateCGV }
                 </a>
               </div>
 
-              {/* Icônes Réseaux Sociaux alignées horizontalement sans blocs noirs */}
+              {/* Icônes Réseaux Sociaux alignées horizontalement */}
               <div className="flex items-center gap-3 pt-0.5">
                 {socialLinks.map((social) => {
                   const Icon = social.icon;
@@ -161,51 +161,101 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateAdmin, onNavigateCGV }
               </div>
             </div>
 
-            {/* COLONNE 3 : LIENS UTILES SUR UNE SEULE COLONNE DISCRÈTE */}
-            <div className="space-y-1 text-xs md:justify-self-end">
-              <button
-                onClick={() => {
-                  if (onNavigateCGV) {
-                    onNavigateCGV();
-                  } else {
-                    setIsCGVModalOpen(true);
-                  }
-                }}
-                className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors py-0.5 text-left"
-              >
-                <FileText className="w-3.5 h-3.5 text-[#DCB8FF]" />
-                <span>Conditions Générales de Vente (CGV)</span>
-              </button>
+            {/* COLONNE 3 : LIENS UTILES (ACCORDÉON SUR MOBILE / COLONNE SUR DESKTOP) */}
+            <div className="w-full md:justify-self-end">
+              {/* Version Mobile : Accordéon <details> compact */}
+              <details className="sm:hidden w-full bg-white/5 rounded-xl p-3 border border-white/5 group">
+                <summary className="text-xs font-bold text-gray-300 cursor-pointer flex items-center justify-between list-none">
+                  <span>Informations Légales & Espace Admin</span>
+                  <span className="text-gray-500 group-open:rotate-180 transition-transform">▾</span>
+                </summary>
+                <div className="pt-3 space-y-2 text-xs border-t border-white/5 mt-2">
+                  <button
+                    onClick={() => {
+                      if (onNavigateCGV) onNavigateCGV();
+                      else setIsCGVModalOpen(true);
+                    }}
+                    className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors py-0.5 text-left w-full"
+                  >
+                    <FileText className="w-3.5 h-3.5 text-[#DCB8FF]" />
+                    <span>Conditions Générales de Vente (CGV)</span>
+                  </button>
 
-              <button
-                onClick={() => setLegalModal('confidentialite')}
-                className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors py-0.5 text-left"
-              >
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Politique de Confidentialité</span>
-              </button>
+                  <button
+                    onClick={() => setLegalModal('confidentialite')}
+                    className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors py-0.5 text-left w-full"
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Politique de Confidentialité</span>
+                  </button>
 
-              <button
-                onClick={() => setLegalModal('faq')}
-                className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors py-0.5 text-left"
-              >
-                <HelpCircle className="w-3.5 h-3.5 text-[#E9C349]" />
-                <span>Foire Aux Questions (FAQ)</span>
-              </button>
+                  <button
+                    onClick={() => setLegalModal('faq')}
+                    className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors py-0.5 text-left w-full"
+                  >
+                    <HelpCircle className="w-3.5 h-3.5 text-[#E9C349]" />
+                    <span>Foire Aux Questions (FAQ)</span>
+                  </button>
 
-              <button
-                onClick={() => {
-                  if (onNavigateAdmin) {
-                    onNavigateAdmin();
-                  } else {
-                    window.location.href = '/admin';
-                  }
-                }}
-                className="flex items-center gap-2 text-gray-400 hover:text-[#E9C349] transition-colors py-0.5 text-left font-medium group"
-              >
-                <ShieldCheck className="w-3.5 h-3.5 text-[#8A2BE2] group-hover:text-[#E9C349] transition-colors" />
-                <span>Accès Administration (Super Admin)</span>
-              </button>
+                  <button
+                    onClick={() => {
+                      if (onNavigateAdmin) onNavigateAdmin();
+                      else window.location.href = '/admin';
+                    }}
+                    className="flex items-center gap-2 text-gray-400 hover:text-[#E9C349] transition-colors py-0.5 text-left font-medium w-full"
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5 text-[#8A2BE2]" />
+                    <span>Accès Administration</span>
+                  </button>
+                </div>
+              </details>
+
+              {/* Version Desktop : Liste normale */}
+              <div className="hidden sm:flex sm:flex-col space-y-1 text-xs">
+                <button
+                  onClick={() => {
+                    if (onNavigateCGV) {
+                      onNavigateCGV();
+                    } else {
+                      setIsCGVModalOpen(true);
+                    }
+                  }}
+                  className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors py-0.5 text-left"
+                >
+                  <FileText className="w-3.5 h-3.5 text-[#DCB8FF]" />
+                  <span>Conditions Générales de Vente (CGV)</span>
+                </button>
+
+                <button
+                  onClick={() => setLegalModal('confidentialite')}
+                  className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors py-0.5 text-left"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Politique de Confidentialité</span>
+                </button>
+
+                <button
+                  onClick={() => setLegalModal('faq')}
+                  className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors py-0.5 text-left"
+                >
+                  <HelpCircle className="w-3.5 h-3.5 text-[#E9C349]" />
+                  <span>Foire Aux Questions (FAQ)</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    if (onNavigateAdmin) {
+                      onNavigateAdmin();
+                    } else {
+                      window.location.href = '/admin';
+                    }
+                  }}
+                  className="flex items-center gap-2 text-gray-400 hover:text-[#E9C349] transition-colors py-0.5 text-left font-medium group"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-[#8A2BE2] group-hover:text-[#E9C349] transition-colors" />
+                  <span>Accès Administration (Super Admin)</span>
+                </button>
+              </div>
             </div>
 
           </div>

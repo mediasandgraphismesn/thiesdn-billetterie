@@ -47,24 +47,24 @@ export const Header: React.FC<HeaderProps> = ({
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   return (
-    <header className="bg-[#131313]/90 backdrop-blur-xl border-b border-white/10 sticky top-0 z-50 px-4 sm:px-6 h-16 w-full flex items-center justify-between transition-all">
+    <header className="bg-[#131313]/90 backdrop-blur-xl border-b border-white/10 sticky top-0 z-50 px-2 sm:px-6 py-2 sm:py-4 h-14 sm:h-16 w-full flex items-center justify-between transition-all">
       {/* Brand & Logo Officiel */}
       <div 
         onClick={() => onNavigate(currentRole === 'admin' && !isAdminPreview ? 'dashboard' : 'home')}
-        className="flex items-center gap-3 cursor-pointer group"
+        className="flex items-center gap-2 sm:gap-3 cursor-pointer group min-w-0"
       >
-        <div className="h-10 px-2.5 py-1 rounded-xl bg-white/5 border border-white/10 hover:border-[#E9C349]/40 flex items-center justify-center shadow-lg shadow-[#8A2BE2]/10 group-hover:scale-105 transition-all">
+        <div className="w-8 h-8 sm:w-10 sm:h-10 px-1 sm:px-2.5 py-1 rounded-xl bg-white/5 border border-white/10 hover:border-[#E9C349]/40 flex items-center justify-center shadow-lg shadow-[#8A2BE2]/10 group-hover:scale-105 transition-all flex-shrink-0">
           <img
             src="/logo-tight.png"
             alt="Thièsdn Logo"
-            className="h-6 w-auto object-contain"
+            className="h-5 sm:h-6 w-auto object-contain"
           />
         </div>
-        <div>
-          <h1 className="font-heading text-lg sm:text-xl font-bold tracking-tight text-white flex items-center gap-1.5">
-            Thiès <span className="text-[#E9C349] font-normal text-sm sm:text-base opacity-90">Days and Nights</span>
+        <div className="min-w-0">
+          <h1 className="font-heading text-base sm:text-xl font-bold tracking-tight text-white flex items-center gap-1.5 truncate max-w-[120px] sm:max-w-none">
+            Thiès <span className="text-[#E9C349] font-normal text-xs sm:text-base opacity-90 truncate">Days and Nights</span>
           </h1>
-          <p className="text-[10px] uppercase font-semibold tracking-wider text-gray-400 -mt-1 hidden sm:block">
+          <p className="text-[10px] uppercase font-semibold tracking-wider text-gray-400 -mt-0.5 sm:-mt-1 hidden sm:block">
             {currentRole === 'admin' && !isAdminPreview ? 'Console Back-Office' : 'Plateforme Officielle'}
           </p>
         </div>
@@ -84,22 +84,22 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Contrôles Droite */}
-      <div className="flex items-center gap-2 sm:gap-3">
+      <div className="flex items-center gap-1.5 sm:gap-3 flex-shrink-0">
         {/* Bouton Discret Partenariat (Accès Showcase Motion Design) */}
         <button
           onClick={() => onNavigate('showcase')}
-          className="group flex items-center gap-1.5 px-2.5 py-1.5 text-xs sm:text-sm font-medium text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-white/5 cursor-pointer"
+          className="group flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 text-xs sm:text-sm font-medium text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-white/5 cursor-pointer flex-shrink-0"
           title="Partenariat & Espace Promoteur / Artiste"
         >
-          <Handshake className="w-4 h-4 text-gray-400 group-hover:text-white transition-colors" />
-          <span>Partenariat</span>
+          <Handshake className="w-4 h-4 text-gray-400 group-hover:text-white transition-colors flex-shrink-0" />
+          <span className="hidden sm:inline">Partenariat</span>
         </button>
 
         {/* Bouton Connexion Visiteur (Uniquement si NON connecté) */}
         {!isAuthenticated && (
           <button
             onClick={onOpenAuth}
-            className="flex items-center gap-1.5 bg-[#8A2BE2] hover:bg-[#7b23cf] text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md shadow-[#8A2BE2]/20"
+            className="flex items-center gap-1.5 bg-[#8A2BE2] hover:bg-[#7b23cf] text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all shadow-md shadow-[#8A2BE2]/20 flex-shrink-0"
           >
             <User className="w-3.5 h-3.5" />
             <span>Connexion</span>

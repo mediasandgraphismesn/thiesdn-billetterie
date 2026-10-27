@@ -356,13 +356,13 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.2 }}
-        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md overflow-y-auto"
+        className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md overflow-y-auto"
       >
         <motion.div
           initial={{ opacity: 0, y: 35, scale: 0.96 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-          className="relative w-full max-w-2xl bg-[#171717] border border-white/10 rounded-3xl overflow-hidden shadow-2xl my-8 max-h-[90vh] flex flex-col"
+          className="relative w-full h-full sm:h-auto sm:max-h-[90vh] max-w-2xl bg-[#171717] border-0 sm:border sm:border-white/10 rounded-none sm:rounded-3xl overflow-hidden shadow-2xl my-0 sm:my-8 flex flex-col"
         >
           {/* Poster Header */}
           <div className="relative h-48 sm:h-56 w-full flex-shrink-0">
@@ -414,7 +414,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
             </div>
 
             {/* Event Title & Bouton Teaser sur Poster */}
-            <div className="absolute bottom-4 inset-x-6 z-10 flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+            <div className="absolute bottom-4 inset-x-4 sm:inset-x-6 z-10 flex flex-col sm:flex-row sm:items-end justify-between gap-3">
               <div>
                 {event.isExclusive && (
                   <span className="bg-[#E9C349] text-[#241A00] text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full mb-1 inline-flex items-center gap-1">
@@ -422,7 +422,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                     Soirée Exclusive
                   </span>
                 )}
-                <h2 className="font-heading text-xl sm:text-2xl font-extrabold text-white leading-tight">
+                <h2 className="font-heading text-lg sm:text-2xl font-extrabold text-white leading-tight">
                   {event.title}
                 </h2>
               </div>
@@ -441,7 +441,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                       }
                     }
                   }}
-                  className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#8A2BE2] hover:bg-[#7824c7] text-white font-heading font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-[#8A2BE2]/30 hover:scale-105 transition-all self-start sm:self-auto shrink-0 border border-white/20"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl bg-[#8A2BE2] hover:bg-[#7824c7] text-white font-heading font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-[#8A2BE2]/30 hover:scale-[1.02] sm:hover:scale-105 transition-all shrink-0 border border-white/20"
                 >
                   <Play className="w-3.5 h-3.5 fill-current" />
                   <span>Voir le Teaser</span>
@@ -451,7 +451,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
           </div>
 
           {/* Scrollable Content Body */}
-          <div className="p-6 overflow-y-auto space-y-6 flex-1">
+          <div className="p-4 sm:p-6 overflow-y-auto space-y-5 sm:space-y-6 flex-1">
             {errorMessage && (
               <div className="p-3.5 rounded-2xl bg-rose-950/60 border border-rose-500/40 text-rose-300 text-xs flex items-center gap-2.5">
                 <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
@@ -1155,7 +1155,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
           </div>
 
           {/* Footer Bar */}
-          <div className="p-5 bg-[#141414] border-t border-white/10 flex items-center justify-between gap-4">
+          <div className="p-4 sm:p-5 bg-[#141414] border-t border-white/10 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
             {step === 'select' && (
               <>
                 {isSalesUpcoming ? (
@@ -1176,10 +1176,10 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                 ) : (
                   /* En mode ventes ouvertes : Total et Bouton Wave */
                   <>
-                    <div>
+                    <div className="flex items-center justify-between sm:flex-col sm:items-start">
                       <p className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Total à payer</p>
                       <div className="flex items-baseline gap-2">
-                        <p className="font-heading text-xl sm:text-2xl font-extrabold text-[#E9C349]">
+                        <p className="font-heading text-lg sm:text-2xl font-extrabold text-[#E9C349]">
                           {totalPrice.toLocaleString('fr-FR')} FCFA
                         </p>
                         {discountAmount > 0 && (
@@ -1190,7 +1190,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                       </div>
                     </div>
 
-                    <div className="flex-1 max-w-sm flex flex-col items-end gap-1">
+                    <div className="w-full sm:flex-1 sm:max-w-sm flex flex-col items-stretch sm:items-end gap-1">
                       <button
                         onClick={handleWaveCheckout}
                         disabled={isProcessing || selectedTier.available < quantity}

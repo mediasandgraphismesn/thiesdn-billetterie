@@ -203,7 +203,7 @@ export const EventCard: React.FC<EventCardProps> = ({
       onClick={() => onSelect(event)}
       className="glass-panel rounded-2xl overflow-hidden flex flex-col cursor-pointer hover:border-[#8A2BE2]/50 transition-shadow duration-300 group shadow-lg"
     >
-      <div className="h-44 sm:h-48 relative overflow-hidden">
+      <div className="h-40 sm:h-48 relative overflow-hidden">
         <img
           src={getOptimizedImageUrl(event.posterUrl, 800, 80)}
           alt={event.title}
@@ -211,7 +211,7 @@ export const EventCard: React.FC<EventCardProps> = ({
           decoding="async"
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#1A1A1A] via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
         
         <div className="absolute top-2.5 inset-x-2.5 flex items-center justify-between z-10">
           {isOngoing ? (
@@ -237,52 +237,59 @@ export const EventCard: React.FC<EventCardProps> = ({
           </div>
         )}
 
-        <div className="absolute bottom-2 left-3 right-3 text-white">
-          <p className="font-heading font-bold text-base line-clamp-1 group-hover:text-[#DCB8FF] transition-colors">
+        <div className="absolute bottom-2.5 left-3 right-3 text-white">
+          <p className="font-heading font-bold text-sm sm:text-base line-clamp-1 group-hover:text-[#DCB8FF] transition-colors drop-shadow-md">
             {event.title}
           </p>
         </div>
       </div>
 
-      <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
+      <div className="p-3 sm:p-4 flex-1 flex flex-col justify-between space-y-2.5 sm:space-y-3">
         <div className="space-y-1.5 text-xs text-gray-300">
           <div className="flex items-center gap-2">
-            <Calendar className="w-3.5 h-3.5 text-[#DCB8FF]" />
-            <span>{event.date} • {event.time}</span>
+            <Calendar className="w-3.5 h-3.5 text-[#DCB8FF] shrink-0" />
+            <span className="truncate">{event.date} • {event.time}</span>
           </div>
           <div className="flex items-center gap-2">
-            <MapPin className="w-3.5 h-3.5 text-[#E9C349]" />
+            <MapPin className="w-3.5 h-3.5 text-[#E9C349] shrink-0" />
             <span className="truncate">{event.venue}{event.quartier ? ` (${event.quartier})` : ''}, {event.city}</span>
           </div>
         </div>
 
-        <div className="pt-2 border-t border-white/5 flex items-center justify-between">
-          {event.promoter?.name && event.promoter.name.trim().toLowerCase() !== 'utilisateur' ? (
-            <div className="flex items-center gap-1.5">
-              {event.promoter.avatar && (
-                <img
-                  src={getOptimizedImageUrl(event.promoter.avatar, 120, 80)}
-                  alt={event.promoter.name}
-                  loading="lazy"
-                  decoding="async"
-                  className="w-5 h-5 rounded-full object-cover"
-                />
-              )}
-              <span className="text-[11px] text-gray-400 truncate max-w-[100px]">
-                {event.promoter.name}
-              </span>
-            </div>
-          ) : (
-            <div />
-          )}
+        <div className="pt-2 border-t border-white/5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div className="flex items-center justify-between sm:justify-start gap-2">
+            {event.promoter?.name && event.promoter.name.trim().toLowerCase() !== 'utilisateur' ? (
+              <div className="flex items-center gap-1.5 min-w-0">
+                {event.promoter.avatar && (
+                  <img
+                    src={getOptimizedImageUrl(event.promoter.avatar, 120, 80)}
+                    alt={event.promoter.name}
+                    loading="lazy"
+                    decoding="async"
+                    className="w-5 h-5 rounded-full object-cover flex-shrink-0"
+                  />
+                )}
+                <span className="text-[11px] text-gray-400 truncate max-w-[110px]">
+                  {event.promoter.name}
+                </span>
+              </div>
+            ) : (
+              <div />
+            )}
+
+            <span className="sm:hidden text-xs font-extrabold text-[#E9C349] font-heading tabular-nums">
+              {event.price.toLocaleString('fr-FR')} FCFA
+            </span>
+          </div>
 
           <button
             className={
-              isOngoing
-                ? 'px-3 py-1 rounded-lg text-xs font-black font-heading bg-red-600 hover:bg-red-500 text-white shadow-md shadow-red-600/30 transition-all flex items-center gap-1.5'
+              `w-full sm:w-auto mt-1 sm:mt-0 justify-center ` +
+              (isOngoing
+                ? 'px-3 py-1.5 rounded-lg text-xs font-black font-heading bg-red-600 hover:bg-red-500 text-white shadow-md shadow-red-600/30 transition-all flex items-center gap-1.5'
                 : isSalesUpcoming
-                ? 'px-3 py-1 rounded-lg text-xs font-bold font-heading bg-[#8A2BE2]/20 text-[#DCB8FF] border border-[#8A2BE2]/40 hover:bg-[#8A2BE2]/40 transition-all flex items-center gap-1.5'
-                : 'btn-primary-glow px-3 py-1 rounded-lg text-xs font-bold font-heading'
+                ? 'px-3 py-1.5 rounded-lg text-xs font-bold font-heading bg-[#8A2BE2]/20 text-[#DCB8FF] border border-[#8A2BE2]/40 hover:bg-[#8A2BE2]/40 transition-all flex items-center gap-1.5'
+                : 'btn-primary-glow px-3.5 py-1.5 rounded-lg text-xs font-bold font-heading flex items-center gap-1.5')
             }
           >
             {isOngoing ? (
