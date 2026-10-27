@@ -476,7 +476,8 @@ export const signUpWithSupabase = async (
     termsAccepted?: boolean;
     termsAcceptedAt?: string;
     termsVersion?: string;
-  }
+  },
+  captchaToken?: string
 ) => {
   const client = getSupabaseClient();
   if (!client) {
@@ -504,6 +505,7 @@ export const signUpWithSupabase = async (
         terms_version: termsVersion,
       },
       emailRedirectTo: redirectUrl,
+      captchaToken,
     },
   });
 
@@ -549,7 +551,7 @@ export const signUpWithSupabase = async (
   return data;
 };
 
-export const resendConfirmationEmail = async (email: string) => {
+export const resendConfirmationEmail = async (email: string, captchaToken?: string) => {
   const client = getSupabaseClient();
   if (!client) {
     throw new Error('Supabase n\'est pas encore configuré.');
@@ -562,6 +564,7 @@ export const resendConfirmationEmail = async (email: string) => {
     email: email.trim(),
     options: {
       emailRedirectTo: redirectUrl,
+      captchaToken,
     },
   });
 
@@ -569,7 +572,7 @@ export const resendConfirmationEmail = async (email: string) => {
   return data;
 };
 
-export const signInWithSupabase = async (email: string, pass: string) => {
+export const signInWithSupabase = async (email: string, pass: string, captchaToken?: string) => {
   const client = getSupabaseClient();
   if (!client) {
     throw new Error('Supabase n\'est pas encore configuré.');
@@ -578,6 +581,9 @@ export const signInWithSupabase = async (email: string, pass: string) => {
   const { data, error } = await client.auth.signInWithPassword({
     email,
     password: pass,
+    options: {
+      captchaToken,
+    },
   });
 
   if (error) {
@@ -587,6 +593,23 @@ export const signInWithSupabase = async (email: string, pass: string) => {
     }
     throw error;
   }
+  return data;
+};
+
+export const resetPasswordWithSupabase = async (email: string, captchaToken?: string) => {
+  const client = getSupabaseClient();
+  if (!client) {
+    throw new Error('Supabase n\'est pas encore configuré.');
+  }
+
+  const redirectUrl = typeof window !== 'undefined' ? `${window.location.origin}/` : undefined;
+
+  const { data, error } = await client.auth.resetPasswordForEmail(email.trim(), {
+    redirectTo: redirectUrl,
+    captchaToken,
+  });
+
+  if (error) throw error;
   return data;
 };
 

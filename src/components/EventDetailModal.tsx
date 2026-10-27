@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SafeImage } from './SafeImage';
 import confetti from 'canvas-confetti';
@@ -35,6 +35,7 @@ import {
 import { EventItem, TicketTier, UserTicket, OrderRecord } from '../types';
 import { getOptimizedImageUrl } from '../utils/imageOptimizer';
 import { createOrderWithStockCheck, registerEventPreRegistration, getSupabaseClient } from '../services/supabase';
+import Turnstile from 'react-turnstile';
 import { CountdownTimer } from './CountdownTimer';
 import { SpotifyVinylPlayer } from './SpotifyVinylPlayer';
 
@@ -95,6 +96,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
   const [copiedRef, setCopiedRef] = useState(false);
 
   // Guest Checkout Conversion
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [guestEmail, setGuestEmail] = useState('');
   const [guestPassword, setGuestPassword] = useState('');
   const [isConvertingAccount, setIsConvertingAccount] = useState(false);
@@ -252,7 +254,14 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
       try {
         const { data: sessionData } = await supabase.auth.getSession();
         if (!sessionData?.session?.user) {
-          const { error: anonErr } = await supabase.auth.signInAnonymously();
+          if (!captchaToken) {
+            setErrorMessage('Veuillez valider le CAPTCHA.');
+            setIsProcessing(false);
+            return;
+          }
+          const { error: anonErr } = await supabase.auth.signInAnonymously({
+            options: { captchaToken },
+          });
           if (anonErr) {
             console.error('Guest checkout anonymous session error:', anonErr);
             setErrorMessage("Impossible d'initialiser l'accès invité pour l'achat. Veuillez réessayer ou vous connecter.");
@@ -974,6 +983,17 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                           </p>
                         )}
                       </div>
+
+                      {!isAuthenticated && (
+                        <div className="flex justify-center pt-1 overflow-x-auto">
+                          <Turnstile
+                            sitekey={(import.meta as any).env?.VITE_TURNSTILE_SITE_KEY || ''}
+                            onSuccess={(token) => setCaptchaToken(token)}
+                            onExpire={() => setCaptchaToken(null)}
+                            theme="dark"
+                          />
+                        </div>
+                      )}
                     </div>
                   </>
                 )}

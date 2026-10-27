@@ -38,6 +38,7 @@ import {
   ShieldCheck,
   Star,
   Copy,
+  Smartphone,
   Music2,
 } from 'lucide-react';
 import {

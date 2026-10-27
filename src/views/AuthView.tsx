@@ -20,9 +20,11 @@ import {
   signInWithSupabase,
   signUpWithSupabase,
   resendConfirmationEmail,
+  resetPasswordWithSupabase,
   isSupabaseConfigured,
   fetchUserProfile,
 } from '../services/supabase';
+import Turnstile from 'react-turnstile';
 import { THIES_33_QUARTIERS } from '../data/thiesQuartiers';
 import { TermsOfServiceModal } from '../components/TermsOfServiceModal';
 import { CURRENT_TERMS_VERSION } from '../types';
@@ -33,6 +35,8 @@ interface AuthViewProps {
 
 export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
   const [isRegister, setIsRegister] = useState(false);
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [city, setCity] = useState<'Thiès' | 'Dakar' | 'Mbour' | 'Saly' | 'Autre'>('Thiès');
@@ -58,8 +62,13 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
     setAuthNotice(null);
     setResendMessage(null);
 
+    if (!captchaToken) {
+      setAuthError('Veuillez valider le CAPTCHA.');
+      return;
+    }
+
     // Validation stricte des champs obligatoires Ville & Quartier & CGV
-    if (isRegister) {
+    if (isRegister && !isForgotPassword) {
       if (!city || !city.trim() || !address || !address.trim()) {
         setAuthError('Veuillez renseigner votre ville et votre quartier.');
         return;
@@ -76,24 +85,33 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
 
     if (hasSupabase) {
       try {
-        if (isRegister) {
-          await signUpWithSupabase(cleanEmail, password, {
-            name: name.trim() || 'Client Thièsdn',
-            phone: phone.trim(),
-            city: city,
-            address: address.trim(),
-            quartier: address.trim(),
-            role: 'user', // Enregistrement public obligatoirement au rôle 'user'
-            termsAccepted: true,
-            termsAcceptedAt: new Date().toISOString(),
-            termsVersion: CURRENT_TERMS_VERSION,
-          });
+        if (isForgotPassword) {
+          await resetPasswordWithSupabase(cleanEmail, captchaToken);
+          setAuthNotice('Un email de réinitialisation de mot de passe vous a été envoyé.');
+          setIsForgotPassword(false);
+        } else if (isRegister) {
+          await signUpWithSupabase(
+            cleanEmail,
+            password,
+            {
+              name: name.trim() || 'Client Thièsdn',
+              phone: phone.trim(),
+              city: city,
+              address: address.trim(),
+              quartier: address.trim(),
+              role: 'user', // Enregistrement public obligatoirement au rôle 'user'
+              termsAccepted: true,
+              termsAcceptedAt: new Date().toISOString(),
+              termsVersion: CURRENT_TERMS_VERSION,
+            },
+            captchaToken
+          );
 
           // Écran de confirmation par email
           setRegisteredEmail(cleanEmail);
           setEmailConfirmationSent(true);
         } else {
-          const res = await signInWithSupabase(cleanEmail, password);
+          const res = await signInWithSupabase(cleanEmail, password, captchaToken);
           // Attribution du rôle authentique selon la table `profiles`
           let userRole: 'user' | 'promoter' | 'admin' | 'sales_agent' | 'artist' = 'user';
           if (res.user?.id) {
@@ -142,7 +160,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
     setIsResending(true);
     setResendMessage(null);
     try {
-      await resendConfirmationEmail(targetEmail);
+      await resendConfirmationEmail(targetEmail, captchaToken || undefined);
       setResendMessage('Un nouvel email de confirmation vous a été envoyé.');
     } catch (err: any) {
       setResendMessage(err.message || 'Impossible de renvoyer l\'email pour l\'instant.');
@@ -294,7 +312,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* Champs Nom & Téléphone (Inscription) */}
-              {isRegister && (
+              {isRegister && !isForgotPassword && (
                 <>
                   <div className="flex flex-col gap-1.5">
                     <label className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
@@ -384,9 +402,24 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
 
               {/* Champ Email */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
-                  EMAIL <span className="text-[#E9C349]">*</span>
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                    EMAIL <span className="text-[#E9C349]">*</span>
+                  </label>
+                  {isForgotPassword && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsForgotPassword(false);
+                        setAuthError(null);
+                        setAuthNotice(null);
+                      }}
+                      className="text-[11px] font-semibold text-[#DCB8FF] hover:underline"
+                    >
+                      Retour à la connexion
+                    </button>
+                  )}
+                </div>
                 <div className="input-glass rounded-xl px-4 py-3.5 flex items-center gap-3">
                   <Mail className="w-4 h-4 text-gray-400" />
                   <input
@@ -401,43 +434,49 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
               </div>
 
               {/* Champ Mot de Passe */}
-              <div className="flex flex-col gap-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
-                    MOT DE PASSE <span className="text-[#E9C349]">*</span>
-                  </label>
-                  {!isRegister && (
+              {!isForgotPassword && (
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                      MOT DE PASSE <span className="text-[#E9C349]">*</span>
+                    </label>
+                    {!isRegister && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsForgotPassword(true);
+                          setAuthError(null);
+                          setAuthNotice(null);
+                        }}
+                        className="text-[11px] font-semibold text-[#DCB8FF] hover:underline"
+                      >
+                        Oublié?
+                      </button>
+                    )}
+                  </div>
+                  <div className="input-glass rounded-xl px-4 py-3.5 flex items-center gap-3">
+                    <Lock className="w-4 h-4 text-gray-400" />
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="bg-transparent border-none outline-none text-white text-sm w-full p-0 focus:ring-0 placeholder-gray-600"
+                    />
                     <button
                       type="button"
-                      onClick={() => alert('Veuillez contacter le support officiel Thièsdn pour la réinitialisation de votre compte.')}
-                      className="text-[11px] font-semibold text-[#DCB8FF] hover:underline"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="text-gray-400 hover:text-white"
                     >
-                      Oublié?
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
-                  )}
+                  </div>
                 </div>
-                <div className="input-glass rounded-xl px-4 py-3.5 flex items-center gap-3">
-                  <Lock className="w-4 h-4 text-gray-400" />
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="bg-transparent border-none outline-none text-white text-sm w-full p-0 focus:ring-0 placeholder-gray-600"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="text-gray-400 hover:text-white"
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
+              )}
 
               {/* Case à cocher OBLIGATOIRE des CGV (Inscription uniquement) */}
-              {isRegister && (
+              {isRegister && !isForgotPassword && (
                 <div className="pt-2 pb-1 animate-in fade-in">
                   <label className="flex items-start gap-2.5 cursor-pointer text-xs text-gray-300 select-none">
                     <input
@@ -465,12 +504,22 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                 </div>
               )}
 
+              {/* Widget Cloudflare Turnstile CAPTCHA */}
+              <div className="flex justify-center pt-1 overflow-x-auto">
+                <Turnstile
+                  sitekey={(import.meta as any).env?.VITE_TURNSTILE_SITE_KEY || ''}
+                  onSuccess={(token) => setCaptchaToken(token)}
+                  onExpire={() => setCaptchaToken(null)}
+                  theme="dark"
+                />
+              </div>
+
               {/* Bouton Principal de Soumission */}
               <button
                 type="submit"
-                disabled={loading || (isRegister && !acceptedTerms)}
+                disabled={loading || (isRegister && !isForgotPassword && !acceptedTerms)}
                 className={`w-full py-3.5 rounded-2xl font-heading font-bold text-sm tracking-wider flex items-center justify-center gap-2 transition-all mt-3 ${
-                  loading || (isRegister && !acceptedTerms)
+                  loading || (isRegister && !isForgotPassword && !acceptedTerms)
                     ? 'bg-white/10 text-gray-500 cursor-not-allowed opacity-60'
                     : 'btn-primary-glow cursor-pointer'
                 }`}
@@ -479,7 +528,13 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                   <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 ) : (
                   <>
-                    <span>{isRegister ? "Créer mon compte" : 'Se connecter'}</span>
+                    <span>
+                      {isForgotPassword
+                        ? 'Envoyer le lien de réinitialisation'
+                        : isRegister
+                        ? 'Créer mon compte'
+                        : 'Se connecter'}
+                    </span>
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}
@@ -503,7 +558,9 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
             <button
               onClick={() => {
                 setIsRegister(!isRegister);
+                setIsForgotPassword(false);
                 setAuthError(null);
+                setAuthNotice(null);
               }}
               className="font-bold text-[#E9C349] hover:underline ml-1"
             >
