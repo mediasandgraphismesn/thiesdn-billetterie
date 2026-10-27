@@ -246,13 +246,25 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
     setIsProcessing(true);
     setErrorMessage(null);
 
-    // Guest Checkout automatique via Supabase Auth Anonyme
+    // Guest Checkout automatique via Supabase Auth Anonyme (une seule fois par visiteur)
     const supabase = getSupabaseClient();
     if (!isAuthenticated && supabase) {
       try {
-        await supabase.auth.signInAnonymously();
-      } catch (anonErr) {
-        console.warn('Guest checkout anonymous session notice:', anonErr);
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (!sessionData?.session?.user) {
+          const { error: anonErr } = await supabase.auth.signInAnonymously();
+          if (anonErr) {
+            console.error('Guest checkout anonymous session error:', anonErr);
+            setErrorMessage("Impossible d'initialiser l'accès invité pour l'achat. Veuillez réessayer ou vous connecter.");
+            setIsProcessing(false);
+            return;
+          }
+        }
+      } catch (anonErr: any) {
+        console.error('Guest checkout anonymous exception:', anonErr);
+        setErrorMessage("Impossible d'initialiser l'accès invité pour l'achat. Veuillez réessayer ou vous connecter.");
+        setIsProcessing(false);
+        return;
       }
     }
 

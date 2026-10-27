@@ -13,6 +13,7 @@ import {
   Loader2,
   RefreshCw,
   Copy,
+  MessageSquare,
   Check,
 } from 'lucide-react';
 import { OrderRecord, EventItem, UserTicket } from '../../types';
@@ -295,9 +296,36 @@ export const OrdersTable: React.FC<OrdersTableProps> = ({
                             </button>
                           </div>
                         ) : order.status === 'confirmed' ? (
-                          <span className="text-[11px] text-emerald-400 font-semibold flex items-center justify-end gap-1">
-                            <CheckCircle2 className="w-3.5 h-3.5" /> Billets émis
-                          </span>
+                          <div className="flex items-center justify-end gap-2">
+                            <span className="text-[11px] text-emerald-400 font-semibold flex items-center gap-1">
+                              <CheckCircle2 className="w-3.5 h-3.5" /> Billets émis
+                            </span>
+                            {(() => {
+                              const cleanPhone = order.customerPhone ? order.customerPhone.replace(/[^0-9]/g, '') : '';
+                              if (!cleanPhone) return null;
+                              const waPhone = cleanPhone.startsWith('221') ? cleanPhone : `221${cleanPhone}`;
+                              const origin = typeof window !== 'undefined' ? window.location.origin : 'https://billetterie.thiesdn.site';
+                              const ticketUrl = `${origin}/?ref=${order.reference}#tickets`;
+                              const waText = encodeURIComponent(
+                                `Bonjour ${order.customerName} ! Votre commande pour "${order.eventTitle}" (${order.tierName}) a été validée avec succès par Thièsdn Billetterie.\n\n` +
+                                `🎫 Référence : ${order.reference}\n` +
+                                `🎟️ Vos billets officiels sont accessibles ici : ${ticketUrl}\n\n` +
+                                `Présentez votre QR Code à l'entrée de l'événement. Bon spectacle !`
+                              );
+                              return (
+                                <a
+                                  href={`https://wa.me/${waPhone}?text=${waText}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-2.5 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1 transition-all"
+                                  title="Envoyer le billet au client par WhatsApp"
+                                >
+                                  <MessageSquare className="w-3 h-3 fill-current" />
+                                  <span>WhatsApp</span>
+                                </a>
+                              );
+                            })()}
+                          </div>
                         ) : (
                           <span className="text-[11px] text-gray-500 italic">
                             Clôturée
