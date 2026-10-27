@@ -1086,6 +1086,10 @@ export default function App() {
           setNotifications((prev) => [newNotif, ...prev]);
         }}
         onPurchaseSuccess={handlePurchaseSuccess}
+        onNavigateToTickets={() => {
+          setSelectedEventForDetail(null);
+          setActiveTab('tickets');
+        }}
         userName={user.name}
         isEmailConfirmed={Boolean(user.isEmailConfirmed)}
         isAuthenticated={isAuthenticated}

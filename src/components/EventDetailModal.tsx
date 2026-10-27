@@ -50,6 +50,7 @@ interface EventDetailModalProps {
   onClose: () => void;
   onOrderCreated?: (order: OrderRecord) => void;
   onPurchaseSuccess?: (ticket: UserTicket) => void;
+  onNavigateToTickets?: () => void;
   userName: string;
   isEmailConfirmed?: boolean;
   isAuthenticated?: boolean;
@@ -61,6 +62,8 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
   isOpen,
   onClose,
   onOrderCreated,
+  onPurchaseSuccess,
+  onNavigateToTickets,
   userName,
   isEmailConfirmed = true,
   isAuthenticated = true,
@@ -1091,55 +1094,45 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                   </div>
                 )}
 
-                {/* Boutons d'Action Post-Achat */}
+                {/* Boutons d'Action Post-Achat : message d'attente pour pending, bouton direct pour confirmed */}
                 <div className="max-w-md mx-auto pt-1 space-y-2.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      confetti({
-                        particleCount: 110,
-                        spread: 80,
-                        origin: { y: 0.6 },
-                        colors: ['#8A2BE2', '#E9C349', '#DCB8FF', '#FFFFFF'],
-                      });
-                      if (onPurchaseSuccess && activeOrder) {
-                        const pseudoTicket: UserTicket = {
-                          id: activeOrder.id,
-                          eventId: event.id,
-                          eventTitle: event.title,
-                          eventDate: event.date,
-                          eventTime: event.time,
-                          eventVenue: event.venue,
-                          eventPoster: event.posterUrl,
-                          tierName: activeOrder.tierName,
-                          price: activeOrder.totalAmount,
-                          qrCode: activeOrder.reference,
-                          holderName: activeOrder.customerName,
-                          status: 'valid',
-                          isExclusive: event.isExclusive,
-                          purchasedAt: new Date().toISOString(),
-                        };
-                        onPurchaseSuccess(pseudoTicket);
-                      }
-                      onClose();
-                    }}
-                    className="w-full py-3.5 px-5 rounded-2xl font-heading font-extrabold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-2.5 transition-all shadow-lg bg-gradient-to-r from-[#8A2BE2] via-[#E9C349] to-[#8A2BE2] text-white shadow-[#8A2BE2]/30 hover:scale-[1.02] active:scale-[0.98]"
-                  >
-                    <Ticket className="w-4 h-4 text-white" />
-                    <span>Voir mon billet</span>
-                  </button>
+                  {activeOrder && (activeOrder.status === 'pending' || (activeOrder.status as string) === 'payment_signaled') ? (
+                    <div className="p-4 rounded-2xl bg-amber-950/40 border border-[#E9C349]/40 text-center space-y-2">
+                      <div className="flex items-center justify-center gap-2 text-[#E9C349] font-bold text-xs uppercase tracking-wider">
+                        <Clock className="w-4 h-4 animate-pulse" />
+                        <span>Paiement en cours de vérification</span>
+                      </div>
+                      <p className="text-xs text-gray-300 leading-relaxed">
+                        ⏳ Paiement en cours de vérification. Votre billet sera disponible après validation par l'administrateur.
+                      </p>
+                    </div>
+                  ) : activeOrder?.status === 'confirmed' ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        if (onNavigateToTickets) onNavigateToTickets();
+                      }}
+                      className="w-full py-3.5 px-5 rounded-2xl font-heading font-extrabold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-2.5 transition-all shadow-lg bg-gradient-to-r from-[#8A2BE2] via-[#E9C349] to-[#8A2BE2] text-white shadow-[#8A2BE2]/30 hover:scale-[1.02] active:scale-[0.98]"
+                    >
+                      <Ticket className="w-4 h-4 text-white" />
+                      <span>Voir mon billet</span>
+                    </button>
+                  ) : null}
 
-                  <a
-                    href={generateWhatsAppConfirmationUrl(activeOrder)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full py-3 px-5 rounded-2xl font-heading font-extrabold text-xs tracking-wider uppercase flex items-center justify-center gap-2.5 transition-all shadow-md bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30 active:scale-[0.98]"
-                  >
-                    <MessageSquare className="w-4 h-4 fill-current" />
-                    <span>Envoyer mon billet par WhatsApp</span>
-                  </a>
+                  {activeOrder && (
+                    <a
+                      href={generateWhatsAppConfirmationUrl(activeOrder)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full py-3 px-5 rounded-2xl font-heading font-extrabold text-xs tracking-wider uppercase flex items-center justify-center gap-2.5 transition-all shadow-md bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30 active:scale-[0.98]"
+                    >
+                      <MessageSquare className="w-4 h-4 fill-current" />
+                      <span>Conserver mon reçu sur WhatsApp</span>
+                    </a>
+                  )}
                   <p className="text-[11px] text-gray-400">
-                    Recevez immédiatement une copie certifiée de votre reçu sur WhatsApp.
+                    Conservez votre référence de commande pour toute assistance ou retrait.
                   </p>
                 </div>
 
@@ -1240,47 +1233,36 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
 
             {step === 'confirmation' && (
               <div className="w-full flex flex-col sm:flex-row gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    confetti({
-                      particleCount: 100,
-                      spread: 75,
-                      origin: { y: 0.6 },
-                      colors: ['#8A2BE2', '#E9C349', '#DCB8FF', '#FFFFFF'],
-                    });
-                    if (onPurchaseSuccess && activeOrder) {
-                      const pseudoTicket: UserTicket = {
-                        id: activeOrder.id,
-                        eventId: event.id,
-                        eventTitle: event.title,
-                        eventDate: event.date,
-                        eventTime: event.time,
-                        eventVenue: event.venue,
-                        eventPoster: event.posterUrl,
-                        tierName: activeOrder.tierName,
-                        price: activeOrder.totalAmount,
-                        qrCode: activeOrder.reference,
-                        holderName: activeOrder.customerName,
-                        status: 'valid',
-                        isExclusive: event.isExclusive,
-                        purchasedAt: new Date().toISOString(),
-                      };
-                      onPurchaseSuccess(pseudoTicket);
-                    }
-                    onClose();
-                  }}
-                  className="flex-1 py-3.5 px-6 rounded-2xl font-heading font-extrabold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-2 transition-all shadow-lg bg-gradient-to-r from-[#8A2BE2] via-[#E9C349] to-[#8A2BE2] text-white shadow-[#8A2BE2]/30 hover:scale-[1.02] active:scale-[0.98]"
-                >
-                  <Ticket className="w-4 h-4 text-white" />
-                  <span>Voir mon billet</span>
-                </button>
-                <button
-                  onClick={onClose}
-                  className="sm:w-auto px-6 py-3.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-heading font-bold text-xs uppercase tracking-wider transition-all"
-                >
-                  Fermer
-                </button>
+                {activeOrder?.status === 'confirmed' ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      if (onNavigateToTickets) onNavigateToTickets();
+                    }}
+                    className="flex-1 py-3.5 px-6 rounded-2xl font-heading font-extrabold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-2 transition-all shadow-lg bg-gradient-to-r from-[#8A2BE2] via-[#E9C349] to-[#8A2BE2] text-white shadow-[#8A2BE2]/30 hover:scale-[1.02] active:scale-[0.98]"
+                  >
+                    <Ticket className="w-4 h-4 text-white" />
+                    <span>Voir mon billet</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="flex-1 py-3.5 px-6 rounded-2xl font-heading font-extrabold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-2 transition-all bg-white/10 hover:bg-white/20 text-white"
+                  >
+                    Fermer la fenêtre
+                  </button>
+                )}
+                {activeOrder?.status === 'confirmed' && (
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="sm:w-auto px-6 py-3.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-heading font-bold text-xs uppercase tracking-wider transition-all"
+                  >
+                    Fermer
+                  </button>
+                )}
               </div>
             )}
           </div>
