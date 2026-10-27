@@ -39,6 +39,7 @@ import {
   Star,
   Copy,
   Music2,
+  Smartphone,
 } from 'lucide-react';
 import {
   EventItem,
