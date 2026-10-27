@@ -75,9 +75,9 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateAdmin, onNavigateCGV }
   return (
     <>
       <footer className="mt-auto border-t border-white/5 bg-[#0A0A0A]/95 text-gray-400 transition-all">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8 pb-24 md:pb-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8 pb-[calc(var(--nav-h,72px)+env(safe-area-inset-bottom)+16px)] lg:pb-8">
           {/* Grille principale responsive : flex vertical sur mobile, colonnes sur desktop */}
-          <div className="flex flex-col gap-4 sm:grid sm:grid-cols-3 sm:gap-8 mb-4 items-start">
+          <div className="flex flex-col gap-6 sm:grid sm:grid-cols-3 sm:gap-8 mb-4 items-start">
             
             {/* COLONNE 1 : IDENTITÉ */}
             <div className="space-y-2">
@@ -107,23 +107,23 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateAdmin, onNavigateCGV }
             </div>
 
             {/* COLONNE 2 : CONTACT RAPIDE & RÉSEAUX SOCIAUX */}
-            <div className="space-y-2.5">
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs">
+            <div className="space-y-3 w-full">
+              <div className="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-1.5 sm:gap-x-4 sm:gap-y-1.5 text-xs">
                 <a
                   href="mailto:contact@mgartswork.site"
-                  className="flex items-center gap-1.5 text-gray-400 hover:text-white transition-colors"
+                  className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors min-h-[44px] py-1"
                 >
-                  <Mail className="w-3.5 h-3.5 text-[#DCB8FF]" />
-                  <span>contact@mgartswork.site</span>
+                  <Mail className="w-4 h-4 text-[#DCB8FF] shrink-0" />
+                  <span className="break-all">contact@mgartswork.site</span>
                 </a>
 
                 <a
                   href="https://wa.me/221774587474?text=Bonjour%20Thi%C3%A8sdn%20Billetterie"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 text-gray-400 hover:text-emerald-400 transition-colors"
+                  className="flex items-center gap-2 text-gray-400 hover:text-emerald-400 transition-colors min-h-[44px] py-1"
                 >
-                  <Phone className="w-3.5 h-3.5 text-emerald-400" />
+                  <Phone className="w-4 h-4 text-emerald-400 shrink-0" />
                   <span>+221 77 458 74 74</span>
                 </a>
 
@@ -131,16 +131,16 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateAdmin, onNavigateCGV }
                   href="https://thiesdn.mgartswork.site/"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-gray-400 hover:text-[#E9C349] transition-colors"
+                  className="flex items-center gap-1.5 text-gray-400 hover:text-[#E9C349] transition-colors min-h-[44px] py-1"
                 >
-                  <Globe className="w-3.5 h-3.5 text-[#E9C349]" />
-                  <span>thiesdn.mgartswork.site</span>
-                  <ExternalLink className="w-2.5 h-2.5 text-gray-600" />
+                  <Globe className="w-4 h-4 text-[#E9C349] shrink-0" />
+                  <span className="break-all">thiesdn.mgartswork.site</span>
+                  <ExternalLink className="w-3 h-3 text-gray-600 shrink-0" />
                 </a>
               </div>
 
-              {/* Icônes Réseaux Sociaux alignées horizontalement */}
-              <div className="flex items-center gap-3 pt-0.5">
+              {/* Icônes Réseaux Sociaux alignées avec zones tactiles 44x44px */}
+              <div className="flex items-center gap-2 pt-1 flex-wrap">
                 {socialLinks.map((social) => {
                   const Icon = social.icon;
                   return (
@@ -151,7 +151,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateAdmin, onNavigateCGV }
                       rel="noopener noreferrer"
                       aria-label={social.name}
                       title={social.name}
-                      className={`text-gray-400 transition-all duration-200 hover:scale-110 ${social.hoverColor.replace(/hover:bg-[^\s]+|hover:border-[^\s]+/g, '')}`}
+                      className="w-11 h-11 min-w-[44px] min-h-[44px] rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 flex items-center justify-center text-gray-400 hover:text-white transition-all cursor-pointer"
                     >
                       <Icon className="w-4 h-4" />
                     </a>
