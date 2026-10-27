@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Search,
   Filter,
@@ -124,6 +124,17 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
     perks: '',
   });
   const [newTierError, setNewTierError] = useState<string | null>(null);
+
+  // Verrouillage du défilement du body pendant l'ouverture de la modale plein écran
+  useEffect(() => {
+    if (editingEvent) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [editingEvent]);
 
   // État local du formulaire d'édition
   const [editForm, setEditForm] = useState({
@@ -870,117 +881,122 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
         </div>
       )}
 
-      {/* MODALE D'ÉDITION AVANCÉE (4 ONGLETS) */}
+      {/* MODALE D'ÉDITION AVANCÉE (5 ONGLETS) - PLEIN ÉCRAN RESPONSIVE */}
       {editingEvent && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
-          <div className="relative w-full max-w-3xl bg-[#161616] border border-white/20 rounded-3xl p-5 sm:p-7 space-y-5 shadow-2xl my-6 max-h-[92vh] flex flex-col">
-            {/* Header Fixe */}
-            <div className="flex items-center justify-between border-b border-white/10 pb-4 shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-[#8A2BE2]/20 border border-[#8A2BE2]/40 flex items-center justify-center text-[#DCB8FF] shrink-0">
-                  <Edit3 className="w-5 h-5" />
+        <div className="fixed inset-0 z-50 h-dvh w-full max-w-none rounded-none bg-[#0D0C12] flex flex-col overflow-hidden animate-in fade-in duration-200">
+          <form onSubmit={handleSaveEdit} className="h-full w-full flex flex-col justify-between overflow-hidden">
+            {/* Header & Onglets Sticky Top */}
+            <div className="sticky top-0 z-20 bg-[#14131A] border-b border-white/10 shrink-0 px-4 sm:px-8 py-3.5 shadow-md">
+              <div className="max-w-5xl mx-auto w-full space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-[#8A2BE2]/20 border border-[#8A2BE2]/40 flex items-center justify-center text-[#DCB8FF] shrink-0">
+                      <Edit3 className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h2 className="font-heading text-lg sm:text-xl font-black text-white leading-tight">
+                        Gestion Avancée de l'Événement
+                      </h2>
+                      <p className="text-xs text-gray-400 truncate max-w-xs sm:max-w-md">
+                        {editingEvent.title} • <span className="font-mono text-[10px] text-gray-300">{editingEvent.id}</span>
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEditingEvent(null)}
+                    className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-colors shrink-0"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
-                <div>
-                  <h2 className="font-heading text-lg sm:text-xl font-black text-white leading-tight">
-                    Gestion Avancée de l'Événement
-                  </h2>
-                  <p className="text-xs text-gray-400 truncate max-w-xs sm:max-w-md">
-                    {editingEvent.title} • <span className="font-mono text-[10px] text-gray-300">{editingEvent.id}</span>
-                  </p>
+
+                {/* Barre de 5 Onglets */}
+                <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-black/40 border border-white/10 overflow-x-auto shrink-0 scrollbar-none">
+                  <button
+                    type="button"
+                    onClick={() => setActiveModalTab('details')}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 ${
+                      activeModalTab === 'details'
+                        ? 'bg-[#8A2BE2] text-white shadow-lg shadow-[#8A2BE2]/30'
+                        : 'text-gray-400 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                    <span>Détails & Contenu</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveModalTab('tiers')}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 ${
+                      activeModalTab === 'tiers'
+                        ? 'bg-[#8A2BE2] text-white shadow-lg shadow-[#8A2BE2]/30'
+                        : 'text-gray-400 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    <Ticket className="w-3.5 h-3.5" />
+                    <span>Tarifs & Billetterie</span>
+                    <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/15 font-mono">
+                      {modalTiers.filter((t) => t.isActive !== false).length}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveModalTab('coproducers')}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 ${
+                      activeModalTab === 'coproducers'
+                        ? 'bg-[#8A2BE2] text-white shadow-lg shadow-[#8A2BE2]/30'
+                        : 'text-gray-400 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    <Users className="w-3.5 h-3.5" />
+                    <span>Co-organisateurs</span>
+                    <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/15 font-mono">
+                      {modalCoproducers.length}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveModalTab('stats')}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 ${
+                      activeModalTab === 'stats'
+                        ? 'bg-[#8A2BE2] text-white shadow-lg shadow-[#8A2BE2]/30'
+                        : 'text-gray-400 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    <BarChart3 className="w-3.5 h-3.5" />
+                    <span>Statistiques</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveModalTab('settings')}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 ${
+                      activeModalTab === 'settings'
+                        ? 'bg-[#8A2BE2] text-white shadow-lg shadow-[#8A2BE2]/30'
+                        : 'text-gray-400 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    <Settings className="w-3.5 h-3.5" />
+                    <span>Paramètres</span>
+                  </button>
                 </div>
+
+                {editError && (
+                  <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2 shrink-0">
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                    <span>{editError}</span>
+                  </div>
+                )}
               </div>
-              <button
-                type="button"
-                onClick={() => setEditingEvent(null)}
-                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-colors shrink-0"
-              >
-                <X className="w-4 h-4" />
-              </button>
             </div>
 
-            {/* Barre de 4 Onglets */}
-            <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-black/40 border border-white/10 overflow-x-auto shrink-0 scrollbar-none">
-              <button
-                type="button"
-                onClick={() => setActiveModalTab('details')}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 ${
-                  activeModalTab === 'details'
-                    ? 'bg-[#8A2BE2] text-white shadow-lg shadow-[#8A2BE2]/30'
-                    : 'text-gray-400 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                <FileText className="w-3.5 h-3.5" />
-                <span>Détails & Contenu</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveModalTab('tiers')}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 ${
-                  activeModalTab === 'tiers'
-                    ? 'bg-[#8A2BE2] text-white shadow-lg shadow-[#8A2BE2]/30'
-                    : 'text-gray-400 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                <Ticket className="w-3.5 h-3.5" />
-                <span>Tarifs & Billetterie</span>
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/15 font-mono">
-                  {modalTiers.filter((t) => t.isActive !== false).length}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveModalTab('coproducers')}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 ${
-                  activeModalTab === 'coproducers'
-                    ? 'bg-[#8A2BE2] text-white shadow-lg shadow-[#8A2BE2]/30'
-                    : 'text-gray-400 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                <Users className="w-3.5 h-3.5" />
-                <span>Co-organisateurs</span>
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/15 font-mono">
-                  {modalCoproducers.length}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveModalTab('stats')}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 ${
-                  activeModalTab === 'stats'
-                    ? 'bg-[#8A2BE2] text-white shadow-lg shadow-[#8A2BE2]/30'
-                    : 'text-gray-400 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                <BarChart3 className="w-3.5 h-3.5" />
-                <span>Statistiques</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveModalTab('settings')}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 ${
-                  activeModalTab === 'settings'
-                    ? 'bg-[#8A2BE2] text-white shadow-lg shadow-[#8A2BE2]/30'
-                    : 'text-gray-400 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                <Settings className="w-3.5 h-3.5" />
-                <span>Paramètres</span>
-              </button>
-            </div>
-
-            {editError && (
-              <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2 shrink-0">
-                <AlertTriangle className="w-4 h-4 shrink-0" />
-                <span>{editError}</span>
-              </div>
-            )}
-
-            {/* Corps Scrollable du Formulaire */}
-            <form onSubmit={handleSaveEdit} className="flex-1 overflow-y-auto pr-1 space-y-5">
+            {/* Corps Scrollable du Formulaire (max-w-5xl mx-auto) */}
+            <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-8 w-full">
+              <div className="max-w-5xl mx-auto w-full space-y-6">
               {/* ONGLET 1 : DÉTAILS */}
               {activeModalTab === 'details' && (
                 <div className="space-y-4 animate-in fade-in duration-150">
@@ -2060,8 +2076,12 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                 </div>
               )}
 
-              {/* Actions Footer Fixe */}
-              <div className="flex items-center justify-between gap-3 pt-4 border-t border-white/10 shrink-0">
+              </div>
+            </div>
+
+            {/* Actions Footer Sticky Bottom */}
+            <div className="sticky bottom-0 z-20 bg-[#14131A] border-t border-white/10 shrink-0 px-4 sm:px-8 py-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))] shadow-xl">
+              <div className="max-w-5xl mx-auto w-full flex items-center justify-between gap-3">
                 <button
                   type="button"
                   onClick={() => setEditingEvent(null)}
@@ -2085,8 +2105,8 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                   )}
                 </button>
               </div>
-            </form>
-          </div>
+            </div>
+          </form>
         </div>
       )}
 
