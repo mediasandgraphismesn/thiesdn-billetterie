@@ -23,25 +23,36 @@ export const HomeView: React.FC<HomeViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
 
+  // Liste sécurisée garantie non-nulle
+  const safeEvents = Array.isArray(events) ? events.filter(Boolean) : [];
+
   // Filtrer les événements approuvés
-  const approvedEvents = events.filter((e) => e.status === 'approved');
+  const approvedEvents = safeEvents.filter(
+    (e) => e && String(e.status || '').toLowerCase() === 'approved'
+  );
 
   // Séparation dynamique : un événement n'est considéré "passé" que si maintenant > date_debut + fin_estimée
   // Ainsi les soirées nocturnes qui traversent minuit (ex: KMOU JANGO) restent actives et "En cours" le lendemain matin
   const now = Date.now();
   const activeEvents = approvedEvents.filter((e) => {
-    const end = getEventEndDatetime(e).getTime();
-    return now <= end;
+    try {
+      const end = getEventEndDatetime(e).getTime();
+      return isNaN(end) ? true : now <= end;
+    } catch {
+      return true;
+    }
   });
 
   // Si tous les événements sont passés, afficher approvedEvents en repli pour ne pas avoir une page vide
   const displayPool = activeEvents.length > 0 ? activeEvents : approvedEvents;
 
   const filteredEvents = displayPool.filter((e) => {
-    const matchesSearch =
-      e.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      e.venue.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      e.promoter.name.toLowerCase().includes(searchQuery.toLowerCase());
+    if (!e) return false;
+    const q = (searchQuery || '').toLowerCase();
+    const titleMatch = e.title ? e.title.toLowerCase().includes(q) : false;
+    const venueMatch = e.venue ? e.venue.toLowerCase().includes(q) : false;
+    const promoterMatch = e.promoter?.name ? e.promoter.name.toLowerCase().includes(q) : false;
+    const matchesSearch = !q || titleMatch || venueMatch || promoterMatch;
 
     const matchesCategory =
       selectedCategory === 'All' || e.category === selectedCategory;
@@ -49,7 +60,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
     return matchesSearch && matchesCategory;
   });
 
-  const featuredEvents = displayPool.filter((e) => e.featured);
+  const featuredEvents = displayPool.filter((e) => e && e.featured);
   const upcomingEvents = filteredEvents.slice(0, 8);
 
   return (

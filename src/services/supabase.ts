@@ -5169,7 +5169,7 @@ export const mapDbEventToItem = (db: any): EventItem => {
       role: 'Organisateur & Promoteur Officiel',
     },
     featured: Boolean(db.featured ?? true),
-    status: db.status || 'approved',
+    status: (String(db.status || 'approved').toLowerCase() as EventStatus) || 'approved',
     vipAvailable: true,
     isExclusive: true,
     description: db.description || '',
@@ -5186,7 +5186,7 @@ export const mapDbEventToItem = (db: any): EventItem => {
     estimatedEndTime: db.estimated_end_time || db.estimatedEndTime || undefined,
     promoCode: db.promo_code || db.promoCode || '',
     promoDiscountPercent: db.promo_discount_percent ? Number(db.promo_discount_percent) : (db.promoDiscountPercent ? Number(db.promoDiscountPercent) : undefined),
-    isDeleted: Boolean(db.is_deleted || db.deleted_at || db.status === 'archived' || db.status === 'ARCHIVED'),
+    isDeleted: Boolean(db.is_deleted || db.deleted_at || String(db.status || '').toLowerCase() === 'archived'),
     deletedAt: db.deleted_at || undefined,
     tiers: enrichedTiers,
     createdAt: db.created_at || new Date().toISOString(),
@@ -5229,15 +5229,16 @@ export const fetchEventsFromSupabase = async (
         return { events: [], error: fallback.error.message };
       }
 
-      const mapped = (fallback.data || []).map(mapDbEventToItem);
+      const mapped = (fallback.data || [])
+        .map(mapDbEventToItem)
+        .filter((e): e is EventItem => Boolean(e));
+
       if (options?.publicOnly) {
         return {
-          events: mapped.filter(
-            (e) =>
-              (e.status.toLowerCase() === 'approved') &&
-              !e.deletedAt &&
-              !e.isDeleted
-          ),
+          events: mapped.filter((e) => {
+            const s = String(e.status || '').toLowerCase();
+            return s === 'approved' && !e.deletedAt && !e.isDeleted;
+          }),
           error: null,
         };
       }
@@ -5247,15 +5248,16 @@ export const fetchEventsFromSupabase = async (
       return { events: filtered, error: null };
     }
 
-    const mapped = (data || []).map(mapDbEventToItem);
+    const mapped = (data || [])
+      .map(mapDbEventToItem)
+      .filter((e): e is EventItem => Boolean(e));
+
     if (options?.publicOnly) {
       return {
-        events: mapped.filter(
-          (e) =>
-            (e.status.toLowerCase() === 'approved') &&
-            !e.deletedAt &&
-            !e.isDeleted
-        ),
+        events: mapped.filter((e) => {
+          const s = String(e.status || '').toLowerCase();
+          return s === 'approved' && !e.deletedAt && !e.isDeleted;
+        }),
         error: null,
       };
     }

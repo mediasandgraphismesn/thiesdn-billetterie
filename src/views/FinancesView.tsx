@@ -270,14 +270,16 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
   // ====================================================================
   // CALCULS DU COCKPIT PROMOTEUR
   // ====================================================================
+  const safeEvents = useMemo(() => (Array.isArray(events) ? events.filter(Boolean) : []), [events]);
+
   const promoterEvents = useMemo(() => {
-    if (!events || events.length === 0) return [];
-    if (!promoterName) return events;
-    const filtered = events.filter((e) =>
-      e.promoter.name.toLowerCase().includes(promoterName.toLowerCase())
+    if (safeEvents.length === 0) return [];
+    if (!promoterName) return safeEvents;
+    const filtered = safeEvents.filter((e) =>
+      e.promoter?.name?.toLowerCase().includes(promoterName.toLowerCase())
     );
-    return filtered.length > 0 ? filtered : events;
-  }, [events, promoterName]);
+    return filtered.length > 0 ? filtered : safeEvents;
+  }, [safeEvents, promoterName]);
 
   const activeEvent = useMemo(() => {
     if (selectedEventId === 'all') return promoterEvents[0] || null;
@@ -2633,11 +2635,13 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
             className="bg-[#1C1B1B] border border-white/15 text-white text-xs rounded-xl px-4 py-2.5 outline-none focus:border-[#E9C349] font-bold cursor-pointer"
           >
             <option value="all">Tous les événements</option>
-            {events.map((evt) => {
-              const isArchived = evt.status === 'archived' || evt.status?.toUpperCase() === 'ARCHIVED' || evt.isDeleted || Boolean(evt.deletedAt);
+            {safeEvents.map((evt) => {
+              if (!evt) return null;
+              const statusStr = String(evt.status || '').toLowerCase();
+              const isArchived = statusStr === 'archived' || Boolean(evt.isDeleted) || Boolean(evt.deletedAt);
               return (
                 <option key={evt.id} value={evt.id}>
-                  {isArchived ? `📦 [Archivé] ${evt.title}` : `🎟️ ${evt.title}`}
+                  {isArchived ? `📦 [Archivé] ${evt.title || 'Sans titre'}` : `🎟️ ${evt.title || 'Sans titre'}`}
                 </option>
               );
             })}
@@ -2650,8 +2654,9 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
               {adminTransactions.length} transaction(s) rattachée(s)
             </span>
             {(() => {
-              const cur = events.find((e) => e.id === selectedEventId);
-              const isArchived = cur?.status === 'archived' || cur?.status?.toUpperCase() === 'ARCHIVED' || cur?.isDeleted || Boolean(cur?.deletedAt);
+              const cur = safeEvents.find((e) => e && e.id === selectedEventId);
+              const statusStr = String(cur?.status || '').toLowerCase();
+              const isArchived = statusStr === 'archived' || Boolean(cur?.isDeleted) || Boolean(cur?.deletedAt);
               return isArchived ? (
                 <span className="text-[11px] bg-slate-700/60 text-slate-300 font-bold px-2.5 py-0.5 rounded-full border border-slate-600">
                   📦 Événement Archivé
@@ -2983,8 +2988,9 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <p className="font-semibold text-white truncate max-w-xs">{tx.eventTitle}</p>
                       {(() => {
-                        const cur = events.find((e) => e.id === tx.eventId);
-                        const isArchived = cur?.status === 'archived' || cur?.status?.toUpperCase() === 'ARCHIVED' || cur?.isDeleted || Boolean(cur?.deletedAt);
+                        const cur = safeEvents.find((e) => e && e.id === tx.eventId);
+                        const statusStr = String(cur?.status || '').toLowerCase();
+                        const isArchived = statusStr === 'archived' || Boolean(cur?.isDeleted) || Boolean(cur?.deletedAt);
                         return isArchived ? (
                           <span className="text-[9px] bg-slate-700/60 text-slate-300 font-bold px-1.5 py-0.2 rounded-full border border-slate-600">
                             📦 Archivé

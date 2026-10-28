@@ -84,7 +84,8 @@ export const ModerationView: React.FC<ModerationViewProps> = ({
     refreshOrders();
   }, []);
 
-  const pendingEvents = events.filter((e) => e.status === 'pending');
+  const safeEvents = Array.isArray(events) ? events.filter(Boolean) : [];
+  const pendingEvents = safeEvents.filter((e) => e && String(e.status || '').toLowerCase() === 'pending');
   const signaledOrdersCount = orders.filter((o) => o.status === 'payment_signaled').length;
   const pendingOrdersCount = orders.filter((o) => o.status === 'pending').length;
 
@@ -250,11 +251,13 @@ export const ModerationView: React.FC<ModerationViewProps> = ({
                 className="bg-[#1C1B1B] border border-white/15 text-white text-xs rounded-xl px-3.5 py-2 outline-none focus:border-[#8A2BE2] font-semibold"
               >
                 <option value="all">Tous les événements</option>
-                {events.map((evt) => {
-                  const isArchived = evt.status === 'archived' || evt.status?.toUpperCase() === 'ARCHIVED' || evt.isDeleted || Boolean(evt.deletedAt);
+                {safeEvents.map((evt) => {
+                  if (!evt) return null;
+                  const statusStr = String(evt.status || '').toLowerCase();
+                  const isArchived = statusStr === 'archived' || Boolean(evt.isDeleted) || Boolean(evt.deletedAt);
                   return (
                     <option key={evt.id} value={evt.id}>
-                      {isArchived ? `📦 [Archivé] ${evt.title}` : `🎟️ ${evt.title}`}
+                      {isArchived ? `📦 [Archivé] ${evt.title || 'Sans titre'}` : `🎟️ ${evt.title || 'Sans titre'}`}
                     </option>
                   );
                 })}
@@ -396,8 +399,9 @@ export const ModerationView: React.FC<ModerationViewProps> = ({
                             {order.eventTitle}
                           </h3>
                           {(() => {
-                            const matchedEvt = events.find((e) => e.id === order.eventId);
-                            const isArchived = matchedEvt?.status === 'archived' || matchedEvt?.status?.toUpperCase() === 'ARCHIVED' || matchedEvt?.isDeleted || Boolean(matchedEvt?.deletedAt);
+                            const matchedEvt = safeEvents.find((e) => e && e.id === order.eventId);
+                            const statusStr = String(matchedEvt?.status || '').toLowerCase();
+                            const isArchived = statusStr === 'archived' || Boolean(matchedEvt?.isDeleted) || Boolean(matchedEvt?.deletedAt);
                             return isArchived ? (
                               <span className="text-[10px] bg-slate-700/60 text-slate-300 font-bold px-2 py-0.5 rounded-full border border-slate-600">
                                 📦 Événement Archivé

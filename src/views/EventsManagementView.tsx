@@ -260,43 +260,48 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
     }
   };
 
+  const safeEvents = Array.isArray(events) ? events.filter(Boolean) : [];
+
   // Détection stricte d'un événement archivé ou soft-deleted
-  const isEventArchived = (e: EventItem) =>
-    e.status === 'archived' ||
-    e.status?.toUpperCase() === 'ARCHIVED' ||
-    Boolean(e.isDeleted) ||
-    Boolean(e.deletedAt);
+  const isEventArchived = (e: EventItem) => {
+    if (!e) return false;
+    const s = String(e.status || '').toLowerCase();
+    return s === 'archived' || Boolean(e.isDeleted) || Boolean(e.deletedAt);
+  };
 
   // Filtrage des événements avec routage automatique des événements soft-deleted vers "Archivés"
-  const filteredEvents = events.filter((e) => {
+  const filteredEvents = safeEvents.filter((e) => {
+    if (!e) return false;
+    const s = String(e.status || '').toLowerCase();
+
     if (selectedStatus === 'archived') {
       if (!isEventArchived(e)) return false;
     } else if (selectedStatus === 'approved') {
-      if (isEventArchived(e) || (e.status !== 'approved' && e.status?.toUpperCase() !== 'APPROVED')) return false;
+      if (isEventArchived(e) || s !== 'approved') return false;
     } else if (selectedStatus === 'pending') {
-      if (isEventArchived(e) || (e.status !== 'pending' && e.status?.toUpperCase() !== 'PENDING')) return false;
+      if (isEventArchived(e) || s !== 'pending') return false;
     } else if (selectedStatus === 'rejected') {
-      if (isEventArchived(e) || (e.status !== 'rejected' && e.status?.toUpperCase() !== 'REJECTED')) return false;
+      if (isEventArchived(e) || s !== 'rejected') return false;
     }
 
     if (selectedCategory !== 'All' && e.category !== selectedCategory) return false;
     if (!searchQuery.trim()) return true;
 
     const q = searchQuery.toLowerCase();
-    return (
-      e.title.toLowerCase().includes(q) ||
-      e.city.toLowerCase().includes(q) ||
-      e.venue.toLowerCase().includes(q) ||
-      (e.promoter?.name && e.promoter.name.toLowerCase().includes(q))
-    );
+    const titleMatch = e.title ? e.title.toLowerCase().includes(q) : false;
+    const cityMatch = e.city ? e.city.toLowerCase().includes(q) : false;
+    const venueMatch = e.venue ? e.venue.toLowerCase().includes(q) : false;
+    const promoterMatch = e.promoter?.name ? e.promoter.name.toLowerCase().includes(q) : false;
+
+    return titleMatch || cityMatch || venueMatch || promoterMatch;
   });
 
   // Compteurs alignés sur le Soft Delete
-  const countArchived = events.filter(isEventArchived).length;
-  const countApproved = events.filter((e) => !isEventArchived(e) && (e.status === 'approved' || e.status?.toUpperCase() === 'APPROVED')).length;
-  const countPending = events.filter((e) => !isEventArchived(e) && (e.status === 'pending' || e.status?.toUpperCase() === 'PENDING')).length;
-  const countRejected = events.filter((e) => !isEventArchived(e) && (e.status === 'rejected' || e.status?.toUpperCase() === 'REJECTED')).length;
-  const countAll = events.length;
+  const countArchived = safeEvents.filter(isEventArchived).length;
+  const countApproved = safeEvents.filter((e) => !isEventArchived(e) && String(e.status || '').toLowerCase() === 'approved').length;
+  const countPending = safeEvents.filter((e) => !isEventArchived(e) && String(e.status || '').toLowerCase() === 'pending').length;
+  const countRejected = safeEvents.filter((e) => !isEventArchived(e) && String(e.status || '').toLowerCase() === 'rejected').length;
+  const countAll = safeEvents.length;
 
   // Ouvrir la modale d'édition pré-remplie
   const handleOpenEdit = (event: EventItem) => {

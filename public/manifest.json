@@ -1,0 +1,24 @@
+{
+  "name": "Thiès Days and Nights",
+  "short_name": "Thièsdn",
+  "description": "La billetterie officielle des événements de prestige au Sénégal.",
+  "theme_color": "#0A0A0A",
+  "background_color": "#0A0A0A",
+  "display": "standalone",
+  "orientation": "portrait",
+  "start_url": "/",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/logo-tight.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/logo-tight.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

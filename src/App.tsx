@@ -108,16 +108,19 @@ export default function App() {
   const [user, setUser] = useState<UserProfile>(contextUser || INITIAL_USER);
   const [events, setEvents] = useState<EventItem[]>([]);
 
-  // Catalogue public : Condition stricte (status = 'APPROVED' AND deleted_at IS NULL AND is_deleted = false)
+  // Liste sécurisée garantie non-nulle
+  const safeEvents = useMemo(() => (Array.isArray(events) ? events.filter(Boolean) : []), [events]);
+
+  // Catalogue public sécurisé : Condition stricte (status = 'approved' AND deleted_at IS NULL AND is_deleted = false)
   // Les événements archivés disparaissent ainsi immédiatement de l'accueil et du tunnel d'achat
   const publicEvents = useMemo(() => {
-    return events.filter(
-      (e) =>
-        (e.status.toLowerCase() === 'approved') &&
-        !e.deletedAt &&
-        !e.isDeleted
-    );
-  }, [events]);
+    return safeEvents.filter((e) => {
+      if (!e || typeof e !== 'object') return false;
+      const status = String(e.status || '').toLowerCase();
+      const isArchived = status === 'archived' || Boolean(e.isDeleted) || Boolean(e.deletedAt);
+      return status === 'approved' && !isArchived;
+    });
+  }, [safeEvents]);
   const [isLoadingEvents, setIsLoadingEvents] = useState<boolean>(true);
   const [eventsError, setEventsError] = useState<string | null>(null);
   const [paymentBannerMessage, setPaymentBannerMessage] = useState<string | null>(null);
@@ -324,18 +327,24 @@ export default function App() {
     }
   };
 
-  // Chargement des événements réels depuis Supabase (Source Unique de Vérité)
+  // Chargement des événements réels depuis Supabase (Source Unique de Vérité avec Résilience Totale)
   const refreshEvents = async () => {
-    setIsLoadingEvents(true);
-    setEventsError(null);
-    const { events: dbEvents, error } = await fetchEventsFromSupabase({ includeDeleted: true });
-    if (error) {
-      setEventsError(error);
+    try {
+      setIsLoadingEvents(true);
+      setEventsError(null);
+      const { events: dbEvents, error } = await fetchEventsFromSupabase({ includeDeleted: true });
+      if (error) {
+        console.warn('Erreur Supabase events (mode repli résilient):', error);
+        setEvents([]);
+      } else {
+        setEvents(Array.isArray(dbEvents) ? dbEvents.filter(Boolean) : []);
+      }
+    } catch (err: any) {
+      console.error('Exception lors du chargement des événements:', err);
       setEvents([]);
-    } else {
-      setEvents(dbEvents);
+    } finally {
+      setIsLoadingEvents(false);
     }
-    setIsLoadingEvents(false);
   };
 
   useEffect(() => {
@@ -363,8 +372,13 @@ export default function App() {
     }
 
     if (targetId) {
-      const matched = events.find((e) => e.id === targetId);
+      const matched = safeEvents.find((e) => e && e.id === targetId);
       if (matched) {
+        const status = String(matched.status || '').toLowerCase();
+        const isArchived = status === 'archived' || Boolean(matched.isDeleted) || Boolean(matched.deletedAt);
+        if (isArchived && effectiveRole !== 'admin') {
+          return;
+        }
         setSelectedEventForDetail(matched);
       }
     }
@@ -844,7 +858,7 @@ export default function App() {
               {/* TABLEAU DE BORD SUPER ADMIN DÉDIÉ (Par défaut à la connexion admin) */}
               {(activeTab === 'dashboard' || (activeTab === 'home' && effectiveRole === 'admin')) && effectiveRole === 'admin' && (
                 <AdminDashboard
-                  events={events}
+                  events={safeEvents}
                   tickets={tickets}
                   onNavigateTab={handleTabChange}
                   onApproveEvent={handleApproveEvent}
@@ -906,7 +920,7 @@ export default function App() {
               {/* GESTION COMPLÈTE DES ÉVÉNEMENTS (ADMIN) */}
               {activeTab === 'events_mgmt' && effectiveRole === 'admin' && (
                 <EventsManagementView
-                  events={events}
+                  events={safeEvents}
                   onRefreshEvents={refreshEvents}
                   onNavigateCreate={() => handleTabChange('create')}
                   onPreviewEvent={(evt) => setSelectedEventForDetail(evt)}
@@ -916,7 +930,7 @@ export default function App() {
               {/* MODÉRATION DES ÉVÉNEMENTS */}
               {activeTab === 'moderation' && effectiveRole === 'admin' && (
                 <ModerationView
-                  events={events}
+                  events={safeEvents}
                   onApproveEvent={handleApproveEvent}
                   onRejectEvent={handleRejectEvent}
                   onPreviewEvent={(evt) => setSelectedEventForDetail(evt)}
@@ -977,7 +991,7 @@ export default function App() {
               {activeTab === 'checkin' && effectiveRole === 'admin' && (
                 <CheckInScannerView
                   tickets={tickets}
-                  events={events}
+                  events={safeEvents}
                   onValidateTicket={handleValidateTicket}
                 />
               )}
@@ -985,7 +999,7 @@ export default function App() {
               {activeTab === 'finances' && (effectiveRole === 'promoter' || effectiveRole === 'admin') && (
                 <FinancesView
                   currentRole={effectiveRole}
-                  events={events}
+                  events={safeEvents}
                   promoterName={user.name}
                 />
               )}

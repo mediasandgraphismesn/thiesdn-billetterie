@@ -32,16 +32,21 @@ export const ExploreView: React.FC<ExploreViewProps> = ({
   const [selectedSort, setSelectedSort] = useState<'date' | 'price-asc' | 'price-desc'>('date');
   const [viewMode, setViewMode] = useState<'grid' | 'map'>('grid');
 
-  const approvedEvents = events.filter((e) => e.status === 'approved');
+  const safeEvents = Array.isArray(events) ? events.filter(Boolean) : [];
+  const approvedEvents = safeEvents.filter(
+    (e) => e && String(e.status || '').toLowerCase() === 'approved'
+  );
 
   const filteredEvents = approvedEvents
     .filter((e) => {
-      const matchesSearch =
-        e.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        e.venue.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        e.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (e.quartier && e.quartier.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        e.promoter.name.toLowerCase().includes(searchQuery.toLowerCase());
+      if (!e) return false;
+      const q = (searchQuery || '').toLowerCase();
+      const titleMatch = e.title ? e.title.toLowerCase().includes(q) : false;
+      const venueMatch = e.venue ? e.venue.toLowerCase().includes(q) : false;
+      const cityMatch = e.city ? e.city.toLowerCase().includes(q) : false;
+      const quartierMatch = e.quartier ? e.quartier.toLowerCase().includes(q) : false;
+      const promoterMatch = e.promoter?.name ? e.promoter.name.toLowerCase().includes(q) : false;
+      const matchesSearch = !q || titleMatch || venueMatch || cityMatch || quartierMatch || promoterMatch;
 
       const matchesCity = selectedCity === 'All' || e.city === selectedCity;
       const matchesQuartier =
@@ -51,10 +56,12 @@ export const ExploreView: React.FC<ExploreViewProps> = ({
       return matchesSearch && matchesCity && matchesQuartier && matchesCat;
     })
     .sort((a, b) => {
-      if (selectedSort === 'price-asc') return a.price - b.price;
-      if (selectedSort === 'price-desc') return b.price - a.price;
-      const timeA = a.datetimeIso ? new Date(a.datetimeIso).getTime() : 0;
-      const timeB = b.datetimeIso ? new Date(b.datetimeIso).getTime() : 0;
+      const priceA = Number(a?.price) || 0;
+      const priceB = Number(b?.price) || 0;
+      if (selectedSort === 'price-asc') return priceA - priceB;
+      if (selectedSort === 'price-desc') return priceB - priceA;
+      const timeA = a?.datetimeIso ? new Date(a.datetimeIso).getTime() : 0;
+      const timeB = b?.datetimeIso ? new Date(b.datetimeIso).getTime() : 0;
       return (isNaN(timeA) ? 0 : timeA) - (isNaN(timeB) ? 0 : timeB);
     });
 
