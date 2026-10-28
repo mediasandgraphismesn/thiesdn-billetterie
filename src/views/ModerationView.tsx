@@ -140,10 +140,15 @@ export const ModerationView: React.FC<ModerationViewProps> = ({
           onTicketsCreated(res.tickets);
         }
         const supabase = getSupabaseClient();
-        if (supabase) {
-          await supabase.functions.invoke('send-order-confirmation', {
-            body: { orderId: order.id },
-          });
+        const clientEmail = (order as any).customerEmail || (order as any).customer_email;
+        if (supabase && clientEmail && clientEmail.includes('@')) {
+          try {
+            await supabase.functions.invoke('send-order-confirmation', {
+              body: { orderId: order.id },
+            });
+          } catch (emailErr) {
+            console.warn('Envoi email Resend non bloquant ignoré:', emailErr);
+          }
         }
         fetchFailedEmailsCountLast7Days().then(setFailedEmailsCount);
         setToastMessage(`Paiement validé pour ${order.customerName} : ${order.quantity} billet(s) émis.`);
@@ -417,9 +422,35 @@ export const ModerationView: React.FC<ModerationViewProps> = ({
                         )}
 
                         {isConfirmed && (
-                          <span className="text-xs text-emerald-400 font-bold flex items-center gap-1">
-                            <CheckCircle2 className="w-4 h-4" /> Billets délivrés
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-emerald-400 font-bold flex items-center gap-1">
+                              <CheckCircle2 className="w-4 h-4" /> Billets délivrés
+                            </span>
+                            {(() => {
+                              const cleanPhone = order.customerPhone ? order.customerPhone.replace(/[^0-9]/g, '') : '';
+                              if (!cleanPhone) return null;
+                              const waPhone = cleanPhone.startsWith('221') ? cleanPhone : `221${cleanPhone}`;
+                              const origin = typeof window !== 'undefined' ? window.location.origin : 'https://billetterie.thiesdn.site';
+                              const ticketUrl = `${origin}/?ref=${order.reference}#tickets`;
+                              const waText = encodeURIComponent(
+                                `Bonjour ${order.customerName} ! Votre commande pour "${order.eventTitle}" (${order.tierName}) a été validée avec succès par Thièsdn Billetterie.\n\n` +
+                                `🎫 Référence : ${order.reference}\n` +
+                                `🎟️ Vos billets officiels sont accessibles ici : ${ticketUrl}\n\n` +
+                                `Présentez votre QR Code à l'entrée de l'événement. Bon spectacle !`
+                              );
+                              return (
+                                <a
+                                  href={`https://wa.me/${waPhone}?text=${waText}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-2.5 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1 transition-all"
+                                  title="Envoyer le lien des billets par WhatsApp"
+                                >
+                                  <span>💬 WhatsApp</span>
+                                </a>
+                              );
+                            })()}
+                          </div>
                         )}
                       </div>
                     </div>

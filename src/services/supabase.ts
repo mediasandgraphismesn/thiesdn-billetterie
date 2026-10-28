@@ -3789,62 +3789,126 @@ export const confirmManualOrderAtomic = async (
   order.confirmedBy = adminId || 'admin-thiesdn';
   saveOrderRecord(order);
 
-  // Génération des billets pour chaque place payée
-  const newTickets: UserTicket[] = [];
+  // Idempotence & Récupération préalable des billets Supabase pour cette commande
+  let newTickets: UserTicket[] = [];
   const basePricePerTicket = order.unitPrice;
   const split = calculateCommissionSplit(order.unitPrice * order.quantity);
 
-  for (let i = 1; i <= order.quantity; i++) {
-    const tktId = `tkt-thiesdn-${Date.now().toString().slice(-6)}-${i}`;
-    const qrCode = `THIESDN-${order.reference}-${i}`;
+  if (client) {
+    try {
+      const { data: existingRows, error: fetchErr } = await client
+        .from('tickets')
+        .select('*')
+        .eq('order_id', order.id);
 
-    const newTicket: UserTicket = {
-      id: tktId,
-      eventId: order.eventId,
-      eventTitle: order.eventTitle,
-      eventPoster: eventFallback?.posterUrl || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800',
-      eventDate: eventFallback?.date || 'Date de l\'événement',
-      eventTime: eventFallback?.time || '21:00',
-      eventVenue: eventFallback?.venue || 'Thiès / Petite Côte',
-      tierName: order.tierName,
-      price: basePricePerTicket,
-      qrCode,
-      seatNumber: `Place ${i}/${order.quantity}`,
-      holderName: order.customerName,
-      holderPhone: order.customerPhone,
-      purchasedAt: new Date().toISOString(),
-      status: 'valid',
-    };
-    newTickets.push(newTicket);
-
-    // Insertion directe dans la table tickets Supabase
-    if (client) {
-      Promise.resolve(
-        client
-          .from('tickets')
-          .insert({
-            event_id: order.eventId,
-            user_id: order.userId || null,
-            order_id: order.id,
-            tier_name: order.tierName,
-            price: basePricePerTicket,
-            qr_code: qrCode,
-            holder_name: order.customerName,
-            holder_phone: order.customerPhone || null,
-            status: 'valid',
-          })
-      )
-        .then((res: any) => {
-          if (res?.error) console.warn('Erreur insertion billet Supabase:', res.error.message);
-        })
-        .catch((e: any) => console.warn('Supabase insert ticket catch:', e));
+      if (!fetchErr && existingRows && existingRows.length > 0) {
+        newTickets = existingRows.map((row: any, idx: number) => ({
+          id: row.id || `tkt-thiesdn-${order.id.slice(0, 8)}-${idx + 1}`,
+          eventId: row.event_id || order.eventId,
+          eventTitle: row.event_title || order.eventTitle,
+          eventPoster: row.event_poster || eventFallback?.posterUrl || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800',
+          eventDate: row.event_date || eventFallback?.date || 'Date de l\'événement',
+          eventTime: row.event_time || eventFallback?.time || '21:00',
+          eventVenue: row.event_venue || eventFallback?.venue || 'Thiès / Petite Côte',
+          tierName: row.tier_name || order.tierName,
+          price: Number(row.price) || basePricePerTicket,
+          qrCode: row.qr_code,
+          seatNumber: `Place ${idx + 1}/${existingRows.length}`,
+          holderName: row.holder_name || order.customerName,
+          holderPhone: row.holder_phone || order.customerPhone,
+          purchasedAt: row.created_at || new Date().toISOString(),
+          status: (row.status as any) || 'valid',
+        }));
+      }
+    } catch (checkErr) {
+      console.warn('Erreur vérification billets existants:', checkErr);
     }
   }
 
-  // Persistance des billets
+  // Si aucun billet n'existe encore pour cette commande, générer des QR codes uniques
+  if (newTickets.length === 0) {
+    const safeOrderId = order.id ? order.id.slice(0, 8) : order.reference.slice(0, 8);
+    const rowsToInsert: any[] = [];
+
+    for (let i = 1; i <= (order.quantity || 1); i++) {
+      const uniqueUuid = typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID().slice(0, 12)
+        : Math.random().toString(36).substring(2, 10);
+      const uniqueQrCode = `TKT-${safeOrderId}-${i}-${uniqueUuid}`;
+      const tktId = `tkt-thiesdn-${safeOrderId}-${i}-${Date.now().toString().slice(-4)}`;
+
+      const newTicket: UserTicket = {
+        id: tktId,
+        eventId: order.eventId,
+        eventTitle: order.eventTitle,
+        eventPoster: eventFallback?.posterUrl || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800',
+        eventDate: eventFallback?.date || 'Date de l\'événement',
+        eventTime: eventFallback?.time || '21:00',
+        eventVenue: eventFallback?.venue || 'Thiès / Petite Côte',
+        tierName: order.tierName,
+        price: basePricePerTicket,
+        qrCode: uniqueQrCode,
+        seatNumber: `Place ${i}/${order.quantity || 1}`,
+        holderName: order.customerName,
+        holderPhone: order.customerPhone,
+        purchasedAt: new Date().toISOString(),
+        status: 'valid',
+      };
+      newTickets.push(newTicket);
+
+      rowsToInsert.push({
+        event_id: order.eventId,
+        user_id: order.userId || null,
+        order_id: order.id,
+        tier_name: order.tierName,
+        price: basePricePerTicket,
+        qr_code: uniqueQrCode,
+        holder_name: order.customerName,
+        holder_phone: order.customerPhone || null,
+        status: 'valid',
+      });
+    }
+
+    if (client && rowsToInsert.length > 0) {
+      try {
+        const { data: insertedRows, error: insertError } = await client
+          .from('tickets')
+          .insert(rowsToInsert)
+          .select();
+
+        if (insertError) {
+          console.warn('Erreur insertion billets Supabase:', insertError.message);
+        } else if (insertedRows && insertedRows.length > 0) {
+          // Utiliser les IDs réels générés par Supabase
+          newTickets = insertedRows.map((row: any, idx: number) => ({
+            id: row.id,
+            eventId: row.event_id || order.eventId,
+            eventTitle: order.eventTitle,
+            eventPoster: eventFallback?.posterUrl || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800',
+            eventDate: eventFallback?.date || 'Date de l\'événement',
+            eventTime: eventFallback?.time || '21:00',
+            eventVenue: eventFallback?.venue || 'Thiès / Petite Côte',
+            tierName: row.tier_name || order.tierName,
+            price: Number(row.price) || basePricePerTicket,
+            qrCode: row.qr_code,
+            seatNumber: `Place ${idx + 1}/${insertedRows.length}`,
+            holderName: row.holder_name || order.customerName,
+            holderPhone: row.holder_phone || order.customerPhone,
+            purchasedAt: row.created_at || new Date().toISOString(),
+            status: (row.status as any) || 'valid',
+          }));
+        }
+      } catch (err: any) {
+        console.warn('Exception insertion billets Supabase:', err.message);
+      }
+    }
+  }
+
+  // Persistance locale des billets
   const currentTickets = getStoredTickets();
-  const updatedTickets = [...newTickets, ...currentTickets];
-  saveStoredTickets(updatedTickets);
+  const existingIds = new Set(currentTickets.map((t) => t.id));
+  const trulyNew = newTickets.filter((t) => !existingIds.has(t.id));
+  saveStoredTickets([...trulyNew, ...currentTickets]);
 
   // Enregistrement de la transaction financière (Comptabilité Option 3)
   saveTransaction({
@@ -5717,6 +5781,67 @@ export const scanTicketWithSupabase = async (
     };
   } catch (err: any) {
     return { success: false, message: err.message || 'Erreur lors du scan du billet.' };
+  }
+};
+
+
+/**
+ * Récupération de TOUS les billets de la table tickets pour l'administration
+ */
+export const fetchAllSoldTicketsFromSupabase = async (): Promise<{ tickets: UserTicket[]; error: string | null }> => {
+  const client = getSupabaseClient();
+  if (!client) {
+    return { tickets: getStoredTickets(), error: null };
+  }
+
+  try {
+    const { data, error } = await client
+      .from('tickets')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.warn('Erreur fetchAllSoldTicketsFromSupabase:', error.message);
+      return { tickets: getStoredTickets(), error: error.message };
+    }
+
+    const mapped: UserTicket[] = (data || []).map((t: any) => ({
+      id: t.id,
+      eventId: t.event_id,
+      eventTitle: t.event_title || 'Événement Thièsdn',
+      eventPoster: t.event_poster || 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=1200&auto=format&fit=crop',
+      eventDate: t.event_date || 'Date à confirmer',
+      eventTime: t.event_time || '20:00',
+      eventVenue: t.event_venue || 'Thiès, Sénégal',
+      tierName: t.tier_name || 'Standard',
+      price: Number(t.price) || 0,
+      qrCode: t.qr_code,
+      seatNumber: t.seat_number,
+      holderName: t.holder_name || 'Nom non renseigné',
+      holderPhone: t.holder_phone || undefined,
+      holderEmail: t.holder_email || undefined,
+      holderAvatar: t.assigned_to_avatar || undefined,
+      purchasedAt: t.created_at || new Date().toISOString(),
+      status: t.status || 'valid',
+      isPhysical: Boolean(t.is_physical),
+      agentId: t.agent_id || undefined,
+      agentName: t.agent_name || undefined,
+      userId: t.user_id,
+      assignedToProfileId: t.assigned_to_profile_id || undefined,
+      assignedToName: t.assigned_to_name || undefined,
+      assignedToPhone: t.assigned_to_phone || undefined,
+      assignedToEmail: t.assigned_to_email || undefined,
+      assignedToAvatar: t.assigned_to_avatar || undefined,
+      assignmentStatus: t.assignment_status || 'unassigned',
+      assignedAt: t.assigned_at || undefined,
+      claimedAt: t.claimed_at || undefined,
+      claimToken: t.claim_token || undefined,
+    }));
+
+    return { tickets: mapped, error: null };
+  } catch (err: any) {
+    console.warn('Exception fetchAllSoldTicketsFromSupabase:', err);
+    return { tickets: getStoredTickets(), error: err.message };
   }
 };
 

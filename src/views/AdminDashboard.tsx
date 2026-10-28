@@ -33,6 +33,9 @@ import {
 } from '../services/supabase';
 import { StatsCard } from '../components/admin/StatsCard';
 import { OrdersTable } from '../components/admin/OrdersTable';
+import { SoldTicketsSection } from '../components/admin/SoldTicketsSection';
+import { fetchAllSoldTicketsFromSupabase } from '../services/supabase';
+import { TicketPassModal } from '../components/TicketPassModal';
 
 interface AdminDashboardProps {
   events: EventItem[];
@@ -63,6 +66,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [actionErrorToast, setActionErrorToast] = useState<string | null>(null);
   const [processingOrderId, setProcessingOrderId] = useState<string | null>(null);
   const [failedEmailsCount, setFailedEmailsCount] = useState<number>(0);
+  const [soldTickets, setSoldTickets] = useState<UserTicket[]>(tickets || []);
+  const [selectedTicketForPass, setSelectedTicketForPass] = useState<UserTicket | null>(null);
 
   /**
    * Chargement direct de TOUTES les données réelles depuis Supabase
@@ -76,12 +81,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setActionErrorToast(null);
 
     try {
-      const [{ orders: dbOrders, error: ordersErr }, { events: dbEvents, error: eventsErr }, { profiles: dbProfiles }] =
-        await Promise.all([
-          fetchOrdersFromSupabase(),
-          fetchEventsFromSupabase(),
-          fetchAllProfilesFromSupabase(),
-        ]);
+      const [
+        { orders: dbOrders, error: ordersErr },
+        { events: dbEvents, error: eventsErr },
+        { profiles: dbProfiles },
+        { tickets: dbTickets, error: ticketsErr },
+      ] = await Promise.all([
+        fetchOrdersFromSupabase(),
+        fetchEventsFromSupabase(),
+        fetchAllProfilesFromSupabase(),
+        fetchAllSoldTicketsFromSupabase(),
+      ]);
+
+      if (ticketsErr) {
+        console.warn('Sold tickets fetch warning:', ticketsErr);
+      }
+      if (dbTickets && dbTickets.length > 0) {
+        setSoldTickets(dbTickets);
+      }
 
       if (ordersErr) {
         console.warn('Orders fetch warning, repli sur le cache local :', ordersErr);
@@ -113,6 +130,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   }, [propEvents]);
 
+  // Synchronisation si les billets changent
+  useEffect(() => {
+    if (tickets && tickets.length > 0) {
+      setSoldTickets((prev) => {
+        const existingIds = new Set(prev.map((t) => t.id));
+        const additions = tickets.filter((t) => !existingIds.has(t.id));
+        return additions.length > 0 ? [...additions, ...prev] : prev;
+      });
+    }
+  }, [tickets]);
+
   // Statistiques en temps réel calculées sur la totalité des données
   const approvedEventsCount = events.filter((e) => e.status === 'approved').length;
   const pendingEvents = events.filter((e) => e.status === 'pending');
@@ -143,15 +171,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         if (onTicketsCreated) {
           onTicketsCreated(result.tickets);
         }
+        setSoldTickets((prev) => [...result.tickets!, ...prev]);
         setOrders((prev) =>
           prev.map((o) => (o.id === order.id ? { ...o, status: 'confirmed' } : o))
         );
         setActionSuccessToast(`Paiement de ${order.customerName} validé ! ${result.tickets.length} billet(s) émis.`);
         const supabase = getSupabaseClient();
-        if (supabase) {
-          await supabase.functions.invoke('send-order-confirmation', {
-            body: { orderId: order.id },
-          });
+        const clientEmail = (order as any).customerEmail || (order as any).customer_email;
+        if (supabase && clientEmail && clientEmail.includes('@')) {
+          try {
+            await supabase.functions.invoke('send-order-confirmation', {
+              body: { orderId: order.id },
+            });
+          } catch (emailErr) {
+            console.warn('Envoi email Resend non bloquant ignoré:', emailErr);
+          }
         }
         fetchFailedEmailsCountLast7Days().then(setFailedEmailsCount);
         setTimeout(() => setActionSuccessToast(null), 4000);
@@ -436,6 +470,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           processingOrderId={processingOrderId}
         />
       </section>
+
+      {/* SECTION BILLETS VENDUS & ÉMIS AVEC QR CODES BRANDÉS */}
+      <SoldTicketsSection
+        tickets={soldTickets}
+        isLoading={isLoading}
+        onOpenTicketModal={(tkt) => setSelectedTicketForPass(tkt)}
+      />
+
+      {/* Modale d'inspection et téléchargement direct du Pass HD */}
+      <TicketPassModal
+        ticket={selectedTicketForPass}
+        isOpen={selectedTicketForPass !== null}
+        onClose={() => setSelectedTicketForPass(null)}
+      />
 
       {/* SECTION SECONDAIRE : ÉVÉNEMENTS EN ATTENTE DE MODÉRATION */}
       {pendingEvents.length > 0 && (
