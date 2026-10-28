@@ -192,6 +192,9 @@ export default function App() {
       if (orderRef) {
         setActiveTab('tickets');
         setOrderFilter(orderRef.trim());
+        if (typeof window !== 'undefined') {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
         if (orderToken) {
           setHasGuestOrderToken(true);
           fetchOrderTicketsByToken(orderRef.trim(), orderToken.trim()).then((res) => {
@@ -205,11 +208,17 @@ export default function App() {
       if (urlParams.get('payment') === 'success') {
         setPaymentBannerMessage('Paiement Wave initié ! Votre pass est en cours de validation.');
         setActiveTab('tickets');
+        if (typeof window !== 'undefined') {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
         urlParams.delete('payment');
         const newSearch = urlParams.toString() ? `?${urlParams.toString()}` : '';
         window.history.replaceState(null, '', `${window.location.pathname}${newSearch}`);
       } else if (urlParams.get('payment') === 'error') {
         setPaymentBannerMessage('Le paiement Wave a été interrompu ou n’a pas abouti.');
+        if (typeof window !== 'undefined') {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
         urlParams.delete('payment');
         const newSearch = urlParams.toString() ? `?${urlParams.toString()}` : '';
         window.history.replaceState(null, '', `${window.location.pathname}${newSearch}`);

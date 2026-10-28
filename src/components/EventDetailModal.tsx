@@ -31,6 +31,7 @@ import {
   Send,
   Copy,
   Lock,
+  ArrowLeft,
 } from 'lucide-react';
 import { EventItem, TicketTier, UserTicket, OrderRecord } from '../types';
 import { getOptimizedImageUrl } from '../utils/imageOptimizer';
@@ -39,6 +40,7 @@ import {
   registerEventPreRegistration,
   getSupabaseClient,
   ensureGuestOrUserSession,
+  signalOrderPayment,
 } from '../services/supabase';
 import { TurnstileGate, type TurnstileGateHandle } from './TurnstileGate';
 import { CountdownTimer } from './CountdownTimer';
@@ -91,9 +93,17 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
   const [step, setStep] = useState<'select' | 'confirmation'>('select');
   const [selectedTier, setSelectedTier] = useState<TicketTier>(defaultTier);
   const [quantity, setQuantity] = useState(1);
-  const [customerName, setCustomerName] = useState(userName || 'Client Thièsdn');
-  const [phoneNumber, setPhoneNumber] = useState('77 000 00 00');
-  const [customerEmail, setCustomerEmail] = useState(userEmail || '');
+  // Guest Checkout : champs strictement vides par défaut si non connecté
+  const [customerName, setCustomerName] = useState(
+    isAuthenticated && userName && userName.trim().toLowerCase() !== 'utilisateur' ? userName : ''
+  );
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [customerEmail, setCustomerEmail] = useState(
+    isAuthenticated && userEmail ? userEmail : ''
+  );
+  const [isSignalingPayment, setIsSignalingPayment] = useState(false);
+  const [paymentSignaledSuccess, setPaymentSignaledSuccess] = useState(false);
+  const modalScrollRef = useRef<HTMLDivElement | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -145,6 +155,61 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
       active = false;
     };
   }, [isAuthenticated, event.id]);
+
+  // Synchronisation des coordonnées utilisateur si authentifié
+  useEffect(() => {
+    if (isAuthenticated) {
+      if (userName && userName.trim().toLowerCase() !== 'utilisateur') {
+        setCustomerName((prev) => (prev ? prev : userName));
+      }
+      if (userEmail) {
+        setCustomerEmail((prev) => (prev ? prev : userEmail));
+      }
+    }
+  }, [isAuthenticated, userName, userEmail]);
+
+  // Scroll automatique en haut lors du passage à l'étape de confirmation (Problème 3)
+  useEffect(() => {
+    if (step === 'confirmation') {
+      if (typeof window !== 'undefined') {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+      if (modalScrollRef.current) {
+        modalScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }
+  }, [step]);
+
+  // Fermeture de la modale avec scroll automatique en haut
+  const handleCloseModal = () => {
+    onClose();
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  // Signalement immédiat du paiement Wave (Problème 2)
+  const handleSignalTransfer = async () => {
+    if (!activeOrder) return;
+    setIsSignalingPayment(true);
+    try {
+      const res = await signalOrderPayment(activeOrder.id, activeOrder.reference);
+      if (res.success && res.order) {
+        setActiveOrder(res.order);
+        setPaymentSignaledSuccess(true);
+      }
+    } catch (e: any) {
+      console.warn('Erreur signalement transfert:', e);
+    } finally {
+      setIsSignalingPayment(false);
+    }
+  };
+
+  // Validation obligatoire : Nom complet + (Téléphone OU Email) (Problème 1)
+  const isCustomerNameFilled = customerName.trim().length >= 2;
+  const isPhoneFilled = phoneNumber.trim().replace(/\s/g, '').length >= 7;
+  const isEmailFilled = customerEmail.trim().length >= 5 && customerEmail.includes('@') && customerEmail.includes('.');
+  const isContactInfoValid = isCustomerNameFilled && (isPhoneFilled || isEmailFilled);
 
   // Gestion des Codes Promo & Remises
   const [promoInput, setPromoInput] = useState('');
@@ -426,13 +491,13 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.2 }}
-        className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto"
+        className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto"
       >
         <motion.div
           initial={{ opacity: 0, y: 35, scale: 0.96 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-          className="relative w-full h-full sm:h-auto sm:max-h-[90dvh] max-w-2xl bg-[#0A0A0A] border-0 sm:border sm:border-white/10 rounded-none sm:rounded-3xl overflow-hidden shadow-2xl my-0 sm:my-8 flex flex-col pt-[env(safe-area-inset-top)]"
+          className="relative w-full max-h-[90dvh] max-w-2xl bg-[#0A0A0A] border border-white/10 rounded-3xl overflow-hidden shadow-2xl flex flex-col"
         >
           {/* Poster Header */}
           <div className="relative h-48 sm:h-56 w-full flex-shrink-0">
@@ -520,7 +585,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
           </div>
 
           {/* Scrollable Content Body */}
-          <div className="p-4 sm:p-6 overflow-y-auto space-y-5 sm:space-y-6 flex-1">
+          <div ref={modalScrollRef} className="p-4 sm:p-6 overflow-y-auto space-y-5 sm:space-y-6 flex-1">
             {errorMessage && (
               <div className="p-3.5 rounded-2xl bg-rose-950/60 border border-rose-500/40 text-rose-300 text-xs flex items-center gap-2.5">
                 <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
@@ -936,21 +1001,23 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="bg-[#1C1B1B] p-3.5 rounded-2xl border border-white/5">
-                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
-                            Nom complet du participant
+                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1 flex items-center justify-between">
+                            <span>Nom complet du participant</span>
+                            <span className="text-[#E9C349] font-bold text-[9px]">* Requis</span>
                           </label>
                           <input
                             type="text"
                             value={customerName}
                             onChange={(e) => setCustomerName(e.target.value)}
-                            placeholder="Ex: Babacar Ndiaye"
+                            placeholder="Votre nom complet"
                             className="bg-transparent border-none outline-none text-white text-xs w-full p-0 font-medium"
                           />
                         </div>
 
                         <div className="bg-[#1C1B1B] p-3.5 rounded-2xl border border-white/5">
-                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
-                            Numéro Mobile Wave
+                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1 flex items-center justify-between">
+                            <span>Numéro Mobile Wave</span>
+                            <span className="text-gray-400 text-[9px]">Tél. ou Email</span>
                           </label>
                           <div className="flex items-center gap-2">
                             <span className="text-xs font-bold text-[#1DC3F4] tracking-wider">+221</span>
@@ -958,23 +1025,24 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                               type="tel"
                               value={phoneNumber}
                               onChange={(e) => setPhoneNumber(e.target.value)}
-                              placeholder="77 000 00 00"
+                              placeholder="Numéro Wave (ex: 77 123 45 67)"
                               className="bg-transparent border-none outline-none text-white text-xs font-mono w-full p-0"
                             />
                           </div>
                         </div>
                       </div>
 
-                      {/* Code Promo */}
+                      {/* Email pour recevoir le billet */}
                       <div className="bg-[#1C1B1B] p-3.5 rounded-2xl border border-white/5">
-                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
-                          Email (pour recevoir votre billet)
+                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1 flex items-center justify-between">
+                          <span>Email (pour recevoir votre billet)</span>
+                          <span className="text-gray-400 text-[9px]">Tél. ou Email</span>
                         </label>
                         <input
                           type="email"
                           value={customerEmail}
                           onChange={(e) => setCustomerEmail(e.target.value)}
-                          placeholder="votre@email.com"
+                          placeholder="votre@email.com (recommandé pour sauvegarder vos billets)"
                           className="bg-transparent border-none outline-none text-white text-xs w-full p-0 font-medium"
                         />
                       </div>
@@ -1034,14 +1102,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                         )}
                       </div>
 
-                      {!isAuthenticated && !hasVerifiedSession && (
-                        <div className="pt-1 w-full max-w-full overflow-hidden">
-                          <TurnstileGate
-                            ref={turnstileRef}
-                            onTokenChange={setCaptchaToken}
-                          />
-                        </div>
-                      )}
+
                     </div>
                   </>
                 )}
@@ -1174,19 +1235,52 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                   </div>
                 )}
 
-                {/* Boutons d'Action Post-Achat : message d'attente pour pending, bouton direct pour confirmed */}
+                {/* Boutons d'Action Post-Achat : bouton de signalement, message d'attente, retour billetterie */}
                 <div className="max-w-md mx-auto pt-1 space-y-2.5">
-                  {activeOrder && (activeOrder.status === 'pending' || (activeOrder.status as string) === 'payment_signaled') ? (
+                  {activeOrder && activeOrder.status === 'pending' && !paymentSignaledSuccess ? (
+                    <button
+                      type="button"
+                      onClick={handleSignalTransfer}
+                      disabled={isSignalingPayment}
+                      className="w-full py-3.5 px-5 rounded-2xl font-heading font-extrabold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-2.5 transition-all shadow-lg bg-[#1DC3F4] hover:bg-[#1bb3e0] text-[#07131D] shadow-[#1DC3F4]/20 active:scale-95 disabled:opacity-50 cursor-pointer"
+                    >
+                      {isSignalingPayment ? (
+                        <div className="flex items-center gap-2">
+                          <span className="w-4 h-4 border-2 border-[#07131D] border-t-transparent rounded-full animate-spin" />
+                          <span>Signalement en cours...</span>
+                        </div>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>J'ai effectué le transfert Wave</span>
+                        </>
+                      )}
+                    </button>
+                  ) : null}
+
+                  {activeOrder && (activeOrder.status === 'payment_signaled' || paymentSignaledSuccess) ? (
+                    <div className="p-4 rounded-2xl bg-emerald-950/40 border border-emerald-500/40 text-center space-y-2 animate-in fade-in">
+                      <div className="flex items-center justify-center gap-2 text-emerald-400 font-bold text-xs uppercase tracking-wider">
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>Transfert signalé avec succès</span>
+                      </div>
+                      <p className="text-xs text-emerald-200/90 leading-relaxed">
+                        ⏳ Votre paiement a été signalé à l'équipe. Votre pass sera activé dès la confirmation de réception.
+                      </p>
+                    </div>
+                  ) : activeOrder && activeOrder.status === 'pending' ? (
                     <div className="p-4 rounded-2xl bg-amber-950/40 border border-[#E9C349]/40 text-center space-y-2">
                       <div className="flex items-center justify-center gap-2 text-[#E9C349] font-bold text-xs uppercase tracking-wider">
                         <Clock className="w-4 h-4 animate-pulse" />
-                        <span>Paiement en cours de vérification</span>
+                        <span>En attente de votre transfert</span>
                       </div>
                       <p className="text-xs text-gray-300 leading-relaxed">
-                        ⏳ Paiement en cours de vérification. Votre billet sera disponible après validation par l'administrateur.
+                        Cliquez sur <strong>« J'ai effectué le transfert Wave »</strong> dès que vous avez envoyé les fonds pour accélérer la validation.
                       </p>
                     </div>
-                  ) : activeOrder?.status === 'confirmed' ? (
+                  ) : null}
+
+                  {activeOrder?.status === 'confirmed' ? (
                     <button
                       type="button"
                       onClick={() => {
@@ -1273,46 +1367,72 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                       </div>
                     </div>
 
-                    <div className="w-full sm:flex-1 sm:max-w-sm flex flex-col items-stretch sm:items-end gap-1">
+                    <div className="w-full sm:flex-1 sm:max-w-md flex flex-col items-stretch sm:items-end gap-1.5">
+                      {/* CAPTCHA Turnstile positionné JUSTE AU-DESSUS du bouton de soumission avec mb-4 (Problème 4) */}
+                      {!isAuthenticated && !hasVerifiedSession && (
+                        <div className="w-full max-w-full overflow-hidden mb-4">
+                          <TurnstileGate
+                            ref={turnstileRef}
+                            onTokenChange={setCaptchaToken}
+                          />
+                        </div>
+                      )}
+
                       {(() => {
                         const currentWaveUrl = resolveWaveUrl(selectedTier);
                         const isWaveConfigured = Boolean(currentWaveUrl && currentWaveUrl.startsWith('http'));
                         const requiresCaptcha = Boolean(getSupabaseClient()) && !isAuthenticated && !hasVerifiedSession;
+                        const canSubmit = isContactInfoValid && !isProcessing && selectedTier.available >= quantity && isWaveConfigured && (!requiresCaptcha || Boolean(captchaToken));
 
                         return (
-                          <button
-                            onClick={handleWaveCheckout}
-                            disabled={
-                              isProcessing ||
-                              selectedTier.available < quantity ||
-                              !isWaveConfigured ||
-                              (requiresCaptcha && !captchaToken)
-                            }
-                            className="w-full h-12 py-3 px-6 rounded-2xl font-heading font-extrabold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-2.5 transition-all shadow-lg bg-[#1DC3F4] hover:bg-[#1bb3e0] text-[#07131D] shadow-[#1DC3F4]/20 active:scale-95 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
-                          >
-                            {!isWaveConfigured ? (
-                              <span>Paiement bientôt disponible</span>
-                            ) : isProcessing ? (
-                              <div className="flex items-center gap-2">
-                                <span className="w-4 h-4 border-2 border-[#07131D] border-t-transparent rounded-full animate-spin" />
-                                <span>Enregistrement...</span>
-                              </div>
-                            ) : requiresCaptcha && !captchaToken ? (
-                              <span>Vérification en cours…</span>
-                            ) : (
-                              <>
-                                <Smartphone className="w-4 h-4 fill-current" />
-                                <span>Payer {totalPrice.toLocaleString('fr-FR')} FCFA avec Wave</span>
-                              </>
-                            )}
-                          </button>
+                          <>
+                            <button
+                              onClick={handleWaveCheckout}
+                              disabled={!canSubmit}
+                              className="w-full h-12 py-3 px-6 rounded-2xl font-heading font-extrabold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-2.5 transition-all shadow-lg bg-[#1DC3F4] hover:bg-[#1bb3e0] text-[#07131D] shadow-[#1DC3F4]/20 active:scale-95 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+                            >
+                              {!isWaveConfigured ? (
+                                <span>Paiement bientôt disponible</span>
+                              ) : isProcessing ? (
+                                <div className="flex items-center gap-2">
+                                  <span className="w-4 h-4 border-2 border-[#07131D] border-t-transparent rounded-full animate-spin" />
+                                  <span>Enregistrement...</span>
+                                </div>
+                              ) : requiresCaptcha && !captchaToken ? (
+                                <span>Vérification en cours…</span>
+                              ) : !isContactInfoValid ? (
+                                <span>Renseignez votre nom et contact</span>
+                              ) : (
+                                <>
+                                  <Smartphone className="w-4 h-4 fill-current" />
+                                  <span>Payer {totalPrice.toLocaleString('fr-FR')} FCFA avec Wave</span>
+                                </>
+                              )}
+                            </button>
+
+                            <div className="w-full flex items-center justify-between text-[11px] pt-1">
+                              <button
+                                type="button"
+                                onClick={handleCloseModal}
+                                className="text-gray-400 hover:text-white transition-colors flex items-center gap-1 cursor-pointer font-medium"
+                              >
+                                <ArrowLeft className="w-3 h-3" />
+                                <span>Retour à la billetterie</span>
+                              </button>
+
+                              {!isContactInfoValid ? (
+                                <span className="text-amber-400 font-semibold text-[10px] text-right">
+                                  Nom + (Tél. ou Email) requis
+                                </span>
+                              ) : !isAuthenticated ? (
+                                <span className="text-gray-400 text-[10px]">
+                                  ⚡ Achat direct sans mot de passe
+                                </span>
+                              ) : null}
+                            </div>
+                          </>
                         );
                       })()}
-                      {!isAuthenticated && (
-                        <span className="text-[10px] text-gray-400 text-center w-full">
-                          ⚡ Achat direct instantané (sans mot de passe requis)
-                        </span>
-                      )}
                     </div>
                   </>
                 )}
@@ -1325,10 +1445,10 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                   <button
                     type="button"
                     onClick={() => {
-                      onClose();
+                      handleCloseModal();
                       if (onNavigateToTickets) onNavigateToTickets();
                     }}
-                    className="flex-1 py-3.5 px-6 rounded-2xl font-heading font-extrabold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-2 transition-all shadow-lg bg-gradient-to-r from-[#8A2BE2] via-[#E9C349] to-[#8A2BE2] text-white shadow-[#8A2BE2]/30 hover:scale-[1.02] active:scale-[0.98]"
+                    className="flex-1 py-3.5 px-6 rounded-2xl font-heading font-extrabold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-2 transition-all shadow-lg bg-gradient-to-r from-[#8A2BE2] via-[#E9C349] to-[#8A2BE2] text-white shadow-[#8A2BE2]/30 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
                   >
                     <Ticket className="w-4 h-4 text-white" />
                     <span>Voir mon billet</span>
@@ -1336,21 +1456,20 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                 ) : (
                   <button
                     type="button"
-                    onClick={onClose}
-                    className="flex-1 py-3.5 px-6 rounded-2xl font-heading font-extrabold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-2 transition-all bg-white/10 hover:bg-white/20 text-white"
+                    onClick={handleCloseModal}
+                    className="flex-1 py-3.5 px-6 rounded-2xl font-heading font-extrabold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-2 transition-all bg-[#1DC3F4]/15 hover:bg-[#1DC3F4]/25 text-[#1DC3F4] border border-[#1DC3F4]/30 shadow-md cursor-pointer"
                   >
-                    Fermer la fenêtre
+                    <ArrowLeft className="w-4 h-4" />
+                    <span>Retour à la billetterie</span>
                   </button>
                 )}
-                {activeOrder?.status === 'confirmed' && (
-                  <button
-                    type="button"
-                    onClick={onClose}
-                    className="sm:w-auto px-6 py-3.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-heading font-bold text-xs uppercase tracking-wider transition-all"
-                  >
-                    Fermer
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={handleCloseModal}
+                  className="sm:w-auto px-6 py-3.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-heading font-bold text-xs uppercase tracking-wider transition-all cursor-pointer"
+                >
+                  Fermer
+                </button>
               </div>
             )}
           </div>

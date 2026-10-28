@@ -257,11 +257,13 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
             )}
 
             {/* Actions : Renvoyer ou Aller à la connexion */}
-            <div className="space-y-3 pt-2">
-              <TurnstileGate
-                ref={turnstileRef}
-                onTokenChange={setCaptchaToken}
-              />
+            <div className="pt-2">
+              <div className="mb-4 w-full max-w-full overflow-hidden">
+                <TurnstileGate
+                  ref={turnstileRef}
+                  onTokenChange={setCaptchaToken}
+                />
+              </div>
 
               <button
                 type="button"
@@ -529,8 +531,8 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                 </div>
               )}
 
-              {/* Widget Cloudflare Turnstile CAPTCHA */}
-              <div className="pt-1 w-full max-w-full overflow-hidden">
+              {/* Widget Cloudflare Turnstile CAPTCHA (Problème 4) */}
+              <div className="mb-4 w-full max-w-full overflow-hidden">
                 <TurnstileGate
                   ref={turnstileRef}
                   onTokenChange={setCaptchaToken}
