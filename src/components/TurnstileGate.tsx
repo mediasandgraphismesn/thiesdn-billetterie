@@ -92,8 +92,11 @@ export const TurnstileGate = forwardRef<TurnstileGateHandle, TurnstileGateProps>
     }
 
     return (
-      <div className={`w-full max-w-full overflow-hidden flex flex-col items-center gap-2 ${className}`}>
-        <div className="w-full max-w-full overflow-hidden flex justify-center">
+      <div
+        data-testid="turnstile-gate"
+        className={`w-full max-w-full overflow-hidden flex flex-col items-center gap-2 ${className}`}
+      >
+        <div className="w-full max-w-full overflow-hidden flex justify-center [&>div]:!w-full [&>div]:!max-w-full [&>div]:!min-w-0 [&_iframe]:!w-full [&_iframe]:!max-w-full [&_iframe]:!min-w-0">
           <Turnstile
             key={retryKey}
             ref={turnstileRef}
