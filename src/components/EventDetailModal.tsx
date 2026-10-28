@@ -32,6 +32,8 @@ import {
   Copy,
   Lock,
   ArrowLeft,
+  ArrowRight,
+  ShieldAlert,
 } from 'lucide-react';
 import { EventItem, TicketTier, UserTicket, OrderRecord } from '../types';
 import { getOptimizedImageUrl } from '../utils/imageOptimizer';
@@ -51,6 +53,8 @@ const TikTokIcon = ({ className = 'w-4 h-4' }: { className?: string }) => (
     <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64c.29 0 .58.04.86.12V9.42a6.34 6.34 0 0 0-.86-.06 6.34 6.34 0 1 0 6.34 6.34V9.05a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.48z" />
   </svg>
 );
+
+export type ModalFlow = 'details' | 'step_captcha' | 'step_contact' | 'step_tickets' | 'step_payment' | 'confirmation';
 
 interface EventDetailModalProps {
   event: EventItem | null;
@@ -90,9 +94,11 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
     available: 100,
   };
 
-  const [step, setStep] = useState<'select' | 'confirmation'>('select');
+  // State Machine du tunnel par étapes
+  const [flow, setFlow] = useState<ModalFlow>('details');
   const [selectedTier, setSelectedTier] = useState<TicketTier>(defaultTier);
   const [quantity, setQuantity] = useState(1);
+
   // Guest Checkout : champs strictement vides par défaut si non connecté
   const [customerName, setCustomerName] = useState(
     isAuthenticated && userName && userName.trim().toLowerCase() !== 'utilisateur' ? userName : ''
@@ -101,6 +107,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
   const [customerEmail, setCustomerEmail] = useState(
     isAuthenticated && userEmail ? userEmail : ''
   );
+
   const [isSignalingPayment, setIsSignalingPayment] = useState(false);
   const [paymentSignaledSuccess, setPaymentSignaledSuccess] = useState(false);
   const modalScrollRef = useRef<HTMLDivElement | null>(null);
@@ -113,16 +120,42 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
   const [openedWaveUrl, setOpenedWaveUrl] = useState<string | null>(null);
   const [copiedRef, setCopiedRef] = useState(false);
 
-  // Guest Checkout Conversion
+  // Captcha & Session vérifiée
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [hasVerifiedSession, setHasVerifiedSession] = useState<boolean>(Boolean(isAuthenticated));
   const turnstileRef = useRef<TurnstileGateHandle | null>(null);
   const checkoutLockRef = useRef<boolean>(false);
+
+  // Conversion compte invité
   const [guestEmail, setGuestEmail] = useState('');
   const [guestPassword, setGuestPassword] = useState('');
   const [isConvertingAccount, setIsConvertingAccount] = useState(false);
   const [accountConverted, setAccountConverted] = useState(false);
   const [accountConvertError, setAccountConvertError] = useState<string | null>(null);
+
+  // Codes Promo
+  const [promoInput, setPromoInput] = useState('');
+  const [appliedPromo, setAppliedPromo] = useState<{
+    code: string;
+    discountPercent: number;
+    discountAmount: number;
+  } | null>(null);
+  const [promoError, setPromoError] = useState<string | null>(null);
+  const [isPromoExpanded, setIsPromoExpanded] = useState(false);
+
+  // Teaser Vidéo YouTube
+  const [isTeaserOpen, setIsTeaserOpen] = useState(false);
+
+  // Pré-inscription (quand ventes fermées)
+  const [preRegName, setPreRegName] = useState(userName || '');
+  const [preRegPhone, setPreRegPhone] = useState('');
+  const [preRegEmail, setPreRegEmail] = useState('');
+  const [isPreRegSubmitting, setIsPreRegSubmitting] = useState(false);
+  const [preRegSuccess, setPreRegSuccess] = useState<string | null>(null);
+
+  const isSalesUpcoming = Boolean(
+    event.salesOpenAt && new Date(event.salesOpenAt).getTime() > Date.now()
+  );
 
   useEffect(() => {
     let active = true;
@@ -168,19 +201,26 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
     }
   }, [isAuthenticated, userName, userEmail]);
 
-  // Scroll automatique en haut lors du passage à l'étape de confirmation (Problème 3)
+  // Scroll reset instantané à chaque changement de flow
   useEffect(() => {
-    if (step === 'confirmation') {
-      if (typeof window !== 'undefined') {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      }
-      if (modalScrollRef.current) {
-        modalScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
-      }
+    if (modalScrollRef.current) {
+      modalScrollRef.current.scrollTo({ top: 0, behavior: 'instant' });
     }
-  }, [step]);
+    if (flow === 'confirmation' && typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [flow]);
 
-  // Fermeture de la modale avec scroll automatique en haut
+  // Transition automatique dès réception du CAPTCHA
+  useEffect(() => {
+    if (flow === 'step_captcha' && captchaToken) {
+      const timer = setTimeout(() => {
+        setFlow('step_contact');
+      }, 350);
+      return () => clearTimeout(timer);
+    }
+  }, [flow, captchaToken]);
+
   const handleCloseModal = () => {
     onClose();
     if (typeof window !== 'undefined') {
@@ -188,7 +228,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
     }
   };
 
-  // Signalement immédiat du paiement Wave (Problème 2)
+  // Signalement immédiat du paiement Wave
   const handleSignalTransfer = async () => {
     if (!activeOrder) return;
     setIsSignalingPayment(true);
@@ -205,37 +245,13 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
     }
   };
 
-  // Validation obligatoire : Nom complet + (Téléphone OU Email) (Problème 1)
+  // Validation coordonnées : Nom (≥2) + (Tél valide OU Email valide)
   const isCustomerNameFilled = customerName.trim().length >= 2;
   const isPhoneFilled = phoneNumber.trim().replace(/\s/g, '').length >= 7;
   const isEmailFilled = customerEmail.trim().length >= 5 && customerEmail.includes('@') && customerEmail.includes('.');
   const isContactInfoValid = isCustomerNameFilled && (isPhoneFilled || isEmailFilled);
 
-  // Gestion des Codes Promo & Remises
-  const [promoInput, setPromoInput] = useState('');
-  const [appliedPromo, setAppliedPromo] = useState<{
-    code: string;
-    discountPercent: number;
-    discountAmount: number;
-  } | null>(null);
-  const [promoError, setPromoError] = useState<string | null>(null);
-
-  // État Modale Teaser Vidéo YouTube
-  const [isTeaserOpen, setIsTeaserOpen] = useState(false);
-
-  // État Pré-inscription (quand les ventes ne sont pas encore ouvertes)
-  const [preRegName, setPreRegName] = useState(userName || '');
-  const [preRegPhone, setPreRegPhone] = useState('');
-  const [preRegEmail, setPreRegEmail] = useState('');
-  const [isPreRegSubmitting, setIsPreRegSubmitting] = useState(false);
-  const [preRegSuccess, setPreRegSuccess] = useState<string | null>(null);
-
-  // Vérifier si les ventes sont dans le futur
-  const isSalesUpcoming = Boolean(
-    event.salesOpenAt && new Date(event.salesOpenAt).getTime() > Date.now()
-  );
-
-  // Extraction d'ID YouTube robuste (supporte standard, shorts, embed, lien court youtu.be, ou ID brut 11 caractères)
+  // Extraction ID YouTube
   const extractYouTubeId = (url?: string): string | null => {
     if (!url) return null;
     const trimmed = url.trim();
@@ -245,10 +261,9 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
     );
     return match ? match[1] : null;
   };
-
   const youtubeVideoId = extractYouTubeId(event.videoSpotUrl || event.youtubeUrl || event.socialYoutube);
 
-  // Filtrage strict : seules les formules actives (isActive !== false) et avec stock > 0 sont proposées à la vente
+  // Formules actives
   const activeTiers = useMemo(() => {
     const rawTiers = event.tiers && event.tiers.length > 0 ? event.tiers : [defaultTier];
     const availableTiers = rawTiers.filter((t) => t.isActive !== false && t.available > 0);
@@ -262,7 +277,6 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
     : 0;
   const totalPrice = Math.max(0, baseTotalPrice - discountAmount);
 
-  // Application dynamique du code promo
   const handleApplyPromo = () => {
     setPromoError(null);
     const cleanCode = promoInput.trim().toUpperCase();
@@ -302,7 +316,6 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
     setPromoError(null);
   };
 
-  // URL du partage WhatsApp avec aperçu riche
   const eventPreviewUrl = `https://billetterie.thiesdn.site/event/${event.id}`;
   const whatsappShareText =
     `🎟️ *${event.title}* à Thiès !\n\n` +
@@ -311,7 +324,6 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
     `💰 *Tarif :* À partir de ${event.price.toLocaleString('fr-FR')} FCFA\n\n` +
     `⚡ ${isSalesUpcoming ? 'Les ventes ouvrent très bientôt ! Rejoignez la liste prioritaire ici :' : 'Réservez votre pass officiel 100% sécurisé via Wave en 1 clic :'}\n` +
     `👉 ${eventPreviewUrl}`;
-
   const whatsappShareEventUrl = `https://wa.me/?text=${encodeURIComponent(whatsappShareText)}`;
 
   const generateWhatsAppConfirmationUrl = (order: OrderRecord) => {
@@ -351,7 +363,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
     return '';
   };
 
-  // Traitement Paiement Wave (avec Guest Checkout anonyme si non connecté)
+  // Traitement Wave Checkout
   const handleWaveCheckout = async () => {
     if (checkoutLockRef.current) return;
     checkoutLockRef.current = true;
@@ -421,7 +433,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
         window.open(waveUrl, '_blank', 'noopener,noreferrer');
       }
 
-      setStep('confirmation');
+      setFlow('confirmation');
     } catch (err: any) {
       setErrorMessage(err.message || 'Erreur lors du traitement de votre commande.');
     } finally {
@@ -430,7 +442,67 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
     }
   };
 
-  // Conversion du compte invité anonyme en compte permanent
+  // CTA Secours : Paiement manuel déjà transféré
+  const handleManualTransferCheckout = async () => {
+    if (checkoutLockRef.current) return;
+    checkoutLockRef.current = true;
+    setIsProcessing(true);
+    setErrorMessage(null);
+
+    try {
+      let resolvedUserId: string | undefined = undefined;
+      const supabase = getSupabaseClient();
+      if (supabase) {
+        const sessionRes = await ensureGuestOrUserSession(captchaToken);
+        if (sessionRes.user?.id) {
+          resolvedUserId = sessionRes.user.id;
+          setHasVerifiedSession(true);
+        }
+      }
+
+      const cleanName = customerName.trim() || 'Client Thièsdn';
+      const cleanPhone = phoneNumber.trim().startsWith('+221')
+        ? phoneNumber.trim()
+        : `+221 ${phoneNumber.trim()}`;
+
+      const result = await createOrderWithStockCheck(
+        event,
+        selectedTier,
+        quantity,
+        {
+          name: cleanName,
+          phone: cleanPhone,
+          paymentMethod: 'wave',
+          userId: resolvedUserId,
+          customTotal: totalPrice,
+          discountAmount: discountAmount > 0 ? discountAmount : undefined,
+          promoCodeApplied: appliedPromo ? appliedPromo.code : undefined,
+          email: customerEmail.trim() || undefined,
+        }
+      );
+
+      if (!result.success || !result.order) {
+        setErrorMessage(result.message || 'Impossible d’enregistrer la commande.');
+        return;
+      }
+
+      const order = result.order;
+      setActiveOrder(order);
+      if (onOrderCreated) onOrderCreated(order);
+
+      // Signalement automatique du transfert manuel
+      await signalOrderPayment(order.id, order.reference);
+      setPaymentSignaledSuccess(true);
+      setFlow('confirmation');
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Erreur lors de l’enregistrement de votre commande.');
+    } finally {
+      setIsProcessing(false);
+      checkoutLockRef.current = false;
+    }
+  };
+
+  // Conversion du compte invité anonyme
   const handleConvertGuestAccount = async () => {
     if (!guestEmail.trim() || guestPassword.length < 6) {
       setAccountConvertError('Veuillez saisir un email valide et un mot de passe d’au moins 6 caractères.');
@@ -454,17 +526,15 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
     }
   };
 
-  // Traitement Pré-inscription "Me notifier à l'ouverture"
+  // Pré-inscription
   const handlePreRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!preRegName.trim() || !preRegPhone.trim()) {
       setErrorMessage('Veuillez remplir votre nom et votre numéro de téléphone.');
       return;
     }
-
     setIsPreRegSubmitting(true);
     setErrorMessage(null);
-
     try {
       const res = await registerEventPreRegistration({
         eventId: event.id,
@@ -472,7 +542,6 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
         phone: preRegPhone.trim(),
         email: preRegEmail.trim() || undefined,
       });
-
       if (res.success) {
         setPreRegSuccess(res.message);
       } else {
@@ -484,6 +553,24 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
       setIsPreRegSubmitting(false);
     }
   };
+
+  // Démarrer la réservation
+  const handleStartBooking = () => {
+    if (!isAuthenticated && !hasVerifiedSession && !captchaToken) {
+      setFlow('step_captcha');
+    } else {
+      setFlow('step_contact');
+    }
+  };
+
+  // Index de l'étape pour le stepper (1 à 4)
+  const currentStepNum = flow === 'step_captcha' ? 1
+    : flow === 'step_contact' ? 2
+    : flow === 'step_tickets' ? 3
+    : flow === 'step_payment' ? 4
+    : 4;
+
+  const isWizardActive = flow !== 'details';
 
   return (
     <>
@@ -497,233 +584,264 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
           initial={{ opacity: 0, y: 35, scale: 0.96 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-          className="relative w-full max-h-[90dvh] max-w-2xl bg-[#0A0A0A] border border-white/10 rounded-3xl overflow-hidden shadow-2xl flex flex-col"
+          className="relative w-full max-h-[88dvh] max-w-xl bg-[#181926] border border-white/10 rounded-3xl overflow-hidden shadow-2xl flex flex-col"
         >
-          {/* Poster Header */}
-          <div className="relative h-48 sm:h-56 w-full flex-shrink-0">
-            <SafeImage
-              src={getOptimizedImageUrl(event.posterUrl, 1200, 85)}
-              rawSrc={event.posterUrl}
-              alt={event.title}
-              className="w-full h-full object-cover"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-[#0A0A0A] via-black/40 to-transparent" />
+          {/* ============================================================== */}
+          {/* HEADER : Deux modes selon le flow                             */}
+          {/* 1. Mode Details : Poster Header avec Image                      */}
+          {/* 2. Mode Wizard (flow !== 'details') : Header ultra-compact <48px*/}
+          {/* ============================================================== */}
+          {flow === 'details' ? (
+            <div className="relative h-44 sm:h-52 w-full flex-shrink-0">
+              <SafeImage
+                src={getOptimizedImageUrl(event.posterUrl, 1200, 85)}
+                rawSrc={event.posterUrl}
+                alt={event.title}
+                className="w-full h-full object-cover"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#181926] via-black/40 to-transparent" />
 
-            {/* Top Controls */}
-            <div className="absolute top-3 inset-x-3 sm:top-4 sm:inset-x-4 flex items-center justify-between z-10 gap-2">
-              <div className="flex items-center gap-1.5 flex-wrap min-w-0 flex-1">
-                <span className="bg-[#121118]/85 backdrop-blur-md text-[#E9C349] border border-[#E9C349]/30 text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-full shadow-lg flex items-center gap-1.5 shrink-0">
-                  <Tag className="w-3.5 h-3.5" />
-                  {event.category}
-                </span>
-                <span className="bg-[#8A2BE2]/90 backdrop-blur-md text-white text-xs font-bold px-2.5 py-1 rounded-full shadow-lg flex items-center gap-1 max-w-full min-w-0 truncate">
-                  <MapPin className="w-3 h-3 shrink-0" />
-                  <span className="truncate">{event.city}{event.quartier ? ` • ${event.quartier}` : ''}</span>
-                </span>
+              {/* Contrôles supérieurs */}
+              <div className="absolute top-3 inset-x-3 flex items-center justify-between z-10 gap-2">
+                <div className="flex items-center gap-1.5 flex-wrap min-w-0 flex-1">
+                  <span className="bg-[#121118]/85 backdrop-blur-md text-[#E9C349] border border-[#E9C349]/30 text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-full shadow-lg flex items-center gap-1.5 shrink-0">
+                    <Tag className="w-3.5 h-3.5" />
+                    {event.category}
+                  </span>
+                  <span className="bg-[#8A2BE2]/90 backdrop-blur-md text-white text-xs font-bold px-2.5 py-1 rounded-full shadow-lg flex items-center gap-1 max-w-full min-w-0 truncate">
+                    <MapPin className="w-3 h-3 shrink-0" />
+                    <span className="truncate">{event.city}{event.quartier ? ` • ${event.quartier}` : ''}</span>
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <a
+                    href={whatsappShareEventUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-9 h-9 rounded-full bg-emerald-600/80 hover:bg-emerald-500 backdrop-blur-md text-white flex items-center justify-center border border-emerald-400/30 transition-all hover:scale-105 shadow-lg"
+                    title="Partager sur WhatsApp"
+                  >
+                    <Share2 className="w-4 h-4" />
+                  </a>
+                  <button
+                    onClick={() => setIsLiked(!isLiked)}
+                    className="w-9 h-9 rounded-full bg-black/60 backdrop-blur-md text-white hover:text-red-400 flex items-center justify-center border border-white/10 transition-colors"
+                  >
+                    <Heart className={`w-4 h-4 ${isLiked ? 'fill-red-500 text-red-500' : ''}`} />
+                  </button>
+                  <button
+                    onClick={handleCloseModal}
+                    className="w-9 h-9 rounded-full bg-black/60 backdrop-blur-md text-white hover:bg-white/20 flex items-center justify-center border border-white/10 transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
 
-              <div className="flex items-center gap-1.5 flex-shrink-0">
-                <a
-                  href={whatsappShareEventUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-11 h-11 min-h-[44px] min-w-[44px] rounded-full bg-emerald-600/80 hover:bg-emerald-500 backdrop-blur-md text-white flex items-center justify-center border border-emerald-400/30 transition-all hover:scale-105 shadow-lg"
-                  title="Partager cet événement sur WhatsApp"
-                >
-                  <Share2 className="w-4 h-4" />
-                </a>
-                <button
-                  onClick={() => setIsLiked(!isLiked)}
-                  className="w-11 h-11 min-h-[44px] min-w-[44px] rounded-full bg-black/60 backdrop-blur-md text-white hover:text-red-400 flex items-center justify-center border border-white/10 transition-colors"
-                >
-                  <Heart className={`w-4 h-4 ${isLiked ? 'fill-red-500 text-red-500' : ''}`} />
-                </button>
-                <button
-                  onClick={onClose}
-                  className="w-11 h-11 min-h-[44px] min-w-[44px] rounded-full bg-black/60 backdrop-blur-md text-white hover:bg-white/20 flex items-center justify-center border border-white/10 transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+              {/* Titre & Teaser bouton sur poster */}
+              <div className="absolute bottom-3 inset-x-4 z-10 flex flex-col sm:flex-row sm:items-end justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  {event.isExclusive && (
+                    <span className="bg-[#E9C349] text-[#241A00] text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full mb-1 inline-flex items-center gap-1">
+                      <ShieldCheck className="w-3 h-3" />
+                      Soirée Exclusive
+                    </span>
+                  )}
+                  <h2 className="font-heading text-lg sm:text-xl font-extrabold text-white leading-tight truncate">
+                    {event.title}
+                  </h2>
+                </div>
+
+                {(youtubeVideoId || event.videoSpotUrl || event.youtubeUrl || event.socialYoutube) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (youtubeVideoId) {
+                        setIsTeaserOpen(true);
+                      } else {
+                        const targetUrl = event.videoSpotUrl || event.youtubeUrl || event.socialYoutube;
+                        if (targetUrl && typeof window !== 'undefined') {
+                          window.open(targetUrl, '_blank', 'noopener,noreferrer');
+                        }
+                      }
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#8A2BE2] hover:bg-[#7824c7] text-white font-heading font-extrabold text-xs uppercase tracking-wider shadow-md shadow-[#8A2BE2]/30 hover:scale-105 transition-all shrink-0 border border-white/20 self-start sm:self-auto"
+                  >
+                    <Play className="w-3 h-3 fill-current" />
+                    <span>Teaser</span>
+                  </button>
+                )}
               </div>
             </div>
-
-            {/* Event Title & Bouton Teaser sur Poster */}
-            <div className="absolute bottom-4 inset-x-4 sm:inset-x-6 z-10 flex flex-col sm:flex-row sm:items-end justify-between gap-3">
-              <div>
-                {event.isExclusive && (
-                  <span className="bg-[#E9C349] text-[#241A00] text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full mb-1 inline-flex items-center gap-1">
-                    <ShieldCheck className="w-3 h-3" />
-                    Soirée Exclusive
-                  </span>
+          ) : (
+            /* HEADER ULTRA-COMPACT (<48px) DÈS QUE FLOW !== 'DETAILS' */
+            <div className="h-12 px-3 sm:px-4 bg-[#10111A] border-b border-white/10 flex items-center justify-between gap-2 flex-shrink-0 z-20">
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                {flow !== 'confirmation' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (flow === 'step_payment') setFlow('step_tickets');
+                      else if (flow === 'step_tickets') setFlow('step_contact');
+                      else if (flow === 'step_contact') {
+                        if (!isAuthenticated && !hasVerifiedSession) setFlow('step_captcha');
+                        else setFlow('details');
+                      } else if (flow === 'step_captcha') setFlow('details');
+                    }}
+                    className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white transition-colors"
+                    title="Étape précédente"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                  </button>
                 )}
-                <h2 className="font-heading text-lg sm:text-2xl font-extrabold text-white leading-tight">
-                  {event.title}
-                </h2>
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-heading text-xs font-bold text-white truncate leading-tight">
+                    {event.title}
+                  </h3>
+                  <span className="text-[10px] text-[#E9C349] font-medium flex items-center gap-1">
+                    <MapPin className="w-2.5 h-2.5" />
+                    <span>{event.city}</span>
+                  </span>
+                </div>
               </div>
 
-              {/* Bouton Voir le Teaser YouTube (TÂCHE 4) */}
-              {(youtubeVideoId || event.videoSpotUrl || event.youtubeUrl || event.socialYoutube) && (
+              {/* Stepper 4 points/barres néon */}
+              {flow !== 'confirmation' && (
+                <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-black/40 border border-white/5">
+                  {[1, 2, 3, 4].map((step) => {
+                    const isActive = step === currentStepNum;
+                    const isPassed = step < currentStepNum;
+                    return (
+                      <div
+                        key={step}
+                        className={`h-1.5 rounded-full transition-all duration-300 ${
+                          isActive
+                            ? 'w-5 bg-gradient-to-r from-[#8A2BE2] to-[#E9C349] shadow-sm shadow-[#E9C349]/50'
+                            : isPassed
+                            ? 'w-2 bg-[#8A2BE2]'
+                            : 'w-2 bg-white/15'
+                        }`}
+                      />
+                    );
+                  })}
+                  <span className="text-[10px] font-mono font-bold text-[#E9C349] ml-1">
+                    {currentStepNum}/4
+                  </span>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={handleCloseModal}
+                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/15 text-gray-400 hover:text-white flex items-center justify-center transition-colors"
+                title="Fermer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          {/* ============================================================== */}
+          {/* BODY SCROLLABLE (Reset instantané à chaque étape)              */}
+          {/* ============================================================== */}
+          <div
+            ref={modalScrollRef}
+            className="p-3 sm:p-5 overflow-y-auto space-y-4 flex-1 select-none"
+          >
+            {errorMessage && (
+              <div className="p-3 rounded-2xl bg-rose-950/60 border border-rose-500/40 text-rose-300 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+                <span className="flex-1">{errorMessage}</span>
                 <button
                   type="button"
-                  onClick={() => {
-                    if (youtubeVideoId) {
-                      setIsTeaserOpen(true);
-                    } else {
-                      const targetUrl = event.videoSpotUrl || event.youtubeUrl || event.socialYoutube;
-                      if (targetUrl && typeof window !== 'undefined') {
-                        window.open(targetUrl, '_blank', 'noopener,noreferrer');
-                      }
-                    }
-                  }}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl bg-[#8A2BE2] hover:bg-[#7824c7] text-white font-heading font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-[#8A2BE2]/30 hover:scale-[1.02] sm:hover:scale-105 transition-all shrink-0 border border-white/20"
+                  onClick={() => setErrorMessage(null)}
+                  className="text-rose-400 hover:text-white text-xs font-bold"
                 >
-                  <Play className="w-3.5 h-3.5 fill-current" />
-                  <span>Voir le Teaser</span>
+                  ✕
                 </button>
-              )}
-            </div>
-          </div>
-
-          {/* Scrollable Content Body */}
-          <div ref={modalScrollRef} className="p-4 sm:p-6 overflow-y-auto space-y-5 sm:space-y-6 flex-1">
-            {errorMessage && (
-              <div className="p-3.5 rounded-2xl bg-rose-950/60 border border-rose-500/40 text-rose-300 text-xs flex items-center gap-2.5">
-                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
-                <span>{errorMessage}</span>
               </div>
             )}
 
-            {/* ÉTAPE 1 : Choix de la catégorie OU Compte à Rebours / Pré-inscription */}
-            {step === 'select' && (
-              <>
-                {/* GRAND COMPTE À REBOURS SI VENTES FUTURES (TÂCHE 1) */}
+            {/* ============================================================ */}
+            {/* VUE 0 : DETAILS (Affichage complet initial)                  */}
+            {/* ============================================================ */}
+            {flow === 'details' && (
+              <div className="space-y-4 animate-in fade-in duration-200">
+                {/* Ventes non ouvertes : Compte à rebours */}
                 {isSalesUpcoming && event.salesOpenAt && (
-                  <div className="space-y-4">
-                    <CountdownTimer
-                      targetDate={event.salesOpenAt}
-                      size="lg"
-                      label="Ouverture officielle de la billetterie dans :"
-                    />
-
-                    {/* Formulaire "Me notifier à l'ouverture" */}
-                    <div className="p-5 rounded-3xl bg-gradient-to-br from-[#201B2E]/90 to-[#12111A]/95 border border-[#8A2BE2]/40 shadow-xl space-y-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-2xl bg-[#E9C349]/20 text-[#E9C349] flex items-center justify-center shrink-0 border border-[#E9C349]/30">
-                          <Bell className="w-5 h-5 animate-wiggle" />
-                        </div>
-                        <div>
-                          <h4 className="font-heading font-extrabold text-base text-white">
-                            Soyez le premier alerté de l'ouverture
-                          </h4>
-                          <p className="text-xs text-gray-300">
-                            Recevez une alerte WhatsApp dès l'ouverture des réservations pour obtenir les tarifs prévente avant rupture de stock.
-                          </p>
-                        </div>
-                      </div>
-
-                      {preRegSuccess ? (
-                        <div className="p-4 rounded-2xl bg-emerald-950/50 border border-emerald-500/40 text-emerald-300 text-xs flex items-center gap-3 animate-in fade-in">
-                          <CheckCircle2 className="w-6 h-6 text-emerald-400 shrink-0" />
-                          <div>
-                            <p className="font-bold text-sm text-emerald-200">Pré-inscription confirmée !</p>
-                            <p className="text-xs text-gray-300 mt-0.5">{preRegSuccess}</p>
-                          </div>
-                        </div>
-                      ) : (
-                        <form onSubmit={handlePreRegister} className="space-y-3">
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div className="bg-[#14131A] p-3 rounded-2xl border border-white/10">
-                              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
-                                Votre Nom Complet *
-                              </label>
-                              <input
-                                type="text"
-                                required
-                                value={preRegName}
-                                onChange={(e) => setPreRegName(e.target.value)}
-                                placeholder="Ex: Moussa Diop"
-                                className="bg-transparent border-none outline-none text-white text-xs w-full p-0 font-medium"
-                              />
-                            </div>
-
-                            <div className="bg-[#14131A] p-3 rounded-2xl border border-white/10">
-                              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
-                                Numéro WhatsApp / Mobile *
-                              </label>
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs font-bold text-[#E9C349]">+221</span>
-                                <input
-                                  type="tel"
-                                  required
-                                  value={preRegPhone}
-                                  onChange={(e) => setPreRegPhone(e.target.value)}
-                                  placeholder="77 123 45 67"
-                                  className="bg-transparent border-none outline-none text-white text-xs font-mono w-full p-0"
-                                />
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="bg-[#14131A] p-3 rounded-2xl border border-white/10">
-                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
-                              Adresse Email (Optionnelle)
-                            </label>
-                            <input
-                              type="email"
-                              value={preRegEmail}
-                              onChange={(e) => setPreRegEmail(e.target.value)}
-                              placeholder="votre.email@gmail.com"
-                              className="bg-transparent border-none outline-none text-white text-xs w-full p-0"
-                            />
-                          </div>
-
-                          <button
-                            type="submit"
-                            disabled={isPreRegSubmitting}
-                            className="w-full py-3.5 px-6 rounded-2xl font-heading font-black text-xs sm:text-sm tracking-wider uppercase transition-all shadow-xl bg-gradient-to-r from-[#E9C349] via-[#F3D779] to-[#d6ad30] hover:scale-[1.01] active:scale-[0.99] text-[#241A00] flex items-center justify-center gap-2 disabled:opacity-50"
-                          >
-                            {isPreRegSubmitting ? (
-                              <div className="flex items-center gap-2">
-                                <span className="w-4 h-4 border-2 border-[#241A00] border-t-transparent rounded-full animate-spin" />
-                                <span>Inscription en cours...</span>
-                              </div>
-                            ) : (
-                              <>
-                                <Bell className="w-4 h-4 fill-current" />
-                                <span>Me notifier à l'ouverture</span>
-                              </>
-                            )}
-                          </button>
-                        </form>
-                      )}
+                  <div className="bg-gradient-to-br from-[#1F172E] to-[#120F1D] p-4 rounded-2xl border border-[#8A2BE2]/40 shadow-lg space-y-3">
+                    <div className="flex items-center gap-2 text-[#E9C349]">
+                      <Clock className="w-4 h-4" />
+                      <span className="text-xs font-heading font-extrabold uppercase tracking-wider">
+                        Ouverture des Ventes
+                      </span>
                     </div>
+                    <CountdownTimer targetDate={event.salesOpenAt} />
+
+                    {/* Formulaire Pré-inscription */}
+                    {!preRegSuccess ? (
+                      <form onSubmit={handlePreRegister} className="pt-2 space-y-2 border-t border-white/10">
+                        <p className="text-[11px] text-gray-300">
+                          Soyez alerté en priorité dès l'ouverture des billets.
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <input
+                            type="text"
+                            value={preRegName}
+                            onChange={(e) => setPreRegName(e.target.value)}
+                            placeholder="Votre nom complet"
+                            className="bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-[#E9C349]"
+                          />
+                          <input
+                            type="tel"
+                            value={preRegPhone}
+                            onChange={(e) => setPreRegPhone(e.target.value)}
+                            placeholder="Téléphone Wave (+221)"
+                            className="bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-[#E9C349]"
+                          />
+                        </div>
+                        <button
+                          type="submit"
+                          disabled={isPreRegSubmitting}
+                          className="w-full py-2.5 rounded-xl bg-[#E9C349] hover:bg-[#f5d56b] text-[#241A00] font-heading font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
+                        >
+                          <Bell className="w-3.5 h-3.5 fill-current" />
+                          <span>{isPreRegSubmitting ? 'Enregistrement...' : 'Me notifier à l’ouverture'}</span>
+                        </button>
+                      </form>
+                    ) : (
+                      <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-semibold flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 shrink-0" />
+                        <span>{preRegSuccess}</span>
+                      </div>
+                    )}
                   </div>
                 )}
 
-                {/* Infos Clés */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-[#201F1F] p-4 rounded-2xl border border-white/5">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-[#8A2BE2]/20 text-[#DCB8FF] flex items-center justify-center flex-shrink-0">
-                      <Calendar className="w-5 h-5" />
+                {/* Date & Lieu */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-[#10111A] p-3.5 rounded-2xl border border-white/5 text-xs">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-[#8A2BE2]/20 text-[#DCB8FF] flex items-center justify-center shrink-0">
+                      <Calendar className="w-4 h-4" />
                     </div>
                     <div>
-                      <p className="text-[11px] uppercase tracking-wider text-gray-400 font-bold">Date & Heure</p>
-                      <p className="text-sm font-semibold text-white">{event.date} • {event.time}</p>
+                      <p className="text-[10px] uppercase font-bold text-gray-400">Date & Heure</p>
+                      <p className="font-semibold text-white">{event.date} • {event.time}</p>
                     </div>
                   </div>
-
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <div className="w-10 h-10 rounded-xl bg-[#E9C349]/20 text-[#E9C349] flex items-center justify-center flex-shrink-0">
-                      <MapPin className="w-5 h-5" />
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-[#E9C349]/20 text-[#E9C349] flex items-center justify-center shrink-0">
+                      <MapPin className="w-4 h-4" />
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[11px] uppercase tracking-wider text-gray-400 font-bold">Lieu & Ville</p>
-                      <p className="text-sm font-semibold text-white break-words line-clamp-2 leading-snug">{event.venue}{event.quartier ? ` • ${event.quartier}` : ''}, {event.city}</p>
+                    <div className="truncate">
+                      <p className="text-[10px] uppercase font-bold text-gray-400">Lieu</p>
+                      <p className="font-semibold text-white truncate">{event.venue}, {event.city}</p>
                     </div>
                   </div>
                 </div>
 
-                {/* LECTEUR VINYLE SPOTIFY "EFFET WOW" (TÂCHE 3) */}
+                {/* Spotify Vinyl Player */}
                 {event.spotifyUrl && (
                   <SpotifyVinylPlayer
                     spotifyUrl={event.spotifyUrl}
@@ -732,410 +850,391 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                   />
                 )}
 
-                {/* Description & Réseaux Sociaux Promoteur */}
-                {(event.description || event.longDescription || event.socialFacebook || event.socialInstagram || event.socialTiktok || event.socialYoutube || event.youtubeUrl || event.websiteUrl) && (
-                  <div className="bg-[#201F1F] p-4 sm:p-5 rounded-2xl border border-white/5 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-heading text-xs font-bold text-[#DCB8FF] uppercase tracking-wider flex items-center gap-1.5">
-                        <AlignLeft className="w-3.5 h-3.5 text-[#E9C349]" />
-                        <span>À Propos de l'Événement</span>
-                      </h3>
-                      {event.promoter?.name && event.promoter.name.trim().toLowerCase() !== 'utilisateur' && (
-                        <span className="text-[11px] text-[#E9C349] font-medium">
-                          Par {event.promoter.name}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Accroche / Description Courte */}
+                {/* Description */}
+                {(event.description || event.longDescription) && (
+                  <div className="bg-[#10111A] p-3.5 rounded-2xl border border-white/5 space-y-2 text-xs">
+                    <h4 className="font-heading font-bold text-[#DCB8FF] uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                      <AlignLeft className="w-3.5 h-3.5 text-[#E9C349]" />
+                      <span>À Propos</span>
+                    </h4>
                     {event.description && (
-                      <p className="text-xs text-gray-300 leading-relaxed font-medium">
-                        {event.description}
-                      </p>
+                      <p className="text-gray-300 leading-relaxed font-medium">{event.description}</p>
                     )}
-
-                    {/* Description Détaillée */}
                     {event.longDescription && (
-                      <div className="p-3.5 rounded-xl bg-black/40 border border-white/5 text-xs text-gray-300 leading-relaxed whitespace-pre-line">
+                      <div className="p-3 rounded-xl bg-black/40 border border-white/5 text-gray-300 leading-relaxed whitespace-pre-line text-[11px]">
                         {event.longDescription}
                       </div>
                     )}
-
-                    {/* Liens Réseaux Sociaux Promoteur / Artiste */}
-                    {(event.socialFacebook || event.socialInstagram || event.socialTiktok || event.socialYoutube || event.youtubeUrl || event.websiteUrl) && (
-                      <div className="pt-2 border-t border-white/5 flex flex-wrap items-center gap-2">
-                        <span className="text-[10px] uppercase font-bold text-gray-400 mr-1 flex items-center gap-1">
-                          <Share2 className="w-3 h-3 text-[#E9C349]" />
-                          Suivre :
-                        </span>
-
-                        {event.socialFacebook && (
-                          <a
-                            href={event.socialFacebook}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600/15 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 text-xs font-semibold transition-all hover:scale-105"
-                          >
-                            <Facebook className="w-3.5 h-3.5" />
-                            <span>Facebook</span>
-                            <ExternalLink className="w-3 h-3 opacity-60" />
-                          </a>
-                        )}
-
-                        {event.socialInstagram && (
-                          <a
-                            href={event.socialInstagram}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-pink-600/15 hover:bg-pink-600/30 text-pink-400 border border-pink-500/30 text-xs font-semibold transition-all hover:scale-105"
-                          >
-                            <Instagram className="w-3.5 h-3.5" />
-                            <span>Instagram</span>
-                            <ExternalLink className="w-3 h-3 opacity-60" />
-                          </a>
-                        )}
-
-                        {event.socialTiktok && (
-                          <a
-                            href={event.socialTiktok}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/30 text-xs font-semibold transition-all hover:scale-105"
-                          >
-                            <TikTokIcon className="w-3.5 h-3.5" />
-                            <span>TikTok</span>
-                            <ExternalLink className="w-3 h-3 opacity-60" />
-                          </a>
-                        )}
-
-                        {/* YouTube Teaser */}
-                        {(event.socialYoutube || event.youtubeUrl || event.videoSpotUrl) && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (youtubeVideoId) {
-                                setIsTeaserOpen(true);
-                              } else {
-                                const targetUrl = event.videoSpotUrl || event.youtubeUrl || event.socialYoutube;
-                                if (targetUrl && typeof window !== 'undefined') {
-                                  window.open(targetUrl, '_blank', 'noopener,noreferrer');
-                                }
-                              }
-                            }}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-600/15 hover:bg-red-600/30 text-red-400 border border-red-500/30 text-xs font-semibold transition-all hover:scale-105"
-                          >
-                            <Youtube className="w-3.5 h-3.5" />
-                            <span>Teaser Vidéo</span>
-                            <Play className="w-2.5 h-2.5 fill-current opacity-80" />
-                          </button>
-                        )}
-
-                        {event.websiteUrl && (
-                          <a
-                            href={event.websiteUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#E9C349]/15 hover:bg-[#E9C349]/30 text-[#E9C349] border border-[#E9C349]/30 text-xs font-semibold transition-all hover:scale-105"
-                          >
-                            <Globe className="w-3.5 h-3.5" />
-                            <span>Site Officiel</span>
-                            <ExternalLink className="w-3 h-3 opacity-60" />
-                          </a>
-                        )}
-                      </div>
-                    )}
                   </div>
                 )}
-
-                {/* Partage WhatsApp avec Aperçu Visuel Dynamique */}
-                <div className="bg-gradient-to-r from-emerald-950/40 via-emerald-900/20 to-black/40 p-3.5 rounded-2xl border border-emerald-500/25 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/30">
-                      <Share2 className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold text-white">Partager cet événement sur WhatsApp</p>
-                      <p className="text-[10px] text-gray-300">Générez un aperçu automatique avec l'affiche officielle</p>
-                    </div>
-                  </div>
-                  <a
-                    href={whatsappShareEventUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full sm:w-auto px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md shrink-0"
-                  >
-                    <Share2 className="w-3.5 h-3.5" />
-                    <span>Partager sur WhatsApp</span>
-                  </a>
-                </div>
-
-                {/* Choix de Formule & Coordonnées (Affiché UNIQUEMENT si ventes ouvertes) */}
-                {!isSalesUpcoming && (
-                  <>
-                    <div>
-                      <div className="flex items-center justify-between mb-3">
-                        <h3 className="font-heading text-xs font-bold text-gray-300 uppercase tracking-wider">
-                          1. Choisissez votre Formule
-                        </h3>
-                        <span className="text-xs text-[#DCB8FF] font-semibold">
-                          {tiers.length} formule(s) disponible(s)
-                        </span>
-                      </div>
-
-                      <div className="space-y-2.5">
-                        {tiers.map((tier) => {
-                          const isSelected = selectedTier.id === tier.id;
-                          const isVipTier =
-                            tier.name.toLowerCase().includes('vip') ||
-                            tier.name.toLowerCase().includes('prestige');
-
-                          return (
-                            <div
-                              key={tier.id}
-                              onClick={() => setSelectedTier(tier)}
-                              className={`p-4 rounded-2xl cursor-pointer transition-all border ${
-                                isSelected
-                                  ? isVipTier
-                                    ? 'bg-[#241A00]/80 border-[#E9C349] shadow-lg shadow-[#E9C349]/15'
-                                    : 'bg-[#1DC3F4]/10 border-[#1DC3F4] shadow-lg shadow-[#1DC3F4]/15'
-                                  : 'bg-[#201F1F] border-white/5 hover:border-white/20'
-                              }`}
-                            >
-                              <div className="flex items-start justify-between">
-                                <div>
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-heading font-bold text-sm text-white">
-                                      {tier.name}
-                                    </span>
-                                    {isVipTier && (
-                                      <span className="bg-[#E9C349] text-[#241A00] text-[9px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-0.5">
-                                        <ShieldCheck className="w-2.5 h-2.5" /> VIP
-                                      </span>
-                                    )}
-
-                                    {/* Badge d'Urgence en Temps Réel (Stock) */}
-                                    {tier.available > 20 ? (
-                                      <span className="text-[10px] text-gray-400 bg-white/5 border border-white/5 px-2.5 py-0.5 rounded-full font-medium">
-                                        Disponible
-                                      </span>
-                                    ) : tier.available > 5 ? (
-                                      <span className="text-[10px] text-[#E9C349] bg-[#E9C349]/15 border border-[#E9C349]/40 px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1.5 animate-pulse shadow-sm shadow-[#E9C349]/20">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-[#E9C349]" />
-                                        Plus que {tier.available} places !
-                                      </span>
-                                    ) : tier.available > 0 ? (
-                                      <span className="text-[10px] text-[#EF4444] bg-[#EF4444]/15 border border-[#EF4444]/40 px-2.5 py-0.5 rounded-full font-extrabold flex items-center gap-1.5 shadow-sm shadow-red-500/20">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-[#EF4444] animate-ping" />
-                                        Dernières places !
-                                      </span>
-                                    ) : (
-                                      <span className="text-[10px] text-gray-500 bg-white/5 border border-white/5 px-2.5 py-0.5 rounded-full font-bold">
-                                        Épuisé
-                                      </span>
-                                    )}
-                                  </div>
-                                  <p className="text-xs text-gray-400 mt-1">{tier.description}</p>
-                                </div>
-
-                                <div className="text-right">
-                                  <span className="font-heading font-extrabold text-base text-[#E9C349]">
-                                    {tier.price.toLocaleString('fr-FR')} FCFA
-                                  </span>
-                                  <p className="text-[10px] text-gray-400">par billet</p>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Quantité & Coordonnées Client */}
-                    <div className="space-y-3">
-                      {!isAuthenticated && (
-                        <div className="p-3.5 rounded-2xl bg-[#1C1A24] border border-[#8A2BE2]/40 text-[#DCB8FF] flex items-center justify-between gap-3 animate-in fade-in">
-                          <div className="flex items-center gap-2.5">
-                            <Zap className="w-5 h-5 text-[#E9C349] shrink-0" />
-                            <div>
-                              <p className="font-bold text-xs text-white">Achat Express sans Compte</p>
-                              <p className="text-[11px] text-gray-300">
-                                Vos billets seront émis instantanément. Vous pourrez créer un mot de passe après le paiement.
-                              </p>
-                            </div>
-                          </div>
-                          {onRequireAuth && (
-                            <button
-                              type="button"
-                              onClick={onRequireAuth}
-                              className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs uppercase tracking-wider whitespace-nowrap transition-colors"
-                            >
-                              Connexion
-                            </button>
-                          )}
-                        </div>
-                      )}
-
-                      <div className="flex items-center justify-between p-4 bg-[#201F1F] rounded-2xl border border-white/5">
-                        <div>
-                          <p className="text-xs uppercase tracking-wider text-gray-400 font-bold">Nombre de places</p>
-                          <p className="text-xs text-gray-400 mt-0.5">Places disponibles : {selectedTier.available}</p>
-                        </div>
-                        <div className="flex items-center gap-3 bg-[#131313] p-1 rounded-xl border border-white/10">
-                          <button
-                            onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                            className="w-8 h-8 rounded-lg bg-[#242424] hover:bg-[#333] text-white flex items-center justify-center font-bold text-base transition-colors"
-                          >
-                            -
-                          </button>
-                          <span className="font-heading font-bold text-base text-white px-2">
-                            {quantity}
-                          </span>
-                          <button
-                            onClick={() => setQuantity(Math.min(Math.min(10, selectedTier.available), quantity + 1))}
-                            className="w-8 h-8 rounded-lg bg-[#242424] hover:bg-[#333] text-white flex items-center justify-center font-bold text-base transition-colors"
-                          >
-                            +
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div className="bg-[#1C1B1B] p-3.5 rounded-2xl border border-white/5">
-                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1 flex items-center justify-between">
-                            <span>Nom complet du participant</span>
-                            <span className="text-[#E9C349] font-bold text-[9px]">* Requis</span>
-                          </label>
-                          <input
-                            type="text"
-                            value={customerName}
-                            onChange={(e) => setCustomerName(e.target.value)}
-                            placeholder="Votre nom complet"
-                            className="bg-transparent border-none outline-none text-white text-xs w-full p-0 font-medium"
-                          />
-                        </div>
-
-                        <div className="bg-[#1C1B1B] p-3.5 rounded-2xl border border-white/5">
-                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1 flex items-center justify-between">
-                            <span>Numéro Mobile Wave</span>
-                            <span className="text-gray-400 text-[9px]">Tél. ou Email</span>
-                          </label>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-[#1DC3F4] tracking-wider">+221</span>
-                            <input
-                              type="tel"
-                              value={phoneNumber}
-                              onChange={(e) => setPhoneNumber(e.target.value)}
-                              placeholder="Numéro Wave (ex: 77 123 45 67)"
-                              className="bg-transparent border-none outline-none text-white text-xs font-mono w-full p-0"
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Email pour recevoir le billet */}
-                      <div className="bg-[#1C1B1B] p-3.5 rounded-2xl border border-white/5">
-                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1 flex items-center justify-between">
-                          <span>Email (pour recevoir votre billet)</span>
-                          <span className="text-gray-400 text-[9px]">Tél. ou Email</span>
-                        </label>
-                        <input
-                          type="email"
-                          value={customerEmail}
-                          onChange={(e) => setCustomerEmail(e.target.value)}
-                          placeholder="votre@email.com (recommandé pour sauvegarder vos billets)"
-                          className="bg-transparent border-none outline-none text-white text-xs w-full p-0 font-medium"
-                        />
-                      </div>
-
-                      {/* Code Promo Bloc */}
-                      <div className="bg-[#1C1B1B] p-3.5 rounded-2xl border border-white/5 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
-                            <Tag className="w-3.5 h-3.5 text-[#E9C349]" />
-                            <span>Code Promo / Réduction Spéciale</span>
-                          </label>
-                          {appliedPromo && (
-                            <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                              -{appliedPromo.discountPercent}% appliqué
-                            </span>
-                          )}
-                        </div>
-
-                        {!appliedPromo ? (
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="text"
-                              value={promoInput}
-                              onChange={(e) => setPromoInput(e.target.value.toUpperCase().replace(/\s/g, ''))}
-                              placeholder={event.promoCode ? `Code promo (${event.promoCode})` : 'EX: THIES2027'}
-                              className="flex-1 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white font-mono uppercase font-bold focus:border-[#E9C349] outline-none"
-                            />
-                            <button
-                              type="button"
-                              onClick={handleApplyPromo}
-                              className="px-3.5 py-2 rounded-xl bg-[#241A00] hover:bg-[#362700] text-[#E9C349] border border-[#E9C349]/40 text-xs font-bold font-heading transition-colors"
-                            >
-                              Appliquer
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center justify-between p-2 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-xs">
-                            <div className="flex items-center gap-2 text-emerald-300 font-medium">
-                              <Tag className="w-4 h-4 text-[#E9C349]" />
-                              <span>Code <strong>{appliedPromo.code}</strong> : -{discountAmount.toLocaleString('fr-FR')} FCFA</span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={handleRemovePromo}
-                              className="text-[11px] text-gray-400 hover:text-white underline font-bold"
-                            >
-                              Retirer
-                            </button>
-                          </div>
-                        )}
-
-                        {promoError && (
-                          <p className="text-[11px] text-rose-400 font-medium flex items-center gap-1">
-                            <AlertCircle className="w-3 h-3" />
-                            <span>{promoError}</span>
-                          </p>
-                        )}
-                      </div>
-
-
-                    </div>
-                  </>
-                )}
-              </>
+              </div>
             )}
 
-            {/* ÉTAPE 2 : Confirmation après ouverture de Wave */}
-            {step === 'confirmation' && activeOrder && (
-              <div className="py-6 px-2 text-center space-y-6 animate-in fade-in duration-300">
-                <div className="relative mx-auto w-20 h-20 flex items-center justify-center">
-                  <div className="absolute inset-0 rounded-full bg-[#1DC3F4]/20 animate-ping" />
-                  <div className="relative w-16 h-16 rounded-full bg-gradient-to-tr from-[#1DC3F4] to-[#0A85EA] text-[#0D0D11] flex items-center justify-center shadow-xl shadow-[#1DC3F4]/30">
-                    <Clock className="w-8 h-8 stroke-[2.5]" />
+            {/* ============================================================ */}
+            {/* ÉTAPE 1 : step_captcha (Vérification Sécurité)               */}
+            {/* ============================================================ */}
+            {flow === 'step_captcha' && (
+              <div className="py-4 text-center space-y-4 animate-in fade-in duration-200">
+                <div className="w-12 h-12 rounded-2xl bg-[#8A2BE2]/20 border border-[#8A2BE2]/40 text-[#DCB8FF] flex items-center justify-center mx-auto shadow-lg shadow-[#8A2BE2]/20">
+                  <ShieldCheck className="w-6 h-6 text-[#E9C349]" />
+                </div>
+                <div>
+                  <h3 className="font-heading text-base font-extrabold text-white">
+                    Vérification de Sécurité
+                  </h3>
+                  <p className="text-xs text-gray-400 mt-1 max-w-xs mx-auto">
+                    Protection anti-robot instantanée avant d'accéder à la réservation.
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-[#10111A] border border-white/10 flex justify-center items-center min-h-[100px] overflow-hidden max-w-sm mx-auto">
+                  <TurnstileGate
+                    ref={turnstileRef}
+                    onTokenChange={setCaptchaToken}
+                  />
+                </div>
+
+                {captchaToken ? (
+                  <div className="space-y-2 animate-in fade-in">
+                    <div className="inline-flex items-center gap-1.5 text-xs text-emerald-400 font-bold">
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Vérification réussie ! Redirection...</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setFlow('step_contact')}
+                      className="w-full py-3 rounded-xl bg-[#E9C349] hover:bg-[#F3D779] text-[#241A00] font-heading font-extrabold text-xs uppercase tracking-wider transition-all"
+                    >
+                      Continuer vers mes coordonnées →
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-gray-500">
+                    Cochez la case ci-dessus pour continuer automatiquement.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* ============================================================ */}
+            {/* ÉTAPE 2 : step_contact (Coordonnées Réception)              */}
+            {/* ============================================================ */}
+            {flow === 'step_contact' && (
+              <div className="space-y-3.5 animate-in fade-in duration-200">
+                <div>
+                  <h3 className="font-heading text-sm font-extrabold text-white flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-[#8A2BE2] text-white text-[11px] flex items-center justify-center font-bold">
+                      2
+                    </span>
+                    <span>Coordonnées de Réception</span>
+                  </h3>
+                  <p className="text-[11px] text-gray-400 mt-0.5">
+                    Indiquez le nom du titulaire et votre contact pour recevoir vos billets officiels.
+                  </p>
+                </div>
+
+                <div className="space-y-2.5 bg-[#10111A] p-3.5 rounded-2xl border border-white/5">
+                  <div>
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1 flex items-center justify-between">
+                      <span>Nom complet du participant</span>
+                      <span className="text-[#E9C349] font-bold text-[9px]">* Requis (≥2 car.)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      placeholder="Prénom et Nom"
+                      className="w-full px-3 py-2.5 rounded-xl bg-black/40 border border-white/10 text-white text-xs font-medium outline-none focus:border-[#E9C349] transition-colors"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1 flex items-center justify-between">
+                      <span>Numéro Mobile Wave</span>
+                      <span className="text-gray-400 text-[9px]">Tél. ou Email requis</span>
+                    </label>
+                    <div className="flex items-center gap-2 bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 focus-within:border-[#1DC3F4] transition-colors">
+                      <span className="text-xs font-bold text-[#1DC3F4] tracking-wider">+221</span>
+                      <input
+                        type="tel"
+                        value={phoneNumber}
+                        onChange={(e) => setPhoneNumber(e.target.value)}
+                        placeholder="77 123 45 67"
+                        className="w-full bg-transparent border-none outline-none text-white text-xs font-mono p-0"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1 flex items-center justify-between">
+                      <span>Email de réception</span>
+                      <span className="text-gray-400 text-[9px]">Recommandé</span>
+                    </label>
+                    <input
+                      type="email"
+                      value={customerEmail}
+                      onChange={(e) => setCustomerEmail(e.target.value)}
+                      placeholder="votre@email.com"
+                      className="w-full px-3 py-2.5 rounded-xl bg-black/40 border border-white/10 text-white text-xs font-medium outline-none focus:border-[#E9C349] transition-colors"
+                    />
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#1DC3F4]/15 text-[#1DC3F4] border border-[#1DC3F4]/30">
-                    <Smartphone className="w-3.5 h-3.5" />
-                    Application Wave Ouverte
-                  </span>
-                  <h3 className="font-heading text-xl sm:text-2xl font-extrabold text-white">
-                    Paiement en cours de vérification
+                {!isContactInfoValid && (
+                  <div className="p-2.5 rounded-xl bg-amber-950/40 border border-[#E9C349]/30 text-amber-300 text-[11px] flex items-center gap-2">
+                    <AlertCircle className="w-3.5 h-3.5 text-[#E9C349] shrink-0" />
+                    <span>Renseignez votre nom et au moins un contact (téléphone ou email).</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ============================================================ */}
+            {/* ÉTAPE 3 : step_tickets (Formules & Quantité)                 */}
+            {/* ============================================================ */}
+            {flow === 'step_tickets' && (
+              <div className="space-y-3.5 animate-in fade-in duration-200">
+                <div>
+                  <h3 className="font-heading text-sm font-extrabold text-white flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-[#8A2BE2] text-white text-[11px] flex items-center justify-center font-bold">
+                      3
+                    </span>
+                    <span>Choix de la Formule</span>
                   </h3>
+                  <p className="text-[11px] text-gray-400 mt-0.5">
+                    Sélectionnez votre pass et le nombre de places souhaité.
+                  </p>
                 </div>
 
-                {/* Référence Wave XXL & Bouton Copier */}
-                <div className="p-4 rounded-2xl bg-[#1C1B1B] border-2 border-[#1DC3F4]/40 text-center max-w-md mx-auto space-y-2.5 shadow-lg shadow-[#1DC3F4]/10">
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                {/* Formules en Radio Cards */}
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                  {tiers.map((tier) => {
+                    const isSelected = selectedTier.id === tier.id;
+                    const isVipTier = tier.name.toLowerCase().includes('vip') || tier.name.toLowerCase().includes('salon');
+                    return (
+                      <div
+                        key={tier.id}
+                        onClick={() => setSelectedTier(tier)}
+                        className={`p-3 rounded-2xl cursor-pointer transition-all border flex items-center justify-between gap-3 ${
+                          isSelected
+                            ? 'bg-[#E9C349]/10 border-[#E9C349] shadow-md shadow-[#E9C349]/10'
+                            : 'bg-[#10111A] border-white/5 hover:border-white/20'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                          <div
+                            className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                              isSelected ? 'border-[#E9C349] bg-[#E9C349]' : 'border-gray-500'
+                            }`}
+                          >
+                            {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-black" />}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-heading font-bold text-xs text-white truncate">
+                                {tier.name}
+                              </span>
+                              {isVipTier && (
+                                <span className="bg-[#E9C349] text-[#241A00] text-[8px] font-black px-1.5 py-0.2 rounded-full shrink-0">
+                                  VIP
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[10px] text-gray-400 truncate">{tier.description}</p>
+                          </div>
+                        </div>
+
+                        <div className="text-right shrink-0">
+                          <span className="font-heading font-extrabold text-xs text-[#E9C349]">
+                            {tier.price.toLocaleString('fr-FR')} F
+                          </span>
+                          <p className="text-[9px] text-gray-400">
+                            {tier.available > 5 ? `${tier.available} dispo` : `⚠️ Plus que ${tier.available} !`}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Quantité & Code Promo */}
+                <div className="p-3 bg-[#10111A] rounded-2xl border border-white/5 space-y-2.5 text-xs">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-bold text-gray-300 text-[11px]">Nombre de places</p>
+                      <p className="text-[10px] text-gray-400">Disponibles : {selectedTier.available}</p>
+                    </div>
+                    <div className="flex items-center gap-3 bg-black/40 px-2 py-1 rounded-xl border border-white/10">
+                      <button
+                        type="button"
+                        onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                        className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 text-white font-bold text-sm transition-colors"
+                      >
+                        -
+                      </button>
+                      <span className="font-heading font-bold text-sm text-white px-1">
+                        {quantity}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setQuantity(Math.min(Math.min(10, selectedTier.available), quantity + 1))}
+                        className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 text-white font-bold text-sm transition-colors"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Code Promo compact 1-ligne */}
+                  <div className="pt-2 border-t border-white/5">
+                    {!appliedPromo ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={promoInput}
+                          onChange={(e) => setPromoInput(e.target.value.toUpperCase().replace(/\s/g, ''))}
+                          placeholder="Code promo (ex: THIES2027)"
+                          className="flex-1 bg-black/40 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white font-mono uppercase font-bold outline-none focus:border-[#E9C349]"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleApplyPromo}
+                          className="px-3 py-1.5 rounded-xl bg-[#241A00] hover:bg-[#362700] text-[#E9C349] border border-[#E9C349]/40 text-[11px] font-bold transition-colors"
+                        >
+                          Appliquer
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between p-1.5 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-[11px]">
+                        <span className="text-emerald-300 font-medium">
+                          🎁 Code <strong>{appliedPromo.code}</strong> (-{discountAmount.toLocaleString('fr-FR')} F)
+                        </span>
+                        <button
+                          type="button"
+                          onClick={handleRemovePromo}
+                          className="text-gray-400 hover:text-white underline font-bold text-[10px]"
+                        >
+                          Retirer
+                        </button>
+                      </div>
+                    )}
+                    {promoError && (
+                      <p className="text-[10px] text-rose-400 mt-1">{promoError}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ============================================================ */}
+            {/* ÉTAPE 4 : step_payment (Récapitulatif & Déclenchement Wave)   */}
+            {/* ============================================================ */}
+            {flow === 'step_payment' && (
+              <div className="space-y-3.5 animate-in fade-in duration-200">
+                <div>
+                  <h3 className="font-heading text-sm font-extrabold text-white flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-[#8A2BE2] text-white text-[11px] flex items-center justify-center font-bold">
+                      4
+                    </span>
+                    <span>Récapitulatif & Paiement</span>
+                  </h3>
+                  <p className="text-[11px] text-gray-400 mt-0.5">
+                    Vérifiez les détails avant d'ouvrir l'application Wave.
+                  </p>
+                </div>
+
+                {/* Mini-carte Récapitulative Or Impérial */}
+                <div className="p-3.5 rounded-2xl bg-[#10111A] border border-[#E9C349]/30 shadow-lg shadow-[#E9C349]/5 space-y-2 text-xs">
+                  <div className="flex justify-between items-center text-gray-400">
+                    <span>Événement :</span>
+                    <strong className="text-white text-right truncate max-w-[180px]">{event.title}</strong>
+                  </div>
+                  <div className="flex justify-between items-center text-gray-400">
+                    <span>Formule :</span>
+                    <strong className="text-white">{selectedTier.name} (x{quantity})</strong>
+                  </div>
+                  <div className="flex justify-between items-center text-gray-400">
+                    <span>Titulaire :</span>
+                    <strong className="text-white">{customerName}</strong>
+                  </div>
+                  <div className="flex justify-between items-center text-gray-400">
+                    <span>Contact :</span>
+                    <span className="text-gray-300 font-mono text-[11px]">
+                      {phoneNumber ? `+221 ${phoneNumber}` : customerEmail}
+                    </span>
+                  </div>
+
+                  {discountAmount > 0 && (
+                    <div className="flex justify-between items-center text-emerald-400 font-semibold pt-1 border-t border-white/5">
+                      <span>Réduction ({appliedPromo?.code}) :</span>
+                      <span>-{discountAmount.toLocaleString('fr-FR')} FCFA</span>
+                    </div>
+                  )}
+
+                  <div className="pt-2 border-t border-white/10 flex justify-between items-baseline">
+                    <span className="font-bold text-gray-300">Total à payer :</span>
+                    <span className="font-heading font-extrabold text-xl text-[#E9C349] tracking-tight">
+                      {totalPrice.toLocaleString('fr-FR')} FCFA
+                    </span>
+                  </div>
+                </div>
+
+                {/* Bouton Principal Wave Cyan */}
+                <button
+                  type="button"
+                  onClick={handleWaveCheckout}
+                  disabled={isProcessing}
+                  className="w-full h-12 py-3 px-6 rounded-2xl font-heading font-extrabold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-2.5 transition-all shadow-lg bg-[#00D2FF] hover:bg-[#00b8e6] text-[#07131D] shadow-[#00D2FF]/25 active:scale-95 disabled:opacity-50 cursor-pointer"
+                >
+                  {isProcessing ? (
+                    <div className="flex items-center gap-2">
+                      <span className="w-4 h-4 border-2 border-[#07131D] border-t-transparent rounded-full animate-spin" />
+                      <span>Génération de la commande...</span>
+                    </div>
+                  ) : (
+                    <>
+                      <Smartphone className="w-4 h-4 fill-current" />
+                      <span>Payer {totalPrice.toLocaleString('fr-FR')} FCFA avec Wave</span>
+                    </>
+                  )}
+                </button>
+
+                {/* CTA Secours : J'ai déjà transféré manuellement */}
+                <div className="text-center pt-1">
+                  <button
+                    type="button"
+                    onClick={handleManualTransferCheckout}
+                    disabled={isProcessing}
+                    className="text-[11px] text-gray-400 hover:text-[#00D2FF] underline transition-colors"
+                  >
+                    J'ai déjà transféré manuellement via Wave
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ============================================================ */}
+            {/* VUE CONFIRMATION : Suivi Post-Paiement (Zero-scroll)         */}
+            {/* ============================================================ */}
+            {flow === 'confirmation' && activeOrder && (
+              <div className="py-2 text-center space-y-3.5 animate-in fade-in duration-300">
+                {/* Badge Statut Animé */}
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#00D2FF]/15 text-[#00D2FF] border border-[#00D2FF]/30">
+                  <Clock className="w-3.5 h-3.5 animate-spin" />
+                  <span>Paiement en cours de vérification</span>
+                </div>
+
+                <h3 className="font-heading text-lg font-extrabold text-white">
+                  Commande Enregistrée !
+                </h3>
+
+                {/* Ticket Stub Card */}
+                <div className="p-3.5 rounded-2xl bg-[#10111A] border-2 border-[#00D2FF]/40 text-center max-w-sm mx-auto space-y-2 shadow-lg shadow-[#00D2FF]/10">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
                     Référence de Commande
                   </p>
-                  <div className="flex items-center justify-center gap-3">
-                    <span className="font-mono text-2xl sm:text-3xl font-black text-[#1DC3F4] tracking-wider selection:bg-[#1DC3F4] selection:text-black">
+                  <div className="flex items-center justify-center gap-2">
+                    <span className="font-mono text-xl sm:text-2xl font-black text-[#00D2FF] tracking-wider selection:bg-[#00D2FF] selection:text-black">
                       {activeOrder.reference}
                     </span>
                     <button
@@ -1145,109 +1244,38 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                         setCopiedRef(true);
                         setTimeout(() => setCopiedRef(false), 2500);
                       }}
-                      className="p-2 px-3 rounded-xl bg-[#1DC3F4]/20 hover:bg-[#1DC3F4]/30 text-[#1DC3F4] transition-all active:scale-95 flex items-center gap-1.5 text-xs font-bold"
-                      title="Copier la référence"
+                      className="p-1.5 px-2.5 rounded-xl bg-[#00D2FF]/20 hover:bg-[#00D2FF]/30 text-[#00D2FF] transition-all text-xs font-bold flex items-center gap-1"
+                      title="Copier"
                     >
-                      <Copy className="w-4 h-4" />
-                      <span>{copiedRef ? 'Copié !' : 'Copier'}</span>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>{copiedRef ? 'Copié' : 'Copier'}</span>
                     </button>
                   </div>
-                  <p className="text-xs text-[#E9C349] font-medium leading-relaxed bg-[#241A00]/60 p-2.5 rounded-xl border border-[#E9C349]/20">
-                    💡 <strong>Important :</strong> Indiquez cette référence dans le motif de votre transfert Wave pour une validation automatique instantanée.
+                  <p className="text-[11px] text-[#E9C349] font-medium leading-snug bg-[#241A00]/60 p-2 rounded-xl border border-[#E9C349]/20">
+                    💡 Mentionnez ce code dans le motif de votre transfert Wave.
                   </p>
-                </div>
-
-                {/* Récapitulatif commande */}
-                <div className="p-4 rounded-2xl bg-[#201F1F] border border-white/5 text-xs text-left max-w-md mx-auto space-y-2">
-                  <div className="flex justify-between items-center text-gray-400">
-                    <span>Événement :</span>
-                    <strong className="text-white text-right truncate max-w-[200px]">{event.title}</strong>
-                  </div>
-                  <div className="flex justify-between items-center text-gray-400">
-                    <span>Formule choisie :</span>
-                    <strong className="text-white">{activeOrder.tierName} ({activeOrder.quantity} place(s))</strong>
-                  </div>
-                  {activeOrder.promoCodeApplied && (
-                    <div className="flex justify-between items-center text-emerald-400 font-semibold">
-                      <span>Code promo ({activeOrder.promoCodeApplied}) :</span>
-                      <span>-{activeOrder.discountAmount?.toLocaleString('fr-FR')} FCFA</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between items-center text-gray-400">
-                    <span>Bénéficiaire :</span>
-                    <strong className="text-white">{activeOrder.customerName}</strong>
-                  </div>
-                  <div className="pt-2 border-t border-white/10 flex justify-between items-center font-bold">
-                    <span className="text-gray-300">Montant total :</span>
-                    <span className="text-[#E9C349] text-base font-extrabold tabular-nums">
+                  <div className="text-right text-xs pt-1 border-t border-white/5 flex justify-between items-center text-gray-400">
+                    <span>Montant total :</span>
+                    <strong className="text-[#E9C349] font-extrabold font-mono text-sm">
                       {activeOrder.totalAmount.toLocaleString('fr-FR')} FCFA
-                    </span>
+                    </strong>
                   </div>
                 </div>
 
-                {/* Proposition sécurisation de compte invité */}
-                {!isAuthenticated && (
-                  <div className="p-4 rounded-2xl bg-[#201F1F] border border-white/10 text-left max-w-md mx-auto space-y-3">
-                    <div>
-                      <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                        <Lock className="w-3.5 h-3.5 text-[#E9C349]" />
-                        Créer un mot de passe pour retrouver vos billets facilement
-                      </h4>
-                      <p className="text-[11px] text-gray-400 mt-1">
-                        Conservez l'accès à tous vos billets sur n'importe quel appareil en sécurisant votre compte.
-                      </p>
-                    </div>
-
-                    {accountConverted ? (
-                      <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-semibold flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-                        <span>Votre compte a été sécurisé avec succès !</span>
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        <input
-                          type="email"
-                          placeholder="Votre adresse email"
-                          value={guestEmail}
-                          onChange={(e) => setGuestEmail(e.target.value)}
-                          className="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white text-xs outline-none focus:border-[#E9C349]"
-                        />
-                        <input
-                          type="password"
-                          placeholder="Définir un mot de passe (min 6 car.)"
-                          value={guestPassword}
-                          onChange={(e) => setGuestPassword(e.target.value)}
-                          className="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white text-xs outline-none focus:border-[#E9C349]"
-                        />
-                        {accountConvertError && (
-                          <p className="text-[11px] text-red-400 font-medium">{accountConvertError}</p>
-                        )}
-                        <button
-                          type="button"
-                          disabled={isConvertingAccount}
-                          onClick={handleConvertGuestAccount}
-                          className="w-full py-2.5 px-4 rounded-xl bg-[#E9C349] hover:bg-[#F3D779] text-[#241A00] font-heading font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-50"
-                        >
-                          {isConvertingAccount ? 'Sécurisation...' : 'Enregistrer mon compte'}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Boutons d'Action Post-Achat : bouton de signalement, message d'attente, retour billetterie */}
-                <div className="max-w-md mx-auto pt-1 space-y-2.5">
-                  {activeOrder && activeOrder.status === 'pending' && !paymentSignaledSuccess ? (
+                {/* Actions Clés Zero-Scroll */}
+                <div className="space-y-2 max-w-sm mx-auto">
+                  {/* Bouton J'ai effectué le transfert Wave */}
+                  {!paymentSignaledSuccess && activeOrder.status === 'pending' ? (
                     <button
                       type="button"
                       onClick={handleSignalTransfer}
                       disabled={isSignalingPayment}
-                      className="w-full py-3.5 px-5 rounded-2xl font-heading font-extrabold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-2.5 transition-all shadow-lg bg-[#1DC3F4] hover:bg-[#1bb3e0] text-[#07131D] shadow-[#1DC3F4]/20 active:scale-95 disabled:opacity-50 cursor-pointer"
+                      className="w-full py-3 px-4 rounded-2xl font-heading font-extrabold text-xs tracking-wider uppercase flex items-center justify-center gap-2 transition-all shadow-md bg-[#00D2FF] hover:bg-[#00b8e6] text-[#07131D] shadow-[#00D2FF]/20 active:scale-95 disabled:opacity-50 cursor-pointer"
                     >
                       {isSignalingPayment ? (
-                        <div className="flex items-center gap-2">
-                          <span className="w-4 h-4 border-2 border-[#07131D] border-t-transparent rounded-full animate-spin" />
-                          <span>Signalement en cours...</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-3.5 h-3.5 border-2 border-[#07131D] border-t-transparent rounded-full animate-spin" />
+                          <span>Signalement...</span>
                         </div>
                       ) : (
                         <>
@@ -1256,236 +1284,183 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                         </>
                       )}
                     </button>
-                  ) : null}
-
-                  {activeOrder && (activeOrder.status === 'payment_signaled' || paymentSignaledSuccess) ? (
-                    <div className="p-4 rounded-2xl bg-emerald-950/40 border border-emerald-500/40 text-center space-y-2 animate-in fade-in">
-                      <div className="flex items-center justify-center gap-2 text-emerald-400 font-bold text-xs uppercase tracking-wider">
-                        <CheckCircle2 className="w-4 h-4" />
-                        <span>Transfert signalé avec succès</span>
-                      </div>
-                      <p className="text-xs text-emerald-200/90 leading-relaxed">
-                        ⏳ Votre paiement a été signalé à l'équipe. Votre pass sera activé dès la confirmation de réception.
-                      </p>
+                  ) : (
+                    <div className="p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-500/40 text-emerald-400 text-xs font-semibold flex items-center justify-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 shrink-0" />
+                      <span>Transfert signalé ! Nos équipes vérifient la réception.</span>
                     </div>
-                  ) : activeOrder && activeOrder.status === 'pending' ? (
-                    <div className="p-4 rounded-2xl bg-amber-950/40 border border-[#E9C349]/40 text-center space-y-2">
-                      <div className="flex items-center justify-center gap-2 text-[#E9C349] font-bold text-xs uppercase tracking-wider">
-                        <Clock className="w-4 h-4 animate-pulse" />
-                        <span>En attente de votre transfert</span>
-                      </div>
-                      <p className="text-xs text-gray-300 leading-relaxed">
-                        Cliquez sur <strong>« J'ai effectué le transfert Wave »</strong> dès que vous avez envoyé les fonds pour accélérer la validation.
-                      </p>
-                    </div>
-                  ) : null}
+                  )}
 
-                  {activeOrder?.status === 'confirmed' ? (
+                  {/* Conserver mon reçu sur WhatsApp */}
+                  <a
+                    href={generateWhatsAppConfirmationUrl(activeOrder)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full py-2.5 px-4 rounded-2xl font-heading font-extrabold text-xs tracking-wider uppercase flex items-center justify-center gap-2 transition-all bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5 fill-current" />
+                    <span>Conserver mon reçu sur WhatsApp</span>
+                  </a>
+
+                  {/* Lien discret de sortie */}
+                  <div className="pt-1">
                     <button
                       type="button"
-                      onClick={() => {
-                        onClose();
-                        if (onNavigateToTickets) onNavigateToTickets();
-                      }}
-                      className="w-full py-3.5 px-5 rounded-2xl font-heading font-extrabold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-2.5 transition-all shadow-lg bg-gradient-to-r from-[#8A2BE2] via-[#E9C349] to-[#8A2BE2] text-white shadow-[#8A2BE2]/30 hover:scale-[1.02] active:scale-[0.98]"
+                      onClick={handleCloseModal}
+                      className="text-xs text-gray-400 hover:text-white transition-colors flex items-center justify-center gap-1 mx-auto"
                     >
-                      <Ticket className="w-4 h-4 text-white" />
-                      <span>Voir mon billet</span>
+                      <ArrowLeft className="w-3 h-3" />
+                      <span>Retourner à la billetterie</span>
                     </button>
-                  ) : null}
-
-                  {activeOrder && (
-                    <a
-                      href={generateWhatsAppConfirmationUrl(activeOrder)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-full py-3 px-5 rounded-2xl font-heading font-extrabold text-xs tracking-wider uppercase flex items-center justify-center gap-2.5 transition-all shadow-md bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30 active:scale-[0.98]"
-                    >
-                      <MessageSquare className="w-4 h-4 fill-current" />
-                      <span>Conserver mon reçu sur WhatsApp</span>
-                    </a>
-                  )}
-                  <p className="text-[11px] text-gray-400">
-                    Conservez votre référence de commande pour toute assistance ou retrait.
-                  </p>
+                  </div>
                 </div>
 
-                <p className="text-xs text-gray-400 max-w-md mx-auto leading-relaxed">
-                  Une fois votre paiement effectué sur l'application Wave, l'équipe valide votre commande. Votre pass avec QR Code unique sera accessible directement dans l'onglet <strong className="text-white">Mes Billets</strong>.
-                </p>
-
-                {openedWaveUrl && (
-                  <div className="pt-2">
-                    <a
-                      href={openedWaveUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-xs text-[#1DC3F4] hover:underline font-semibold"
-                    >
-                      <span>L'application ne s'est pas ouverte ? Cliquez ici</span>
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Footer Bar */}
-          <div className="p-4 sm:p-5 bg-[#0A0A0A] border-t border-white/10 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-            {step === 'select' && (
-              <>
-                {isSalesUpcoming ? (
-                  /* En mode ventes non ouvertes : affichage informatif et bouton de fermeture */
-                  <div className="w-full flex flex-col sm:flex-row items-center justify-between gap-3">
-                    <div className="flex items-center gap-2 text-xs text-[#DCB8FF]">
-                      <Clock className="w-4 h-4 text-[#E9C349]" />
-                      <span>Inscrivez-vous ci-dessus pour être alerté en priorité.</span>
+                {/* Sauvegarde invité ultra-compacte */}
+                {!isAuthenticated && !accountConverted && (
+                  <div className="p-3 rounded-2xl bg-[#10111A] border border-white/10 text-left max-w-sm mx-auto space-y-2 text-xs">
+                    <p className="font-bold text-white text-[11px] flex items-center gap-1.5">
+                      <Lock className="w-3 h-3 text-[#E9C349]" />
+                      <span>Créer un mot de passe pour retrouver vos pass</span>
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="email"
+                        placeholder="Votre email"
+                        value={guestEmail}
+                        onChange={(e) => setGuestEmail(e.target.value)}
+                        className="px-2.5 py-1.5 rounded-xl bg-black/40 border border-white/10 text-white text-[11px] outline-none"
+                      />
+                      <input
+                        type="password"
+                        placeholder="Mot de passe (min 6)"
+                        value={guestPassword}
+                        onChange={(e) => setGuestPassword(e.target.value)}
+                        className="px-2.5 py-1.5 rounded-xl bg-black/40 border border-white/10 text-white text-[11px] outline-none"
+                      />
                     </div>
+                    {accountConvertError && (
+                      <p className="text-[10px] text-red-400">{accountConvertError}</p>
+                    )}
                     <button
                       type="button"
-                      onClick={onClose}
-                      className="w-full sm:w-auto min-h-[48px] px-6 py-3 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-heading font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center cursor-pointer"
+                      disabled={isConvertingAccount}
+                      onClick={handleConvertGuestAccount}
+                      className="w-full py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-[10px] uppercase transition-colors"
                     >
-                      Fermer
+                      {isConvertingAccount ? 'Sécurisation...' : 'Enregistrer mon compte'}
                     </button>
                   </div>
-                ) : (
-                  /* En mode ventes ouvertes : Total et Bouton Wave */
-                  <>
-                    <div className="flex items-center justify-between sm:flex-col sm:items-start">
-                      <p className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Total à payer</p>
-                      <div className="flex items-baseline gap-2">
-                        <p className="font-heading text-lg sm:text-2xl font-extrabold text-[#E9C349]">
-                          {totalPrice.toLocaleString('fr-FR')} FCFA
-                        </p>
-                        {discountAmount > 0 && (
-                          <span className="text-xs text-gray-400 line-through font-mono">
-                            {baseTotalPrice.toLocaleString('fr-FR')} F
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="w-full sm:flex-1 sm:max-w-md flex flex-col items-stretch sm:items-end gap-1.5">
-                      {/* CAPTCHA Turnstile positionné JUSTE AU-DESSUS du bouton de soumission avec mb-4 (Problème 4) */}
-                      {!isAuthenticated && !hasVerifiedSession && (
-                        <div className="w-full max-w-full overflow-hidden mb-4">
-                          <TurnstileGate
-                            ref={turnstileRef}
-                            onTokenChange={setCaptchaToken}
-                          />
-                        </div>
-                      )}
-
-                      {(() => {
-                        const currentWaveUrl = resolveWaveUrl(selectedTier);
-                        const isWaveConfigured = Boolean(currentWaveUrl && currentWaveUrl.startsWith('http'));
-                        const requiresCaptcha = Boolean(getSupabaseClient()) && !isAuthenticated && !hasVerifiedSession;
-                        const canSubmit = isContactInfoValid && !isProcessing && selectedTier.available >= quantity && isWaveConfigured && (!requiresCaptcha || Boolean(captchaToken));
-
-                        return (
-                          <>
-                            <button
-                              onClick={handleWaveCheckout}
-                              disabled={!canSubmit}
-                              className="w-full h-12 py-3 px-6 rounded-2xl font-heading font-extrabold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-2.5 transition-all shadow-lg bg-[#1DC3F4] hover:bg-[#1bb3e0] text-[#07131D] shadow-[#1DC3F4]/20 active:scale-95 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
-                            >
-                              {!isWaveConfigured ? (
-                                <span>Paiement bientôt disponible</span>
-                              ) : isProcessing ? (
-                                <div className="flex items-center gap-2">
-                                  <span className="w-4 h-4 border-2 border-[#07131D] border-t-transparent rounded-full animate-spin" />
-                                  <span>Enregistrement...</span>
-                                </div>
-                              ) : requiresCaptcha && !captchaToken ? (
-                                <span>Vérification en cours…</span>
-                              ) : !isContactInfoValid ? (
-                                <span>Renseignez votre nom et contact</span>
-                              ) : (
-                                <>
-                                  <Smartphone className="w-4 h-4 fill-current" />
-                                  <span>Payer {totalPrice.toLocaleString('fr-FR')} FCFA avec Wave</span>
-                                </>
-                              )}
-                            </button>
-
-                            <div className="w-full flex items-center justify-between text-[11px] pt-1">
-                              <button
-                                type="button"
-                                onClick={handleCloseModal}
-                                className="text-gray-400 hover:text-white transition-colors flex items-center gap-1 cursor-pointer font-medium"
-                              >
-                                <ArrowLeft className="w-3 h-3" />
-                                <span>Retour à la billetterie</span>
-                              </button>
-
-                              {!isContactInfoValid ? (
-                                <span className="text-amber-400 font-semibold text-[10px] text-right">
-                                  Nom + (Tél. ou Email) requis
-                                </span>
-                              ) : !isAuthenticated ? (
-                                <span className="text-gray-400 text-[10px]">
-                                  ⚡ Achat direct sans mot de passe
-                                </span>
-                              ) : null}
-                            </div>
-                          </>
-                        );
-                      })()}
-                    </div>
-                  </>
                 )}
-              </>
-            )}
-
-            {step === 'confirmation' && (
-              <div className="w-full flex flex-col sm:flex-row gap-3">
-                {activeOrder?.status === 'confirmed' ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      handleCloseModal();
-                      if (onNavigateToTickets) onNavigateToTickets();
-                    }}
-                    className="flex-1 py-3.5 px-6 rounded-2xl font-heading font-extrabold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-2 transition-all shadow-lg bg-gradient-to-r from-[#8A2BE2] via-[#E9C349] to-[#8A2BE2] text-white shadow-[#8A2BE2]/30 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-                  >
-                    <Ticket className="w-4 h-4 text-white" />
-                    <span>Voir mon billet</span>
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleCloseModal}
-                    className="flex-1 py-3.5 px-6 rounded-2xl font-heading font-extrabold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-2 transition-all bg-[#1DC3F4]/15 hover:bg-[#1DC3F4]/25 text-[#1DC3F4] border border-[#1DC3F4]/30 shadow-md cursor-pointer"
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                    <span>Retour à la billetterie</span>
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={handleCloseModal}
-                  className="sm:w-auto px-6 py-3.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-heading font-bold text-xs uppercase tracking-wider transition-all cursor-pointer"
-                >
-                  Fermer
-                </button>
               </div>
             )}
           </div>
+
+          {/* ============================================================== */}
+          {/* FOOTER BAR CONTEXTUELLE SELON L'ÉTAPE DU WIZARD                */}
+          {/* ============================================================== */}
+          {flow === 'details' && !isSalesUpcoming && (
+            <div className="p-3.5 sm:p-4 bg-[#10111A] border-t border-white/10 flex items-center justify-between gap-3 flex-shrink-0">
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Tarif</p>
+                <p className="font-heading text-lg font-extrabold text-[#E9C349]">
+                  À partir de {event.price.toLocaleString('fr-FR')} F
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleStartBooking}
+                className="py-3 px-6 rounded-2xl font-heading font-extrabold text-xs sm:text-sm tracking-wider uppercase flex items-center gap-2 transition-all shadow-lg bg-[#E9C349] hover:bg-[#F3D779] text-[#241A00] shadow-[#E9C349]/20 active:scale-95 cursor-pointer"
+              >
+                <span>Réserver mes places</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          {flow === 'step_contact' && (
+            <div className="p-3 sm:p-4 bg-[#10111A] border-t border-white/10 flex items-center justify-between gap-2 flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => setFlow('details')}
+                className="px-3.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 font-bold text-xs flex items-center gap-1.5 transition-colors"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Détails</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setFlow('step_tickets')}
+                disabled={!isContactInfoValid}
+                className="flex-1 py-3 px-5 rounded-2xl font-heading font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-md bg-[#8A2BE2] hover:bg-[#7824c7] text-white disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              >
+                <span>Suivant : Formules</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
+          {flow === 'step_tickets' && (
+            <div className="p-3 sm:p-4 bg-[#10111A] border-t border-white/10 flex items-center justify-between gap-2 flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => setFlow('step_contact')}
+                className="px-3 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 font-bold text-xs flex items-center gap-1 transition-colors"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Contact</span>
+              </button>
+
+              <div className="text-right px-2">
+                <span className="font-heading font-extrabold text-sm text-[#E9C349]">
+                  {totalPrice.toLocaleString('fr-FR')} F
+                </span>
+                <p className="text-[9px] text-gray-400">Total</p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setFlow('step_payment')}
+                className="py-3 px-5 rounded-2xl font-heading font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all shadow-md bg-[#E9C349] hover:bg-[#F3D779] text-[#241A00] cursor-pointer"
+              >
+                <span>Vérifier</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
+          {flow === 'step_payment' && (
+            <div className="p-2.5 sm:p-3 bg-[#10111A] border-t border-white/10 flex items-center justify-between text-xs flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => setFlow('step_tickets')}
+                className="text-gray-400 hover:text-white transition-colors flex items-center gap-1"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Modifier ma sélection</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleCloseModal}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                Annuler
+              </button>
+            </div>
+          )}
         </motion.div>
       </motion.div>
 
-      {/* MODALE TEASER VIDÉO YOUTUBE 16:9 AVEC LAZY LOADING (TÂCHE 4) */}
+      {/* MODALE TEASER VIDÉO YOUTUBE LAZY LOADÉE */}
       {isTeaserOpen && youtubeVideoId && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/95 backdrop-blur-xl animate-in fade-in duration-200">
           <div className="relative w-full max-w-3xl bg-[#0D0C12] border border-[#8A2BE2]/50 rounded-3xl overflow-hidden shadow-2xl">
-            {/* Header de la modale vidéo */}
             <div className="p-4 bg-[#14131A] border-b border-white/10 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Youtube className="w-5 h-5 text-red-500" />
                 <h3 className="font-heading font-extrabold text-sm sm:text-base text-white truncate max-w-md">
-                  Teaser Officiel : {event.title}
+                  Teaser : {event.title}
                 </h3>
               </div>
               <button
@@ -1495,31 +1470,14 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                 <X className="w-4 h-4" />
               </button>
             </div>
-
-            {/* Container Iframe YouTube 16:9 Lazy Loadé */}
             <div className="relative w-full pb-[56.25%] bg-black">
               <iframe
-                src={`https://www.youtube.com/embed/${youtubeVideoId}?autoplay=0&mute=0&rel=0&modestbranding=1`}
+                src={`https://www.youtube.com/embed/${youtubeVideoId}?autoplay=1&mute=0&rel=0&modestbranding=1`}
                 title={`Teaser ${event.title}`}
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                 allowFullScreen
                 className="absolute inset-0 w-full h-full border-none"
               />
-            </div>
-
-            {/* Footer de la modale vidéo */}
-            <div className="p-3.5 bg-[#14131A] border-t border-white/10 flex items-center justify-between text-xs text-gray-400">
-              <span className="truncate">
-                {event.promoter?.name && event.promoter.name.trim().toLowerCase() !== 'utilisateur'
-                  ? `Produit et partagé par ${event.promoter.name}`
-                  : 'Production officielle Thièsdn'}
-              </span>
-              <button
-                onClick={() => setIsTeaserOpen(false)}
-                className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs"
-              >
-                Fermer la vidéo
-              </button>
             </div>
           </div>
         </div>
