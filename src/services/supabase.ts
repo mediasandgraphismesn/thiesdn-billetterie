@@ -483,6 +483,9 @@ export const signUpWithSupabase = async (
   if (!client) {
     throw new Error('Supabase n\'est pas encore configuré.');
   }
+  if (!captchaToken) {
+    throw new Error('Veuillez valider le CAPTCHA.');
+  }
 
   const redirectUrl = typeof window !== 'undefined' ? window.location.origin : undefined;
   const termsAcceptedAt = metadata.termsAcceptedAt || new Date().toISOString();
@@ -556,6 +559,9 @@ export const resendConfirmationEmail = async (email: string, captchaToken?: stri
   if (!client) {
     throw new Error('Supabase n\'est pas encore configuré.');
   }
+  if (!captchaToken) {
+    throw new Error('Veuillez valider le CAPTCHA.');
+  }
 
   const redirectUrl = typeof window !== 'undefined' ? window.location.origin : undefined;
 
@@ -576,6 +582,9 @@ export const signInWithSupabase = async (email: string, pass: string, captchaTok
   const client = getSupabaseClient();
   if (!client) {
     throw new Error('Supabase n\'est pas encore configuré.');
+  }
+  if (!captchaToken) {
+    throw new Error('Veuillez valider le CAPTCHA.');
   }
 
   const { data, error } = await client.auth.signInWithPassword({
@@ -601,6 +610,9 @@ export const resetPasswordWithSupabase = async (email: string, captchaToken?: st
   if (!client) {
     throw new Error('Supabase n\'est pas encore configuré.');
   }
+  if (!captchaToken) {
+    throw new Error('Veuillez valider le CAPTCHA.');
+  }
 
   const redirectUrl = typeof window !== 'undefined' ? `${window.location.origin}/` : undefined;
 
@@ -611,6 +623,75 @@ export const resetPasswordWithSupabase = async (email: string, captchaToken?: st
 
   if (error) throw error;
   return data;
+};
+
+let inFlightAnonSessionPromise: Promise<{
+  user: any | null;
+  reused: boolean;
+  error: string | null;
+}> | null = null;
+
+export const ensureGuestOrUserSession = async (
+  captchaToken?: string | null
+): Promise<{
+  user: any | null;
+  reused: boolean;
+  error: string | null;
+}> => {
+  const client = getSupabaseClient();
+  if (!client) {
+    return { user: null, reused: false, error: null };
+  }
+
+  try {
+    const { data: sessionData } = await client.auth.getSession();
+    if (sessionData?.session) {
+      const { data: userData, error: userErr } = await client.auth.getUser();
+      if (!userErr && userData?.user) {
+        return { user: userData.user, reused: true, error: null };
+      }
+    }
+  } catch (err) {
+    console.warn('Vérification session existante getUser:', err);
+  }
+
+  if (inFlightAnonSessionPromise) {
+    return inFlightAnonSessionPromise;
+  }
+
+  if (!captchaToken) {
+    return { user: null, reused: false, error: 'Veuillez valider le CAPTCHA.' };
+  }
+
+  inFlightAnonSessionPromise = (async () => {
+    try {
+      const { data, error } = await client.auth.signInAnonymously({
+        options: { captchaToken },
+      });
+      if (error || !data?.user) {
+        return {
+          user: null,
+          reused: false,
+          error:
+            error?.message ||
+            "Impossible d'initialiser l'accès invité pour l'achat. Veuillez réessayer ou vous connecter.",
+        };
+      }
+      return { user: data.user, reused: false, error: null };
+    } catch (err: any) {
+      return {
+        user: null,
+        reused: false,
+        error:
+          err?.message ||
+          "Impossible d'initialiser l'accès invité pour l'achat. Veuillez réessayer ou vous connecter.",
+      };
+    } finally {
+      inFlightAnonSessionPromise = null;
+    }
+  })();
+
+  return inFlightAnonSessionPromise;
 };
 
 export const signOutWithSupabase = async () => {

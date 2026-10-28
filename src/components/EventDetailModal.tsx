@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SafeImage } from './SafeImage';
 import confetti from 'canvas-confetti';
@@ -34,8 +34,13 @@ import {
 } from 'lucide-react';
 import { EventItem, TicketTier, UserTicket, OrderRecord } from '../types';
 import { getOptimizedImageUrl } from '../utils/imageOptimizer';
-import { createOrderWithStockCheck, registerEventPreRegistration, getSupabaseClient } from '../services/supabase';
-import Turnstile from 'react-turnstile';
+import {
+  createOrderWithStockCheck,
+  registerEventPreRegistration,
+  getSupabaseClient,
+  ensureGuestOrUserSession,
+} from '../services/supabase';
+import { TurnstileGate, type TurnstileGateHandle } from './TurnstileGate';
 import { CountdownTimer } from './CountdownTimer';
 import { SpotifyVinylPlayer } from './SpotifyVinylPlayer';
 
@@ -100,11 +105,46 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
 
   // Guest Checkout Conversion
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [hasVerifiedSession, setHasVerifiedSession] = useState<boolean>(Boolean(isAuthenticated));
+  const turnstileRef = useRef<TurnstileGateHandle | null>(null);
+  const checkoutLockRef = useRef<boolean>(false);
   const [guestEmail, setGuestEmail] = useState('');
   const [guestPassword, setGuestPassword] = useState('');
   const [isConvertingAccount, setIsConvertingAccount] = useState(false);
   const [accountConverted, setAccountConverted] = useState(false);
   const [accountConvertError, setAccountConvertError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    if (isAuthenticated) {
+      setHasVerifiedSession(true);
+      return;
+    }
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+      setHasVerifiedSession(false);
+      return;
+    }
+    supabase.auth
+      .getSession()
+      .then(async ({ data: sessionData }) => {
+        if (!active) return;
+        if (sessionData?.session) {
+          const { data: userData, error: userErr } = await supabase.auth.getUser();
+          if (active) {
+            setHasVerifiedSession(Boolean(!userErr && userData?.user));
+          }
+        } else {
+          setHasVerifiedSession(false);
+        }
+      })
+      .catch(() => {
+        if (active) setHasVerifiedSession(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [isAuthenticated, event.id]);
 
   // Gestion des Codes Promo & Remises
   const [promoInput, setPromoInput] = useState('');
@@ -248,44 +288,35 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
 
   // Traitement Paiement Wave (avec Guest Checkout anonyme si non connecté)
   const handleWaveCheckout = async () => {
+    if (checkoutLockRef.current) return;
+    checkoutLockRef.current = true;
     setIsProcessing(true);
     setErrorMessage(null);
 
-    // Guest Checkout automatique via Supabase Auth Anonyme (une seule fois par visiteur)
-    const supabase = getSupabaseClient();
-    if (!isAuthenticated && supabase) {
-      try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        if (!sessionData?.session?.user) {
-          if (!captchaToken) {
-            setErrorMessage('Veuillez valider le CAPTCHA.');
-            setIsProcessing(false);
-            return;
-          }
-          const { error: anonErr } = await supabase.auth.signInAnonymously({
-            options: { captchaToken },
-          });
-          if (anonErr) {
-            console.error('Guest checkout anonymous session error:', anonErr);
-            setErrorMessage("Impossible d'initialiser l'accès invité pour l'achat. Veuillez réessayer ou vous connecter.");
-            setIsProcessing(false);
-            return;
-          }
-        }
-      } catch (anonErr: any) {
-        console.error('Guest checkout anonymous exception:', anonErr);
-        setErrorMessage("Impossible d'initialiser l'accès invité pour l'achat. Veuillez réessayer ou vous connecter.");
-        setIsProcessing(false);
-        return;
-      }
-    }
-
-    const cleanName = customerName.trim() || 'Client Thièsdn';
-    const cleanPhone = phoneNumber.trim().startsWith('+221')
-      ? phoneNumber.trim()
-      : `+221 ${phoneNumber.trim()}`;
-
     try {
+      let resolvedUserId: string | undefined = undefined;
+      const supabase = getSupabaseClient();
+
+      if (supabase) {
+        const sessionRes = await ensureGuestOrUserSession(captchaToken);
+        if (!sessionRes.reused) {
+          turnstileRef.current?.resetToken();
+        }
+        if (sessionRes.error) {
+          setErrorMessage(sessionRes.error);
+          return;
+        }
+        if (sessionRes.user?.id) {
+          resolvedUserId = sessionRes.user.id;
+          setHasVerifiedSession(true);
+        }
+      }
+
+      const cleanName = customerName.trim() || 'Client Thièsdn';
+      const cleanPhone = phoneNumber.trim().startsWith('+221')
+        ? phoneNumber.trim()
+        : `+221 ${phoneNumber.trim()}`;
+
       const result = await createOrderWithStockCheck(
         event,
         selectedTier,
@@ -294,6 +325,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
           name: cleanName,
           phone: cleanPhone,
           paymentMethod: 'wave',
+          userId: resolvedUserId,
           customTotal: totalPrice,
           discountAmount: discountAmount > 0 ? discountAmount : undefined,
           promoCodeApplied: appliedPromo ? appliedPromo.code : undefined,
@@ -303,7 +335,6 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
 
       if (!result.success || !result.order) {
         setErrorMessage(result.message || 'Impossible d’enregistrer la commande.');
-        setIsProcessing(false);
         return;
       }
 
@@ -330,6 +361,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
       setErrorMessage(err.message || 'Erreur lors du traitement de votre commande.');
     } finally {
       setIsProcessing(false);
+      checkoutLockRef.current = false;
     }
   };
 
@@ -1002,13 +1034,11 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                         )}
                       </div>
 
-                      {!isAuthenticated && (
-                        <div className="flex justify-center pt-1 overflow-x-auto">
-                          <Turnstile
-                            sitekey={(import.meta as any).env?.VITE_TURNSTILE_SITE_KEY || ''}
-                            onSuccess={(token) => setCaptchaToken(token)}
-                            onExpire={() => setCaptchaToken(null)}
-                            theme="dark"
+                      {!isAuthenticated && !hasVerifiedSession && (
+                        <div className="pt-1 w-full max-w-full overflow-hidden">
+                          <TurnstileGate
+                            ref={turnstileRef}
+                            onTokenChange={setCaptchaToken}
                           />
                         </div>
                       )}
@@ -1247,11 +1277,17 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                       {(() => {
                         const currentWaveUrl = resolveWaveUrl(selectedTier);
                         const isWaveConfigured = Boolean(currentWaveUrl && currentWaveUrl.startsWith('http'));
+                        const requiresCaptcha = Boolean(getSupabaseClient()) && !isAuthenticated && !hasVerifiedSession;
 
                         return (
                           <button
                             onClick={handleWaveCheckout}
-                            disabled={isProcessing || selectedTier.available < quantity || !isWaveConfigured}
+                            disabled={
+                              isProcessing ||
+                              selectedTier.available < quantity ||
+                              !isWaveConfigured ||
+                              (requiresCaptcha && !captchaToken)
+                            }
                             className="w-full h-12 py-3 px-6 rounded-2xl font-heading font-extrabold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-2.5 transition-all shadow-lg bg-[#1DC3F4] hover:bg-[#1bb3e0] text-[#07131D] shadow-[#1DC3F4]/20 active:scale-95 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
                           >
                             {!isWaveConfigured ? (
@@ -1261,6 +1297,8 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                                 <span className="w-4 h-4 border-2 border-[#07131D] border-t-transparent rounded-full animate-spin" />
                                 <span>Enregistrement...</span>
                               </div>
+                            ) : requiresCaptcha && !captchaToken ? (
+                              <span>Vérification en cours…</span>
                             ) : (
                               <>
                                 <Smartphone className="w-4 h-4 fill-current" />

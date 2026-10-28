@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Mail,
   Lock,
@@ -24,7 +24,7 @@ import {
   isSupabaseConfigured,
   fetchUserProfile,
 } from '../services/supabase';
-import Turnstile from 'react-turnstile';
+import { TurnstileGate, type TurnstileGateHandle } from '../components/TurnstileGate';
 import { THIES_33_QUARTIERS } from '../data/thiesQuartiers';
 import { TermsOfServiceModal } from '../components/TermsOfServiceModal';
 import { CURRENT_TERMS_VERSION } from '../types';
@@ -37,6 +37,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
   const [isRegister, setIsRegister] = useState(false);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const turnstileRef = useRef<TurnstileGateHandle | null>(null);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [city, setCity] = useState<'Thiès' | 'Dakar' | 'Mbour' | 'Saly' | 'Autre'>('Thiès');
@@ -142,6 +143,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
 
         setAuthError(userFriendlyMsg);
       } finally {
+        turnstileRef.current?.resetToken();
         setLoading(false);
       }
     } else {
@@ -156,15 +158,20 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
   const handleResend = async () => {
     const targetEmail = (registeredEmail || email).trim().toLowerCase();
     if (!targetEmail) return;
+    if (!captchaToken) {
+      setResendMessage('Veuillez valider le CAPTCHA.');
+      return;
+    }
 
     setIsResending(true);
     setResendMessage(null);
     try {
-      await resendConfirmationEmail(targetEmail, captchaToken || undefined);
+      await resendConfirmationEmail(targetEmail, captchaToken);
       setResendMessage('Un nouvel email de confirmation vous a été envoyé.');
     } catch (err: any) {
       setResendMessage(err.message || 'Impossible de renvoyer l\'email pour l\'instant.');
     } finally {
+      turnstileRef.current?.resetToken();
       setIsResending(false);
     }
   };
@@ -251,14 +258,25 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
 
             {/* Actions : Renvoyer ou Aller à la connexion */}
             <div className="space-y-3 pt-2">
+              <TurnstileGate
+                ref={turnstileRef}
+                onTokenChange={setCaptchaToken}
+              />
+
               <button
                 type="button"
                 onClick={handleResend}
-                disabled={isResending}
-                className="w-full py-3 px-4 rounded-xl bg-white/5 hover:bg-white/10 text-white font-heading font-bold text-xs flex items-center justify-center gap-2 border border-white/10 transition-all disabled:opacity-50"
+                disabled={isResending || !captchaToken}
+                className="w-full py-3 px-4 rounded-xl bg-white/5 hover:bg-white/10 text-white font-heading font-bold text-xs flex items-center justify-center gap-2 border border-white/10 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <RefreshCw className={`w-4 h-4 ${isResending ? 'animate-spin' : ''}`} />
-                <span>{isResending ? 'Envoi en cours...' : 'Renvoyer l\'email de confirmation'}</span>
+                <span>
+                  {isResending
+                    ? 'Envoi en cours...'
+                    : !captchaToken
+                    ? 'Vérification en cours…'
+                    : "Renvoyer l'email de confirmation"}
+                </span>
               </button>
 
               <button
@@ -266,6 +284,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                 onClick={() => {
                   setEmailConfirmationSent(false);
                   setIsRegister(false);
+                  turnstileRef.current?.resetToken();
                 }}
                 className="w-full btn-primary-glow py-3.5 rounded-xl font-heading font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2"
               >
@@ -287,11 +306,17 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                   <button
                     type="button"
                     onClick={handleResend}
-                    disabled={isResending}
-                    className="w-full mt-1 py-1.5 px-3 rounded-lg bg-rose-900/60 hover:bg-rose-900 text-white text-[11px] font-bold flex items-center justify-center gap-1.5 transition-colors"
+                    disabled={isResending || !captchaToken}
+                    className="w-full mt-1 py-1.5 px-3 rounded-lg bg-rose-900/60 hover:bg-rose-900 text-white text-[11px] font-bold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Send className="w-3 h-3" />
-                    <span>{isResending ? 'Envoi...' : 'Renvoyer l\'email d\'activation'}</span>
+                    <span>
+                      {isResending
+                        ? 'Envoi...'
+                        : !captchaToken
+                        ? 'Vérification en cours…'
+                        : "Renvoyer l'email d'activation"}
+                    </span>
                   </button>
                 )}
               </div>
@@ -505,27 +530,27 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
               )}
 
               {/* Widget Cloudflare Turnstile CAPTCHA */}
-              <div className="flex justify-center pt-1 overflow-x-auto">
-                <Turnstile
-                  sitekey={(import.meta as any).env?.VITE_TURNSTILE_SITE_KEY || ''}
-                  onSuccess={(token) => setCaptchaToken(token)}
-                  onExpire={() => setCaptchaToken(null)}
-                  theme="dark"
+              <div className="pt-1 w-full max-w-full overflow-hidden">
+                <TurnstileGate
+                  ref={turnstileRef}
+                  onTokenChange={setCaptchaToken}
                 />
               </div>
 
               {/* Bouton Principal de Soumission */}
               <button
                 type="submit"
-                disabled={loading || (isRegister && !isForgotPassword && !acceptedTerms)}
+                disabled={loading || !captchaToken || (isRegister && !isForgotPassword && !acceptedTerms)}
                 className={`w-full py-3.5 rounded-2xl font-heading font-bold text-sm tracking-wider flex items-center justify-center gap-2 transition-all mt-3 ${
-                  loading || (isRegister && !isForgotPassword && !acceptedTerms)
+                  loading || !captchaToken || (isRegister && !isForgotPassword && !acceptedTerms)
                     ? 'bg-white/10 text-gray-500 cursor-not-allowed opacity-60'
                     : 'btn-primary-glow cursor-pointer'
                 }`}
               >
                 {loading ? (
                   <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : !captchaToken ? (
+                  <span>Vérification en cours…</span>
                 ) : (
                   <>
                     <span>

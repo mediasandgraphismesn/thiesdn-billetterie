@@ -24,7 +24,13 @@ import {
   Upload,
 } from 'lucide-react';
 import { UserProfile, UserTicket } from '../types';
-import { getSupabaseClient, uploadAvatarToSupabase, updateUserProfileInSupabase } from '../services/supabase';
+import {
+  getSupabaseClient,
+  uploadAvatarToSupabase,
+  updateUserProfileInSupabase,
+  resetPasswordWithSupabase,
+} from '../services/supabase';
+import { TurnstileGate, type TurnstileGateHandle } from '../components/TurnstileGate';
 import { THIES_33_QUARTIERS, THIES_QUARTIERS_BY_ZONE } from '../data/thiesQuartiers';
 
 interface ProfileViewProps {
@@ -201,9 +207,16 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     }
   };
 
+  const [resetCaptchaToken, setResetCaptchaToken] = useState<string | null>(null);
+  const resetTurnstileRef = useRef<TurnstileGateHandle | null>(null);
+
   const handleSendResetEmail = async () => {
     if (!user.email) {
       setPasswordError('Aucune adresse email associée à ce compte.');
+      return;
+    }
+    if (!resetCaptchaToken) {
+      setPasswordError('Veuillez valider le CAPTCHA.');
       return;
     }
     setPasswordLoading(true);
@@ -212,15 +225,13 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     const client = getSupabaseClient();
     if (client) {
       try {
-        const { error } = await client.auth.resetPasswordForEmail(user.email, {
-          redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/` : undefined,
-        });
-        if (error) throw error;
+        await resetPasswordWithSupabase(user.email, resetCaptchaToken);
         setResetEmailSent(true);
         setPasswordSuccess(`Un email de réinitialisation a été envoyé à ${user.email}.`);
       } catch (err: any) {
         setPasswordError(err.message || 'Impossible d\'envoyer l\'email pour le moment.');
       } finally {
+        resetTurnstileRef.current?.resetToken();
         setPasswordLoading(false);
       }
     } else {
@@ -878,17 +889,25 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
             {/* Option par email */}
             {user.email && (
-              <div className="pt-2 border-t border-white/5 text-center">
+              <div className="pt-2 border-t border-white/5 text-center space-y-2.5">
+                {!resetEmailSent && (
+                  <TurnstileGate
+                    ref={resetTurnstileRef}
+                    onTokenChange={setResetCaptchaToken}
+                  />
+                )}
                 <button
                   type="button"
                   onClick={handleSendResetEmail}
-                  disabled={passwordLoading || resetEmailSent}
-                  className="text-xs text-[#DCB8FF] hover:underline flex items-center justify-center gap-1.5 mx-auto"
+                  disabled={passwordLoading || resetEmailSent || !resetCaptchaToken}
+                  className="text-xs text-[#DCB8FF] hover:underline flex items-center justify-center gap-1.5 mx-auto disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Send className="w-3.5 h-3.5" />
                   <span>
                     {resetEmailSent
                       ? 'Email de réinitialisation envoyé'
+                      : !resetCaptchaToken
+                      ? 'Vérification en cours…'
                       : `M'envoyer un lien de réinitialisation par email (${user.email})`}
                   </span>
                 </button>

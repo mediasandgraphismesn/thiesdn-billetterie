@@ -40,7 +40,6 @@ import {
   Copy,
   Smartphone,
   Music2,
-  Smartphone,
 } from 'lucide-react';
 import {
   EventItem,
