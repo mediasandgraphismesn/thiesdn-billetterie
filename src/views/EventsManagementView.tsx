@@ -40,6 +40,10 @@ import {
   Copy,
   Smartphone,
   Music2,
+  Bell,
+  Download,
+  Send,
+  MessageCircle,
 } from 'lucide-react';
 import {
   EventItem,
@@ -49,6 +53,7 @@ import {
   EventCoproducer,
   CoproducerRole,
   TicketTier,
+  EventPreRegistration,
 } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import {
@@ -61,6 +66,8 @@ import {
   deleteCoproducer,
   fetchOrdersFromSupabase,
   fetchAllTicketsForEvent,
+  fetchEventPreRegistrations,
+  fetchPreRegistrationCounts,
 } from '../services/supabase';
 import { PhysicalTicketsModal } from '../components/PhysicalTicketsModal';
 
@@ -107,12 +114,31 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
   const [selectedStatus, setSelectedStatus] = useState<'all' | EventStatus>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
 
-  // Modal d'édition avancée (5 Onglets)
+  // Modal d'édition avancée (Onglets)
   const [editingEvent, setEditingEvent] = useState<EventItem | null>(null);
-  const [activeModalTab, setActiveModalTab] = useState<'details' | 'tiers' | 'coproducers' | 'stats' | 'settings'>('details');
+  const [activeModalTab, setActiveModalTab] = useState<'details' | 'tiers' | 'coproducers' | 'preregistrations' | 'stats' | 'settings'>('details');
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [isPhysicalModalOpen, setIsPhysicalModalOpen] = useState(false);
+
+  // État des Pré-inscriptions & Leads (Onglet Pré-inscriptions)
+  const [modalPreRegistrations, setModalPreRegistrations] = useState<EventPreRegistration[]>([]);
+  const [isLoadingPreReg, setIsLoadingPreReg] = useState(false);
+  const [copiedBroadcast, setCopiedBroadcast] = useState(false);
+  const [preRegCounts, setPreRegCounts] = useState<Record<string, number>>({});
+
+  // Chargement initial des compteurs de pré-inscriptions pour chaque carte
+  useEffect(() => {
+    let active = true;
+    fetchPreRegistrationCounts().then((counts) => {
+      if (active) {
+        setPreRegCounts(counts);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [events]);
 
   // État des Catégories & Tarifs (Onglet Tarifs)
   const [modalTiers, setModalTiers] = useState<TicketTier[]>([]);
@@ -219,6 +245,21 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
       console.warn('Erreur chargement co-producteurs:', err);
     } finally {
       setIsLoadingCoproducers(false);
+    }
+  };
+
+  // Chargement des pré-inscriptions (Leads marketing) pour l'événement sélectionné
+  const loadEventPreRegistrations = async (eventId: string) => {
+    setIsLoadingPreReg(true);
+    try {
+      const res = await fetchEventPreRegistrations(eventId);
+      const list = res.preRegistrations || [];
+      setModalPreRegistrations(list);
+      setPreRegCounts((prev) => ({ ...prev, [eventId]: list.length }));
+    } catch (err) {
+      console.warn('Erreur chargement pré-inscriptions:', err);
+    } finally {
+      setIsLoadingPreReg(false);
     }
   };
 
@@ -376,9 +417,16 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
     setTierDeleteError(null);
     setNewTierError(null);
 
-    // Chargement dynamique des co-producteurs et statistiques
+    // Chargement dynamique des co-producteurs, pré-inscriptions et statistiques
     loadEventCoproducers(event.id);
+    loadEventPreRegistrations(event.id);
     loadEventStats(event.id);
+  };
+
+  // Ouverture directe de la modale sur l'onglet Pré-inscriptions & Leads
+  const handleOpenLeads = (event: EventItem) => {
+    handleOpenEdit(event);
+    setActiveModalTab('preregistrations');
   };
 
   // Actions sur les catégories de billets
@@ -898,50 +946,71 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                   </div>
                 </div>
 
-                {/* 3 BOUTONS D'ACTION (MODIFIER / SUPPRIMER / ARCHIVER) */}
-                <div className="pt-4 mt-4 border-t border-white/10 grid grid-cols-3 gap-2">
-                  {/* 1. Modifier */}
+                {/* BOUTONS D'ACTION (LEADS DIRECT / MODIFIER / ARCHIVER / SUPPRIMER) */}
+                <div className="pt-4 mt-4 border-t border-white/10 space-y-2">
+                  {/* Bouton Accès Direct Leads Marketing */}
                   <button
-                    onClick={() => handleOpenEdit(event)}
-                    className="py-2.5 px-2 rounded-xl bg-white/5 hover:bg-[#8A2BE2]/20 border border-white/10 text-[11px] font-bold text-white hover:text-[#DCB8FF] flex items-center justify-center gap-1.5 transition-all"
-                    title="Modifier les informations"
+                    onClick={() => handleOpenLeads(event)}
+                    className="w-full px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 font-semibold text-xs flex items-center justify-between hover:bg-amber-500/20 transition-all shadow-sm"
+                    title="Voir directement les pré-inscriptions et leads pour cet événement"
                   >
-                    <Edit3 className="w-3.5 h-3.5 text-[#DCB8FF]" />
-                    <span>Modifier</span>
+                    <span className="flex items-center gap-1.5">
+                      <span>🔔</span>
+                      <strong className="font-bold">Leads / Pré-inscriptions</strong>
+                      <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-amber-500/20 text-[#E9C349] font-mono font-bold border border-amber-500/30">
+                        {preRegCounts[event.id] ?? 0}
+                      </span>
+                    </span>
+                    <span className="text-[10px] text-amber-300 font-mono hover:underline flex items-center gap-1">
+                      <span>Ouvrir</span>
+                      <span>→</span>
+                    </span>
                   </button>
 
-                  {/* 2. Archiver / Désarchiver */}
-                  <button
-                    onClick={() => handleToggleArchive(event)}
-                    className={`py-2.5 px-2 rounded-xl border text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all ${
-                      isArchived
-                        ? 'bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/30 text-emerald-300'
-                        : 'bg-white/5 hover:bg-amber-500/20 border-white/10 text-gray-300 hover:text-amber-300'
-                    }`}
-                    title={isArchived ? "Désarchiver (rendre public)" : "Archiver l'événement"}
-                  >
-                    {isArchived ? (
-                      <>
-                        <ArchiveRestore className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>Restaurer</span>
-                      </>
-                    ) : (
-                      <>
-                        <Archive className="w-3.5 h-3.5 text-amber-400" />
-                        <span>Archiver</span>
-                      </>
-                    )}
-                  </button>
+                  <div className="grid grid-cols-3 gap-2">
+                    {/* 1. Modifier */}
+                    <button
+                      onClick={() => handleOpenEdit(event)}
+                      className="py-2.5 px-2 rounded-xl bg-white/5 hover:bg-[#8A2BE2]/20 border border-white/10 text-[11px] font-bold text-white hover:text-[#DCB8FF] flex items-center justify-center gap-1.5 transition-all"
+                      title="Modifier les informations"
+                    >
+                      <Edit3 className="w-3.5 h-3.5 text-[#DCB8FF]" />
+                      <span>Modifier</span>
+                    </button>
 
-                  {/* 3. Supprimer */}
-                  <button
-                    onClick={() => handleStartDelete(event)}
-                    className="py-2.5 px-2 rounded-xl bg-white/5 hover:bg-rose-500/20 border border-white/10 text-[11px] font-bold text-gray-300 hover:text-rose-400 flex items-center justify-center gap-1.5 transition-all"
-                    title="Supprimer définitivement"
-                  >
-                    <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-                    <span>Supprimer</span>
-                  </button>
+                    {/* 2. Archiver / Désarchiver */}
+                    <button
+                      onClick={() => handleToggleArchive(event)}
+                      className={`py-2.5 px-2 rounded-xl border text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all ${
+                        isArchived
+                          ? 'bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/30 text-emerald-300'
+                          : 'bg-white/5 hover:bg-amber-500/20 border-white/10 text-gray-300 hover:text-amber-300'
+                      }`}
+                      title={isArchived ? "Désarchiver (rendre public)" : "Archiver l'événement"}
+                    >
+                      {isArchived ? (
+                        <>
+                          <ArchiveRestore className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Restaurer</span>
+                        </>
+                      ) : (
+                        <>
+                          <Archive className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Archiver</span>
+                        </>
+                      )}
+                    </button>
+
+                    {/* 3. Supprimer */}
+                    <button
+                      onClick={() => handleStartDelete(event)}
+                      className="py-2.5 px-2 rounded-xl bg-white/5 hover:bg-rose-500/20 border border-white/10 text-[11px] font-bold text-gray-300 hover:text-rose-400 flex items-center justify-center gap-1.5 transition-all"
+                      title="Supprimer définitivement"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                      <span>Supprimer</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             );
@@ -1023,6 +1092,26 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                     <span>Co-organisateurs</span>
                     <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/15 font-mono">
                       {modalCoproducers.length}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveModalTab('preregistrations')}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 ${
+                      activeModalTab === 'preregistrations'
+                        ? 'bg-[#8A2BE2] text-white shadow-lg shadow-[#8A2BE2]/30'
+                        : 'text-gray-400 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    <Bell className="w-3.5 h-3.5" />
+                    <span>Pré-inscriptions & Leads</span>
+                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                      modalPreRegistrations.length > 0
+                        ? 'bg-[#E9C349] text-[#241A00] font-bold'
+                        : 'bg-white/15 text-gray-300'
+                    }`}>
+                      {modalPreRegistrations.length}
                     </span>
                   </button>
 
@@ -1869,6 +1958,184 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                         </>
                       )}
                     </button>
+                  </div>
+                </div>
+              )}
+
+              {/* ONGLET : PRÉ-INSCRIPTIONS & LEADS MARKETING */}
+              {activeModalTab === 'preregistrations' && (
+                <div className="space-y-5 animate-in fade-in duration-150">
+                  {/* En-tête récapitulatif & Badges */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-gradient-to-r from-[#1E162D] to-[#12111A] border border-[#8A2BE2]/30">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2.5 py-1 rounded-full text-xs font-bold font-heading bg-[#E9C349]/20 text-[#E9C349] border border-[#E9C349]/30 flex items-center gap-1.5">
+                          <span>🔥</span>
+                          <span>{modalPreRegistrations.length} prospect{modalPreRegistrations.length > 1 ? 's' : ''} en attente</span>
+                        </span>
+                        {editingEvent.salesOpenAt && new Date(editingEvent.salesOpenAt).getTime() > Date.now() && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-[#8A2BE2]/20 text-[#DCB8FF] border border-[#8A2BE2]/30">
+                            Compte à rebours actif
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-300">
+                        Liste prioritaire des personnes ayant demandé à être alertées pour <strong className="text-white">{editingEvent.title}</strong>.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {/* Bouton Copier Broadcast WhatsApp */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const eventUrl = `https://billetterie.thiesdn.site/event/${editingEvent.id}`;
+                          const broadcastText =
+                            `🎉 *OUVERTURE OFFICIELLE DES VENTES !*\n\n` +
+                            `Les billets pour l'événement *${editingEvent.title}* sont désormais en vente sur Thiès Days and Nights.\n\n` +
+                            `📍 *Lieu :* ${editingEvent.venue}, ${editingEvent.city}\n` +
+                            `📅 *Date :* ${editingEvent.date} à ${editingEvent.time}\n` +
+                            `💰 *Tarif :* À partir de ${editingEvent.price.toLocaleString('fr-FR')} FCFA\n\n` +
+                            `👉 *Réservez votre pass officiel 1-Clic Wave ici :*\n${eventUrl}`;
+
+                          navigator.clipboard.writeText(broadcastText);
+                          setCopiedBroadcast(true);
+                          setTimeout(() => setCopiedBroadcast(false), 3000);
+                        }}
+                        className="px-3 py-2 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-xs font-bold flex items-center gap-1.5 transition-all"
+                        title="Copier le message prêt pour diffusion WhatsApp"
+                      >
+                        {copiedBroadcast ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>Message copié !</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5" />
+                            <span>Copier texte Diffusion</span>
+                          </>
+                        )}
+                      </button>
+
+                      {/* Bouton Exporter CSV */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (modalPreRegistrations.length === 0) return;
+                          const headers = ['Nom', 'Telephone', 'Email', 'Date_Inscription', 'Evenement'];
+                          const rows = modalPreRegistrations.map((p) => [
+                            `"${(p.fullName || '').replace(/"/g, '""')}"`,
+                            `"${(p.phone || '').replace(/"/g, '""')}"`,
+                            `"${(p.email || '').replace(/"/g, '""')}"`,
+                            `"${p.createdAt ? new Date(p.createdAt).toLocaleString('fr-FR') : ''}"`,
+                            `"${(editingEvent.title || '').replace(/"/g, '""')}"`,
+                          ]);
+                          const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+                          const encodedUri = encodeURI(csvContent);
+                          const link = document.createElement('a');
+                          link.setAttribute('href', encodedUri);
+                          link.setAttribute('download', `leads_${editingEvent.title.replace(/\s+/g, '_').toLowerCase()}.csv`);
+                          document.body.appendChild(link);
+                          link.click();
+                          document.body.removeChild(link);
+                        }}
+                        disabled={modalPreRegistrations.length === 0}
+                        className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white border border-white/15 text-xs font-bold flex items-center gap-1.5 transition-all disabled:opacity-40"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Exporter CSV</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Tableau des prospects */}
+                  <div className="space-y-3">
+                    {isLoadingPreReg ? (
+                      <div className="p-8 text-center text-gray-400 text-xs">
+                        Chargement des pré-inscriptions...
+                      </div>
+                    ) : modalPreRegistrations.length === 0 ? (
+                      <div className="p-8 rounded-2xl bg-[#111111] border border-white/5 text-center space-y-2">
+                        <Bell className="w-8 h-8 text-gray-600 mx-auto" />
+                        <p className="text-xs text-gray-400 font-medium">
+                          Aucun prospect pré-inscrit pour le moment.
+                        </p>
+                        <p className="text-[11px] text-gray-500 max-w-sm mx-auto">
+                          Lorsque vous configurez une date d'ouverture des ventes ultérieure (mode compte à rebours), les clients peuvent laisser leur numéro pour être prévenus en priorité.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto rounded-2xl border border-white/10 bg-[#111111]">
+                        <table className="w-full text-left border-collapse text-xs">
+                          <thead>
+                            <tr className="border-b border-white/10 bg-black/40 text-[10px] uppercase font-bold text-gray-400 tracking-wider">
+                              <th className="py-3 px-3.5">Nom complet</th>
+                              <th className="py-3 px-3.5">Téléphone / WhatsApp</th>
+                              <th className="py-3 px-3.5">Email</th>
+                              <th className="py-3 px-3.5">Date d'inscription</th>
+                              <th className="py-3 px-3.5 text-right">Relance WhatsApp</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-white/5">
+                            {modalPreRegistrations.map((lead) => {
+                              // Normalisation du téléphone pour l'indicatif international Sénégal (+221)
+                              const rawDigits = (lead.phone || '').replace(/\D/g, '');
+                              const normalizedPhone = rawDigits.startsWith('221')
+                                ? rawDigits
+                                : rawDigits.length === 9
+                                ? `221${rawDigits}`
+                                : rawDigits;
+
+                              const eventUrl = `https://billetterie.thiesdn.site/event/${editingEvent.id}`;
+                              const personalizedMessage =
+                                `Bonjour ${lead.fullName}, les ventes de billets pour l'événement *${editingEvent.title}* sont officiellement ouvertes sur ThièsDN ! ` +
+                                `Réservez votre place dès maintenant en 1 clic : ${eventUrl}`;
+                              const whatsappLink = `https://wa.me/${normalizedPhone}?text=${encodeURIComponent(personalizedMessage)}`;
+
+                              const formattedDate = lead.createdAt
+                                ? new Date(lead.createdAt).toLocaleDateString('fr-FR', {
+                                    day: '2-digit',
+                                    month: '2-digit',
+                                    year: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })
+                                : '—';
+
+                              return (
+                                <tr key={lead.id} className="hover:bg-white/[0.02] transition-colors">
+                                  <td className="py-3 px-3.5 font-bold text-white">
+                                    {lead.fullName}
+                                  </td>
+                                  <td className="py-3 px-3.5 font-mono text-[#DCB8FF]">
+                                    {lead.phone}
+                                  </td>
+                                  <td className="py-3 px-3.5 text-gray-400">
+                                    {lead.email || '—'}
+                                  </td>
+                                  <td className="py-3 px-3.5 text-gray-400 font-mono text-[11px]">
+                                    {formattedDate}
+                                  </td>
+                                  <td className="py-3 px-3.5 text-right">
+                                    <a
+                                      href={whatsappLink}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 text-[11px] font-bold transition-all hover:scale-105"
+                                      title={`Envoyer une relance WhatsApp à ${lead.fullName}`}
+                                    >
+                                      <MessageCircle className="w-3.5 h-3.5 fill-current" />
+                                      <span>Relancer (1-Clic)</span>
+                                    </a>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

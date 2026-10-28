@@ -5847,6 +5847,124 @@ export const registerEventPreRegistration = async (params: {
   }
 };
 
+/**
+ * Récupère les pré-inscriptions (leads marketing) pour un événement spécifique.
+ * Utilisé par les admins et promoteurs pour les relances WhatsApp / Email.
+ */
+export const fetchEventPreRegistrations = async (
+  eventId: string
+): Promise<{ preRegistrations: EventPreRegistration[]; error: string | null }> => {
+  const client = getSupabaseClient();
+
+  // 1. Repli local (offline-first & tests)
+  let localList: EventPreRegistration[] = [];
+  try {
+    const rawLocal = localStorage.getItem('thiesdn_pre_registrations_v1');
+    if (rawLocal) {
+      const parsed = JSON.parse(rawLocal);
+      localList = (parsed || []).filter((r: any) => r.eventId === eventId);
+    }
+  } catch (e) {
+    console.warn('Erreur lecture cache local pre_registrations:', e);
+  }
+
+  if (!client) {
+    return { preRegistrations: localList, error: null };
+  }
+
+  try {
+    const { data, error } = await client
+      .from('event_pre_registrations')
+      .select('*')
+      .eq('event_id', eventId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.warn('Erreur fetchEventPreRegistrations Supabase (repli local):', error.message);
+      return { preRegistrations: localList, error: error.message };
+    }
+
+    const formatted: EventPreRegistration[] = (data || []).map((row: any) => ({
+      id: row.id,
+      eventId: row.event_id,
+      userId: row.user_id || undefined,
+      fullName: row.full_name,
+      phone: row.phone,
+      email: row.email || undefined,
+      createdAt: row.created_at,
+    }));
+
+    // Fusion avec le local si des entrées n'étaient pas encore synchronisées
+    const idSet = new Set(formatted.map((f) => `${f.phone}`));
+    for (const loc of localList) {
+      if (!idSet.has(loc.phone)) {
+        formatted.push(loc);
+      }
+    }
+
+    return { preRegistrations: formatted, error: null };
+  } catch (err: any) {
+    console.warn('Erreur fetchEventPreRegistrations:', err);
+    return { preRegistrations: localList, error: err.message || 'Erreur de chargement' };
+  }
+};
+
+/**
+ * Récupère le dictionnaire du nombre de pré-inscriptions groupé par eventId.
+ * Permet un affichage immédiat et fluide des badges "Leads (X)" sur le catalogue sans N requêtes séquentielles.
+ */
+export const fetchPreRegistrationCounts = async (): Promise<Record<string, number>> => {
+  const counts: Record<string, number> = {};
+
+  // 1. Comptage local
+  try {
+    const rawLocal = localStorage.getItem('thiesdn_pre_registrations_v1');
+    if (rawLocal) {
+      const parsed: EventPreRegistration[] = JSON.parse(rawLocal);
+      (parsed || []).forEach((item) => {
+        if (item.eventId) {
+          counts[item.eventId] = (counts[item.eventId] || 0) + 1;
+        }
+      });
+    }
+  } catch (e) {
+    console.warn('Erreur lecture cache pre_registrations counts:', e);
+  }
+
+  const client = getSupabaseClient();
+  if (!client) return counts;
+
+  try {
+    const { data, error } = await client
+      .from('event_pre_registrations')
+      .select('event_id');
+
+    if (error) {
+      console.warn('Erreur fetchPreRegistrationCounts:', error.message);
+      return counts;
+    }
+
+    const supabaseCounts: Record<string, number> = {};
+    (data || []).forEach((row: { event_id: string }) => {
+      if (row.event_id) {
+        supabaseCounts[row.event_id] = (supabaseCounts[row.event_id] || 0) + 1;
+      }
+    });
+
+    // On prend le max entre Supabase et local pour ne jamais sous-estimer
+    const allEventIds = new Set([...Object.keys(counts), ...Object.keys(supabaseCounts)]);
+    const merged: Record<string, number> = {};
+    allEventIds.forEach((id) => {
+      merged[id] = Math.max(counts[id] || 0, supabaseCounts[id] || 0);
+    });
+
+    return merged;
+  } catch (err) {
+    console.warn('Erreur fetchPreRegistrationCounts:', err);
+    return counts;
+  }
+};
+
 export const fetchOrdersFromSupabase = async (): Promise<{ orders: OrderRecord[]; error: string | null }> => {
   const client = getSupabaseClient();
   if (!client) return { orders: [], error: 'Supabase non connecté.' };

@@ -147,7 +147,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
   const [isTeaserOpen, setIsTeaserOpen] = useState(false);
 
   // Pré-inscription (quand ventes fermées)
-  const [preRegName, setPreRegName] = useState(userName || '');
+  const [preRegName, setPreRegName] = useState('');
   const [preRegPhone, setPreRegPhone] = useState('');
   const [preRegEmail, setPreRegEmail] = useState('');
   const [isPreRegSubmitting, setIsPreRegSubmitting] = useState(false);
@@ -610,7 +610,9 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                   </span>
                   <span className="bg-[#8A2BE2]/90 backdrop-blur-md text-white text-xs font-bold px-2.5 py-1 rounded-full shadow-lg flex items-center gap-1 max-w-full min-w-0 truncate">
                     <MapPin className="w-3 h-3 shrink-0" />
-                    <span className="truncate">{event.city}{event.quartier ? ` • ${event.quartier}` : ''}</span>
+                    <span className="truncate">
+                      {(event as any).venue_name || event.venue || "SAM'S PRESTIGE CLUB, Thiès"}
+                    </span>
                   </span>
                 </div>
 
@@ -790,7 +792,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                             type="text"
                             value={preRegName}
                             onChange={(e) => setPreRegName(e.target.value)}
-                            placeholder="Votre nom complet"
+                            placeholder="Ex : Bijoux Diop"
                             className="bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-[#E9C349]"
                           />
                           <input
