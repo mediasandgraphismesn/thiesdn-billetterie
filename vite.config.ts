@@ -37,6 +37,8 @@ export default defineConfig(() => {
           ],
         },
         workbox: {
+          skipWaiting: true,
+          clientsClaim: true,
           maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5 Mo pour autoriser le precache du bundle
           globPatterns: ['**/*.{js,css,html,png,svg,woff2,ico}'],
           runtimeCaching: [
