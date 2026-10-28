@@ -3766,20 +3766,49 @@ export const confirmManualOrderAtomic = async (
     return { success: false, message: 'Impossible de confirmer une commande déjà annulée, rejetée ou expirée.' };
   }
 
-  // Si Supabase est connecté, tenter la RPC atomique ou mise à jour directe
+  // Si Supabase est connecté, tenter la mise à jour directe avec capture stricte des erreurs
   if (client) {
+    const isValidUuid = (val?: string) =>
+      Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val));
+
+    // Construction du payload assaini
+    const payload: Record<string, any> = {
+      status: 'confirmed',
+      confirmed_at: new Date().toISOString(),
+    };
+
+    // Ne renseigner confirmed_by QUE s'il s'agit d'un UUID PostgreSQL valide
+    if (adminId && isValidUuid(adminId)) {
+      payload.confirmed_by = adminId;
+    }
+
     try {
-      await client
+      const { data, error: orderError } = await client
         .from('orders')
-        .update({
-          status: 'confirmed',
-          confirmed_at: new Date().toISOString(),
-          confirmed_by: adminId || 'admin-thiesdn',
-          guest_token: order.guestToken || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID().replace(/-/g, '') : `${Date.now().toString(16)}${Math.random().toString(16).slice(2, 18)}`),
-        })
-        .eq('id', order.id);
+        .update(payload)
+        .eq('id', order.id)
+        .select();
+
+      if (orderError) {
+        console.error("DÉTAIL ERREUR 400 SUPABASE ORDERS:", {
+          message: orderError.message,
+          details: orderError.details,
+          hint: orderError.hint,
+          code: orderError.code,
+          payloadSent: payload,
+          orderId: order.id,
+        });
+        if (typeof window !== 'undefined') {
+          alert(`Erreur Supabase Orders [${orderError.code}]: ${orderError.message}`);
+        }
+        throw orderError;
+      }
     } catch (err: any) {
-      console.warn('Erreur mise à jour commande Supabase:', err.message);
+      console.error('Exception mise à jour commande Supabase orders:', err);
+      return {
+        success: false,
+        message: `Échec de mise à jour Supabase : ${err.message || 'Erreur 400'}`,
+      };
     }
   }
 
