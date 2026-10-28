@@ -53,6 +53,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import {
   deleteEventFromSupabase,
+  softDeleteEventInSupabase,
   updateEventStatusInSupabase,
   updateEventInSupabase,
   fetchCoproducersFromSupabase,
@@ -195,6 +196,10 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
   // Modal de suppression
   const [deletingEvent, setDeletingEvent] = useState<EventItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isSoftDeleting, setIsSoftDeleting] = useState(false);
+  const [deleteOrdersCount, setDeleteOrdersCount] = useState<number | null>(null);
+  const [isLoadingDeleteInfo, setIsLoadingDeleteInfo] = useState(false);
+  const [deleteErrorMessage, setDeleteErrorMessage] = useState<string | null>(null);
 
   // Notifications toast
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -255,9 +260,25 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
     }
   };
 
-  // Filtrage des événements
+  // Détection stricte d'un événement archivé ou soft-deleted
+  const isEventArchived = (e: EventItem) =>
+    e.status === 'archived' ||
+    e.status?.toUpperCase() === 'ARCHIVED' ||
+    Boolean(e.isDeleted) ||
+    Boolean(e.deletedAt);
+
+  // Filtrage des événements avec routage automatique des événements soft-deleted vers "Archivés"
   const filteredEvents = events.filter((e) => {
-    if (selectedStatus !== 'all' && e.status !== selectedStatus) return false;
+    if (selectedStatus === 'archived') {
+      if (!isEventArchived(e)) return false;
+    } else if (selectedStatus === 'approved') {
+      if (isEventArchived(e) || (e.status !== 'approved' && e.status?.toUpperCase() !== 'APPROVED')) return false;
+    } else if (selectedStatus === 'pending') {
+      if (isEventArchived(e) || (e.status !== 'pending' && e.status?.toUpperCase() !== 'PENDING')) return false;
+    } else if (selectedStatus === 'rejected') {
+      if (isEventArchived(e) || (e.status !== 'rejected' && e.status?.toUpperCase() !== 'REJECTED')) return false;
+    }
+
     if (selectedCategory !== 'All' && e.category !== selectedCategory) return false;
     if (!searchQuery.trim()) return true;
 
@@ -270,12 +291,12 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
     );
   });
 
-  // Compteurs
+  // Compteurs alignés sur le Soft Delete
+  const countArchived = events.filter(isEventArchived).length;
+  const countApproved = events.filter((e) => !isEventArchived(e) && (e.status === 'approved' || e.status?.toUpperCase() === 'APPROVED')).length;
+  const countPending = events.filter((e) => !isEventArchived(e) && (e.status === 'pending' || e.status?.toUpperCase() === 'PENDING')).length;
+  const countRejected = events.filter((e) => !isEventArchived(e) && (e.status === 'rejected' || e.status?.toUpperCase() === 'REJECTED')).length;
   const countAll = events.length;
-  const countApproved = events.filter((e) => e.status === 'approved').length;
-  const countPending = events.filter((e) => e.status === 'pending').length;
-  const countRejected = events.filter((e) => e.status === 'rejected').length;
-  const countArchived = events.filter((e) => e.status === 'archived').length;
 
   // Ouvrir la modale d'édition pré-remplie
   const handleOpenEdit = (event: EventItem) => {
@@ -560,24 +581,65 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
     );
   };
 
-  // Supprimer définitivement un événement
-  const handleConfirmDelete = async () => {
+  // Démarrer la gestion de suppression (pré-chargement des commandes associées)
+  const handleStartDelete = async (event: EventItem) => {
+    setDeletingEvent(event);
+    setDeleteErrorMessage(null);
+    setDeleteOrdersCount(null);
+    setIsLoadingDeleteInfo(true);
+
+    try {
+      const ordersRes = await fetchOrdersFromSupabase();
+      const eventOrders = (ordersRes.orders || []).filter((o) => o.eventId === event.id);
+      setDeleteOrdersCount(eventOrders.length);
+    } catch (err) {
+      console.warn('Impossible de pré-charger les commandes pour la suppression:', err);
+      setDeleteOrdersCount(0);
+    } finally {
+      setIsLoadingDeleteInfo(false);
+    }
+  };
+
+  // Option Recommandée : Soft Delete (Archivage sécurisé & préservation comptable)
+  const handleConfirmSoftDelete = async () => {
     if (!deletingEvent) return;
 
-    setIsDeleting(true);
-    const res = await deleteEventFromSupabase(deletingEvent.id);
-    setIsDeleting(false);
+    setIsSoftDeleting(true);
+    setDeleteErrorMessage(null);
+    const res = await softDeleteEventInSupabase(deletingEvent.id);
+    setIsSoftDeleting(false);
 
     if (!res.success) {
-      showToast(res.error || 'Erreur lors de la suppression.', 'error');
-      setDeletingEvent(null);
+      setDeleteErrorMessage(res.error || "Erreur lors de l'archivage.");
+      showToast(res.error || "Erreur lors de l'archivage.", 'error');
       return;
     }
 
     const title = deletingEvent.title;
     setDeletingEvent(null);
     await onRefreshEvents();
-    showToast(`Événement "${title}" supprimé définitivement de Supabase.`);
+    showToast(`Événement "${title}" archivé avec succès (Soft Delete). Traçabilité comptable préservée.`);
+  };
+
+  // Option Alternative : Suppression Définitive (Hard Delete SQL)
+  const handleConfirmHardDelete = async () => {
+    if (!deletingEvent) return;
+
+    setIsDeleting(true);
+    setDeleteErrorMessage(null);
+    const res = await deleteEventFromSupabase(deletingEvent.id);
+    setIsDeleting(false);
+
+    if (!res.success) {
+      setDeleteErrorMessage(res.error || 'Erreur lors de la suppression.');
+      showToast(res.error || 'Erreur lors de la suppression.', 'error');
+      return;
+    }
+
+    const title = deletingEvent.title;
+    setDeletingEvent(null);
+    await onRefreshEvents();
+    showToast(`Événement "${title}" supprimé définitivement de la base.`);
   };
 
   return (
@@ -868,7 +930,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
 
                   {/* 3. Supprimer */}
                   <button
-                    onClick={() => setDeletingEvent(event)}
+                    onClick={() => handleStartDelete(event)}
                     className="py-2.5 px-2 rounded-xl bg-white/5 hover:bg-rose-500/20 border border-white/10 text-[11px] font-bold text-gray-300 hover:text-rose-400 flex items-center justify-center gap-1.5 transition-all"
                     title="Supprimer définitivement"
                   >
@@ -2114,47 +2176,135 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
         </div>
       )}
 
-      {/* MODALE DE CONFIRMATION DE SUPPRESSION */}
+      {/* MODALE DE CONFIRMATION DE SUPPRESSION / ARCHIVAGE (SOFT DELETE & HARD DELETE) */}
       {deletingEvent && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="w-full max-w-md bg-[#161616] border border-rose-500/30 rounded-3xl p-6 sm:p-8 space-y-5 shadow-2xl text-center">
-            <div className="w-16 h-16 rounded-full bg-rose-500/10 text-rose-400 flex items-center justify-center mx-auto border border-rose-500/20">
+          <div className="w-full max-w-lg bg-[#141414] border border-white/10 rounded-3xl p-6 sm:p-8 space-y-5 shadow-2xl text-center relative overflow-hidden">
+            <div className="w-16 h-16 rounded-full bg-rose-500/10 text-rose-400 flex items-center justify-center mx-auto border border-rose-500/20 shadow-lg shadow-rose-950/30">
               <Trash2 className="w-8 h-8" />
             </div>
 
             <div>
-              <h3 className="font-heading text-lg font-bold text-white">
-                Supprimer définitivement cet événement ?
+              <div className="inline-block px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-500/15 text-rose-300 border border-rose-500/25 mb-2">
+                Action Critique • Événement
+              </div>
+              <h3 className="font-heading text-xl font-extrabold text-white">
+                Supprimer ou Archiver ?
               </h3>
-              <p className="text-xs text-gray-400 mt-2 leading-relaxed">
-                Vous êtes sur le point de supprimer{' '}
-                <span className="text-white font-bold">"{deletingEvent.title}"</span>.
-                Cette action supprimera l'événement de la base Supabase et est irréversible.
+              <p className="text-sm font-semibold text-[#E9C349] mt-1 line-clamp-1">
+                « {deletingEvent.title} »
               </p>
             </div>
 
-            <div className="flex items-center justify-center gap-3 pt-2">
+            {/* Diagnostic Commandes & Traçabilité */}
+            {isLoadingDeleteInfo ? (
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center justify-center gap-3 text-xs text-gray-400">
+                <span className="w-4 h-4 border-2 border-[#8A2BE2] border-t-transparent rounded-full animate-spin" />
+                <span>Vérification de l'intégrité comptable et des commandes en base...</span>
+              </div>
+            ) : deleteOrdersCount !== null && deleteOrdersCount > 0 ? (
+              /* CAS 1 : >= 1 commande -> MODALE CONFORME SPÉCIFICATION THIÈSDN */
+              <div className="bg-amber-500/10 border border-amber-500/40 rounded-2xl p-4 text-left space-y-3 animate-in fade-in">
+                <div className="flex items-start gap-2.5 text-amber-300 font-bold text-xs">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400 mt-0.5" />
+                  <span className="leading-snug">
+                    Cet événement contient des transactions financières. Il sera archivé et retiré de la billetterie publique, mais son historique comptable restera conservé.
+                  </span>
+                </div>
+                <div className="bg-black/30 rounded-xl p-2.5 text-[11px] text-gray-300 border border-white/5 flex items-center justify-between">
+                  <span>Transactions rattachées :</span>
+                  <span className="font-extrabold text-[#E9C349] font-mono">{deleteOrdersCount} commande(s)</span>
+                </div>
+              </div>
+            ) : (
+              /* CAS 2 : 0 commande -> Suppression totale autorisée */
+              <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-4 text-left space-y-2">
+                <div className="flex items-center gap-2 text-emerald-300 font-bold text-xs">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>Aucune commande financière rattachée (0 commande).</span>
+                </div>
+                <p className="text-[11px] text-gray-300 leading-relaxed">
+                  Cet événement ne contient aucune transaction financière. La suppression totale de la base (Hard Delete SQL) est autorisée.
+                </p>
+              </div>
+            )}
+
+            {/* Message d'erreur explicite avec interception de clé étrangère */}
+            {deleteErrorMessage && (
+              <div className="bg-rose-950/60 border border-rose-500/40 rounded-2xl p-4 text-left space-y-2 animate-in shake">
+                <div className="flex items-start gap-2.5 text-rose-300 font-bold text-xs">
+                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
+                  <span>{deleteErrorMessage}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Boutons d'actions conditionnels */}
+            <div className="space-y-3 pt-2">
+              {deleteOrdersCount !== null && deleteOrdersCount > 0 ? (
+                /* ÉVÉNEMENT AVEC >= 1 COMMANDE : SOFT DELETE REQUIS */
+                <>
+                  <button
+                    type="button"
+                    disabled={isSoftDeleting}
+                    onClick={handleConfirmSoftDelete}
+                    className="w-full py-3.5 px-5 rounded-2xl bg-gradient-to-r from-[#8A2BE2] via-[#7B24CC] to-[#E9C349]/90 hover:from-[#9D3CF2] hover:to-[#E9C349] text-white font-extrabold text-xs flex items-center justify-center gap-2.5 shadow-xl shadow-[#8A2BE2]/30 hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-50 cursor-pointer"
+                  >
+                    {isSoftDeleting ? (
+                      <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <>
+                        <Archive className="w-4 h-4 text-[#E9C349]" />
+                        <span>Archiver l'Événement (Soft Delete)</span>
+                      </>
+                    )}
+                  </button>
+                  <p className="text-[10px] text-gray-400 text-center italic">
+                    🔒 La suppression totale SQL est verrouillée pour garantir la réconciliation financière.
+                  </p>
+                </>
+              ) : (
+                /* ÉVÉNEMENT AVEC 0 COMMANDE : SUPPRESSION TOTALE AUTORISÉE */
+                <>
+                  <button
+                    type="button"
+                    disabled={isDeleting || isSoftDeleting}
+                    onClick={handleConfirmHardDelete}
+                    className="w-full py-3 px-5 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-lg shadow-rose-900/30 transition-all disabled:opacity-50 cursor-pointer"
+                  >
+                    {isDeleting ? (
+                      <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <>
+                        <Trash2 className="w-4 h-4" />
+                        <span>Supprimer Définitivement (Hard Delete SQL)</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={isDeleting || isSoftDeleting}
+                    onClick={handleConfirmSoftDelete}
+                    className="w-full py-2.5 px-4 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  >
+                    <Archive className="w-3.5 h-3.5 text-[#E9C349]" />
+                    <span>Archiver plutôt (Soft Delete)</span>
+                  </button>
+                </>
+              )}
+
+              {/* Annuler */}
               <button
                 type="button"
-                onClick={() => setDeletingEvent(null)}
-                className="px-5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-bold text-gray-300 transition-colors"
+                disabled={isSoftDeleting || isDeleting}
+                onClick={() => {
+                  setDeletingEvent(null);
+                  setDeleteErrorMessage(null);
+                }}
+                className="w-full py-2 text-xs font-semibold text-gray-400 hover:text-white transition-colors cursor-pointer"
               >
                 Annuler
-              </button>
-              <button
-                type="button"
-                disabled={isDeleting}
-                onClick={handleConfirmDelete}
-                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-xs font-bold text-white flex items-center gap-2 shadow-lg shadow-rose-900/30 transition-all"
-              >
-                {isDeleting ? (
-                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <>
-                    <Trash2 className="w-4 h-4" />
-                    <span>Confirmer la Suppression</span>
-                  </>
-                )}
               </button>
             </div>
           </div>

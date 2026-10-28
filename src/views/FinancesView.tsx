@@ -703,14 +703,68 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
   };
 
   // ====================================================================
-  // CALCULS GLOBAUX PLATEFORME (ADMIN)
+  // CALCULS GLOBAUX PLATEFORME (ADMIN) & SÉCURITÉ COMPTABLE
   // ====================================================================
-  const totalVolumeConfirmed = transactions.reduce((acc, t) => acc + t.totalAmount, 0);
-  const totalPromoterShare = transactions.reduce((acc, t) => acc + t.promoterShare, 0);
-  const totalPlatformFee = transactions.reduce((acc, t) => acc + t.platformFee, 0);
+  // Consolidation des transactions avec les commandes confirmées de Supabase
+  const consolidatedTransactions = useMemo(() => {
+    const list: TransactionRecord[] = [...transactions];
+    const confirmedOrders = orders.filter((o) => o.status === 'confirmed');
 
-  const signaledOrders = orders.filter((o) => o.status === 'payment_signaled');
-  const signaledVolume = signaledOrders.reduce((acc, o) => acc + o.totalAmount, 0);
+    confirmedOrders.forEach((co) => {
+      const exists = list.some((t) => t.orderId === co.id || t.id === co.id);
+      if (!exists) {
+        list.push({
+          id: `tx-${co.id.slice(-6)}`,
+          orderId: co.id,
+          eventId: co.eventId,
+          eventTitle: co.eventTitle || 'Événement Thièsdn',
+          promoterName: co.organizerName || 'Promoteur Thièsdn',
+          customerName: co.customerName,
+          customerPhone: co.customerPhone,
+          paymentMethod: co.paymentMethod,
+          totalAmount: co.totalAmount,
+          promoterShare: Math.round(co.totalAmount * 0.9),
+          platformFee: Math.round(co.totalAmount * 0.1),
+          operatorFee: 0,
+          status: 'completed',
+          createdAt: co.confirmedAt || co.createdAt,
+        });
+      }
+    });
+
+    return list;
+  }, [transactions, orders]);
+
+  // Filtrage des transactions pour l'administrateur
+  const adminTransactions = useMemo(() => {
+    if (selectedEventId === 'all') return consolidatedTransactions;
+    return consolidatedTransactions.filter((t) => t.eventId === selectedEventId);
+  }, [consolidatedTransactions, selectedEventId]);
+
+  const totalVolumeConfirmed = useMemo(() => {
+    return adminTransactions.reduce((acc, t) => acc + t.totalAmount, 0);
+  }, [adminTransactions]);
+
+  const totalPromoterShare = useMemo(() => {
+    return adminTransactions.reduce((acc, t) => acc + t.promoterShare, 0);
+  }, [adminTransactions]);
+
+  const totalPlatformFee = useMemo(() => {
+    return adminTransactions.reduce((acc, t) => acc + t.platformFee, 0);
+  }, [adminTransactions]);
+
+  const adminFilteredOrders = useMemo(() => {
+    if (selectedEventId === 'all') return orders;
+    return orders.filter((o) => o.eventId === selectedEventId);
+  }, [orders, selectedEventId]);
+
+  const signaledOrders = useMemo(() => {
+    return adminFilteredOrders.filter((o) => o.status === 'payment_signaled');
+  }, [adminFilteredOrders]);
+
+  const signaledVolume = useMemo(() => {
+    return signaledOrders.reduce((acc, o) => acc + o.totalAmount, 0);
+  }, [signaledOrders]);
 
   // ====================================================================
   // 1. VUE PROMOTEUR : LE COCKPIT ORGANISATEUR & STATISTIQUES EN DIRECT
@@ -2566,6 +2620,48 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
         </button>
       </div>
 
+      {/* Filtre Déroulant Multi-Événements (Admin Finances) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#141414] p-4 sm:p-5 rounded-3xl border border-white/10 shadow-xl">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 text-xs text-gray-300 font-extrabold">
+            <Filter className="w-4 h-4 text-[#8A2BE2]" />
+            <span>Filtrer les Transactions :</span>
+          </div>
+          <select
+            value={selectedEventId}
+            onChange={(e) => setSelectedEventId(e.target.value)}
+            className="bg-[#1C1B1B] border border-white/15 text-white text-xs rounded-xl px-4 py-2.5 outline-none focus:border-[#E9C349] font-bold cursor-pointer"
+          >
+            <option value="all">Tous les événements</option>
+            {events.map((evt) => {
+              const isArchived = evt.status === 'archived' || evt.status?.toUpperCase() === 'ARCHIVED' || evt.isDeleted || Boolean(evt.deletedAt);
+              return (
+                <option key={evt.id} value={evt.id}>
+                  {isArchived ? `📦 [Archivé] ${evt.title}` : `🎟️ ${evt.title}`}
+                </option>
+              );
+            })}
+          </select>
+        </div>
+
+        {selectedEventId !== 'all' && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-[#E9C349] font-extrabold bg-[#E9C349]/10 px-3 py-1 rounded-xl border border-[#E9C349]/30">
+              {adminTransactions.length} transaction(s) rattachée(s)
+            </span>
+            {(() => {
+              const cur = events.find((e) => e.id === selectedEventId);
+              const isArchived = cur?.status === 'archived' || cur?.status?.toUpperCase() === 'ARCHIVED' || cur?.isDeleted || Boolean(cur?.deletedAt);
+              return isArchived ? (
+                <span className="text-[11px] bg-slate-700/60 text-slate-300 font-bold px-2.5 py-0.5 rounded-full border border-slate-600">
+                  📦 Événement Archivé
+                </span>
+              ) : null;
+            })()}
+          </div>
+        )}
+      </div>
+
       {/* KPI Cards : État des Flux Financiers */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Confirmé Encaissé */}
@@ -2845,7 +2941,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
           <div className="flex items-center gap-2">
             <Wallet className="w-5 h-5 text-[#8A2BE2]" />
             <h2 className="font-heading font-bold text-base text-white">
-              Historique des Transactions & Répartitions ({transactions.length})
+              Historique des Transactions & Répartitions ({adminTransactions.length})
             </h2>
           </div>
 
@@ -2869,7 +2965,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-              {transactions.map((tx) => (
+              {adminTransactions.map((tx) => (
                 <tr key={tx.id} className="hover:bg-white/5 transition-colors">
                   <td className="py-3.5 px-3">
                     <p className="font-mono text-white font-bold">{tx.id}</p>
@@ -2884,7 +2980,18 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                   </td>
 
                   <td className="py-3.5 px-3">
-                    <p className="font-semibold text-white truncate max-w-xs">{tx.eventTitle}</p>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <p className="font-semibold text-white truncate max-w-xs">{tx.eventTitle}</p>
+                      {(() => {
+                        const cur = events.find((e) => e.id === tx.eventId);
+                        const isArchived = cur?.status === 'archived' || cur?.status?.toUpperCase() === 'ARCHIVED' || cur?.isDeleted || Boolean(cur?.deletedAt);
+                        return isArchived ? (
+                          <span className="text-[9px] bg-slate-700/60 text-slate-300 font-bold px-1.5 py-0.2 rounded-full border border-slate-600">
+                            📦 Archivé
+                          </span>
+                        ) : null;
+                      })()}
+                    </div>
                     <p className="text-[11px] text-[#DCB8FF]">{tx.promoterName}</p>
                   </td>
 

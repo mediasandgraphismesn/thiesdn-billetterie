@@ -57,6 +57,7 @@ export const ModerationView: React.FC<ModerationViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState('All');
   const [orderFilter, setOrderFilter] = useState<'all' | 'payment_signaled' | 'pending' | 'confirmed' | 'rejected'>('all');
+  const [selectedEventId, setSelectedEventId] = useState<string>('all');
   const [rejectingEvent, setRejectingEvent] = useState<EventItem | null>(null);
   const [rejectionReason, setRejectionReason] = useState('Informations de lieu incomplètes');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -98,6 +99,7 @@ export const ModerationView: React.FC<ModerationViewProps> = ({
   });
 
   const filteredOrders = orders.filter((o) => {
+    if (selectedEventId !== 'all' && o.eventId !== selectedEventId) return false;
     if (orderFilter !== 'all' && o.status !== orderFilter) return false;
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
@@ -106,6 +108,7 @@ export const ModerationView: React.FC<ModerationViewProps> = ({
       o.customerName.toLowerCase().includes(q) ||
       o.customerPhone.toLowerCase().includes(q) ||
       o.eventTitle.toLowerCase().includes(q) ||
+      (o.organizerName && o.organizerName.toLowerCase().includes(q)) ||
       (o.paymentReference && o.paymentReference.toLowerCase().includes(q))
     );
   });
@@ -234,6 +237,36 @@ export const ModerationView: React.FC<ModerationViewProps> = ({
       {/* VUE 1 : VÉRIFICATION DES COMMANDES ET PAIEMENTS MANUELS */}
       {activeTab === 'orders' && (
         <div className="space-y-4">
+          {/* Sélecteur Déroulant Événements (Spécification ThièsDN Soft Delete & Comptabilité) */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-[#141414] rounded-2xl border border-white/10 shadow-lg">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <span className="text-xs text-gray-300 font-extrabold flex items-center gap-1.5 whitespace-nowrap">
+                <Filter className="w-3.5 h-3.5 text-[#8A2BE2]" />
+                Filtrer par Événement :
+              </span>
+              <select
+                value={selectedEventId}
+                onChange={(e) => setSelectedEventId(e.target.value)}
+                className="bg-[#1C1B1B] border border-white/15 text-white text-xs rounded-xl px-3.5 py-2 outline-none focus:border-[#8A2BE2] font-semibold"
+              >
+                <option value="all">Tous les événements</option>
+                {events.map((evt) => {
+                  const isArchived = evt.status === 'archived' || evt.status?.toUpperCase() === 'ARCHIVED' || evt.isDeleted || Boolean(evt.deletedAt);
+                  return (
+                    <option key={evt.id} value={evt.id}>
+                      {isArchived ? `📦 [Archivé] ${evt.title}` : `🎟️ ${evt.title}`}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+            {selectedEventId !== 'all' && (
+              <span className="text-xs text-[#E9C349] font-medium bg-[#E9C349]/10 px-3 py-1 rounded-lg border border-[#E9C349]/20 self-start sm:self-auto">
+                {filteredOrders.length} commande(s) filtrée(s)
+              </span>
+            )}
+          </div>
+
           {/* Filters Bar */}
           <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-[#1C1B1B] rounded-2xl border border-white/5">
             <div className="flex flex-wrap items-center gap-2">
@@ -358,9 +391,25 @@ export const ModerationView: React.FC<ModerationViewProps> = ({
                           </span>
                         </div>
 
-                        <h3 className="font-heading font-bold text-white text-base">
-                          {order.eventTitle}
-                        </h3>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="font-heading font-bold text-white text-base">
+                            {order.eventTitle}
+                          </h3>
+                          {(() => {
+                            const matchedEvt = events.find((e) => e.id === order.eventId);
+                            const isArchived = matchedEvt?.status === 'archived' || matchedEvt?.status?.toUpperCase() === 'ARCHIVED' || matchedEvt?.isDeleted || Boolean(matchedEvt?.deletedAt);
+                            return isArchived ? (
+                              <span className="text-[10px] bg-slate-700/60 text-slate-300 font-bold px-2 py-0.5 rounded-full border border-slate-600">
+                                📦 Événement Archivé
+                              </span>
+                            ) : null;
+                          })()}
+                        </div>
+                        {order.organizerName && (
+                          <p className="text-[11px] text-[#DCB8FF] font-medium">
+                            Organisateur : {order.organizerName}
+                          </p>
+                        )}
 
                         <div className="flex flex-wrap items-center gap-y-1 gap-x-4 text-xs text-gray-300">
                           <span className="flex items-center gap-1">

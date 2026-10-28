@@ -107,6 +107,17 @@ export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(authIsAuthenticated);
   const [user, setUser] = useState<UserProfile>(contextUser || INITIAL_USER);
   const [events, setEvents] = useState<EventItem[]>([]);
+
+  // Catalogue public : Condition stricte (status = 'APPROVED' AND deleted_at IS NULL AND is_deleted = false)
+  // Les événements archivés disparaissent ainsi immédiatement de l'accueil et du tunnel d'achat
+  const publicEvents = useMemo(() => {
+    return events.filter(
+      (e) =>
+        (e.status.toLowerCase() === 'approved') &&
+        !e.deletedAt &&
+        !e.isDeleted
+    );
+  }, [events]);
   const [isLoadingEvents, setIsLoadingEvents] = useState<boolean>(true);
   const [eventsError, setEventsError] = useState<string | null>(null);
   const [paymentBannerMessage, setPaymentBannerMessage] = useState<string | null>(null);
@@ -317,7 +328,7 @@ export default function App() {
   const refreshEvents = async () => {
     setIsLoadingEvents(true);
     setEventsError(null);
-    const { events: dbEvents, error } = await fetchEventsFromSupabase();
+    const { events: dbEvents, error } = await fetchEventsFromSupabase({ includeDeleted: true });
     if (error) {
       setEventsError(error);
       setEvents([]);

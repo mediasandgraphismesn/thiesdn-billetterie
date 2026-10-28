@@ -1206,6 +1206,8 @@ export const createOrderWithStockCheck = async (
   const client = getSupabaseClient();
   const reference = `CMD-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`;
   const totalAmount = customerData.customTotal !== undefined ? customerData.customTotal : tier.price * quantity;
+  const eventTitle = event.title;
+  const organizerName = event.promoter?.name || 'Organisateur Thi�sdn';
 
   // Si Supabase est connecté, utiliser la fonction RPC atomique ou transaction
   if (client) {
@@ -1228,6 +1230,8 @@ export const createOrderWithStockCheck = async (
           .insert({
             reference,
             event_id: event.id,
+            event_title: eventTitle,
+            organizer_name: organizerName,
             user_id: customerData.userId || null,
             tier_id: tier.id,
             tier_name: tier.name,
@@ -1252,6 +1256,7 @@ export const createOrderWithStockCheck = async (
           reference: directOrder.reference,
           eventId: event.id,
           eventTitle: event.title,
+          organizerName,
           userId: customerData.userId,
           tierId: tier.id,
           tierName: tier.name,
@@ -1284,7 +1289,8 @@ export const createOrderWithStockCheck = async (
         reference,
         eventId: event.id,
         eventTitle: event.title,
-        userId: customerData.userId,
+          organizerName,
+          userId: customerData.userId,
         tierId: tier.id,
         tierName: tier.name,
         quantity,
@@ -1312,7 +1318,8 @@ export const createOrderWithStockCheck = async (
     reference,
     eventId: event.id,
     eventTitle: event.title,
-    userId: customerData.userId,
+          organizerName,
+          userId: customerData.userId,
     tierId: tier.id,
     tierName: tier.name,
     quantity,
@@ -3095,6 +3102,7 @@ export const verifyScanStationAccess = async (
           id: data.id,
           eventId: data.event_id,
           eventTitle: data.event_title || 'Événement Thièsdn',
+          organizerName: data.organizer_name || 'Organisateur Thièsdn',
           name: data.name,
           accessCode: data.access_code,
           createdBy: data.created_by,
@@ -3651,6 +3659,7 @@ export const signalOrderPayment = async (
           reference: data.reference,
           eventId: data.event_id,
           eventTitle: data.event_title || 'Événement Thièsdn',
+          organizerName: data.organizer_name || 'Organisateur Thièsdn',
           userId: data.user_id,
           tierId: data.tier_id || 'std',
           tierName: data.tier_name || 'Standard',
@@ -3732,6 +3741,7 @@ export const confirmManualOrderAtomic = async (
           reference: data.reference,
           eventId: data.event_id,
           eventTitle: data.event_title || 'Événement Thièsdn',
+          organizerName: data.organizer_name || 'Organisateur Thièsdn',
           userId: data.user_id,
           tierId: data.tier_id || 'std',
           tierName: data.tier_name || 'Standard',
@@ -3992,6 +4002,7 @@ export const rejectManualOrderAtomic = async (
           reference: data.reference,
           eventId: data.event_id,
           eventTitle: data.event_title || 'Événement Thièsdn',
+          organizerName: data.organizer_name || 'Organisateur Thièsdn',
           userId: data.user_id,
           tierId: data.tier_id || 'std',
           tierName: data.tier_name || 'Standard',
@@ -4193,12 +4204,16 @@ CREATE TABLE IF NOT EXISTS public.events (
 
 ALTER TABLE public.events ADD COLUMN IF NOT EXISTS promo_code TEXT;
 ALTER TABLE public.events ADD COLUMN IF NOT EXISTS promo_discount_percent NUMERIC;
+ALTER TABLE public.events ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.events ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITH TIME ZONE;
 
 -- 4. Table des commandes (Flux Paiement Manuel)
 CREATE TABLE IF NOT EXISTS public.orders (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   reference TEXT UNIQUE NOT NULL,
   event_id UUID REFERENCES public.events(id) ON DELETE RESTRICT,
+  event_title TEXT,
+  organizer_name TEXT,
   user_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
   tier_id TEXT NOT NULL,
   tier_name TEXT NOT NULL,
@@ -4220,7 +4235,9 @@ CREATE TABLE IF NOT EXISTS public.orders (
 CREATE TABLE IF NOT EXISTS public.tickets (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   order_id UUID REFERENCES public.orders(id) ON DELETE CASCADE,
-  event_id UUID REFERENCES public.events(id) ON DELETE CASCADE,
+  event_id UUID REFERENCES public.events(id) ON DELETE RESTRICT,
+  event_title TEXT,
+  organizer_name TEXT,
   user_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
   event_title TEXT NOT NULL,
   event_poster TEXT,
@@ -4264,7 +4281,9 @@ CREATE TABLE IF NOT EXISTS public.transactions (
 CREATE TABLE IF NOT EXISTS public.sales_agents (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
-  event_id UUID REFERENCES public.events(id) ON DELETE CASCADE,
+  event_id UUID REFERENCES public.events(id) ON DELETE RESTRICT,
+  event_title TEXT,
+  organizer_name TEXT,
   promoter_id TEXT NOT NULL,
   point_de_vente TEXT NOT NULL,
   gerant_name TEXT NOT NULL,
@@ -4304,7 +4323,9 @@ ALTER TABLE public.tickets ADD CONSTRAINT tickets_status_check CHECK (status IN 
 -- 8. Table des Co-Producteurs, Artistes & Staff (Module Co-Production)
 CREATE TABLE IF NOT EXISTS public.event_coproducers (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  event_id UUID REFERENCES public.events(id) ON DELETE CASCADE,
+  event_id UUID REFERENCES public.events(id) ON DELETE RESTRICT,
+  event_title TEXT,
+  organizer_name TEXT,
   user_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
   promoter_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
@@ -4333,7 +4354,9 @@ ALTER TABLE public.event_coproducers ADD COLUMN IF NOT EXISTS decompte_signature
 -- 9. Table des Pass Invités Artiste / Staff (Guest List)
 CREATE TABLE IF NOT EXISTS public.event_guest_tickets (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  event_id UUID REFERENCES public.events(id) ON DELETE CASCADE,
+  event_id UUID REFERENCES public.events(id) ON DELETE RESTRICT,
+  event_title TEXT,
+  organizer_name TEXT,
   coproducer_id UUID REFERENCES public.event_coproducers(id) ON DELETE CASCADE,
   guest_name TEXT NOT NULL,
   guest_phone TEXT,
@@ -4346,7 +4369,9 @@ CREATE TABLE IF NOT EXISTS public.event_guest_tickets (
 -- 10. Table des Accréditations : Staff, Invités VIP & Presse (Module Accréditations)
 CREATE TABLE IF NOT EXISTS public.accreditations (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  event_id UUID REFERENCES public.events(id) ON DELETE CASCADE,
+  event_id UUID REFERENCES public.events(id) ON DELETE RESTRICT,
+  event_title TEXT,
+  organizer_name TEXT,
   event_title TEXT,
   type TEXT NOT NULL CHECK (type IN ('staff', 'invite', 'presse')),
   holder_name TEXT NOT NULL,
@@ -4974,7 +4999,9 @@ USING (
 -- 12. Table des Postes de Contrôle (Scanners Multi-Entrées sans login)
 CREATE TABLE IF NOT EXISTS public.scan_stations (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  event_id UUID REFERENCES public.events(id) ON DELETE CASCADE,
+  event_id UUID REFERENCES public.events(id) ON DELETE RESTRICT,
+  event_title TEXT,
+  organizer_name TEXT,
   event_title TEXT,
   name TEXT NOT NULL,
   access_code TEXT UNIQUE NOT NULL,
@@ -5159,33 +5186,94 @@ export const mapDbEventToItem = (db: any): EventItem => {
     estimatedEndTime: db.estimated_end_time || db.estimatedEndTime || undefined,
     promoCode: db.promo_code || db.promoCode || '',
     promoDiscountPercent: db.promo_discount_percent ? Number(db.promo_discount_percent) : (db.promoDiscountPercent ? Number(db.promoDiscountPercent) : undefined),
+    isDeleted: Boolean(db.is_deleted || db.deleted_at || db.status === 'archived' || db.status === 'ARCHIVED'),
+    deletedAt: db.deleted_at || undefined,
     tiers: enrichedTiers,
     createdAt: db.created_at || new Date().toISOString(),
   };
 };
 
-export const fetchEventsFromSupabase = async (): Promise<{ events: EventItem[]; error: string | null }> => {
+export const fetchEventsFromSupabase = async (
+  options?: { includeDeleted?: boolean; publicOnly?: boolean }
+): Promise<{ events: EventItem[]; error: string | null }> => {
   const client = getSupabaseClient();
   if (!client) {
     return { events: [], error: 'Supabase n\'est pas encore configuré.' };
   }
 
   try {
-    const { data, error } = await client
-      .from('events')
-      .select('*')
-      .order('created_at', { ascending: false });
+    let query = client.from('events').select('*');
+
+    // Requête côté billetterie publique : status = 'approved' AND deleted_at IS NULL AND is_deleted IS NOT TRUE
+    if (options?.publicOnly) {
+      query = query
+        .ilike('status', 'approved')
+        .is('deleted_at', null)
+        .neq('is_deleted', true)
+        .order('datetime_iso', { ascending: true });
+    } else {
+      query = query.order('created_at', { ascending: false });
+    }
+
+    const { data, error } = await query;
 
     if (error) {
-      console.error('Erreur Supabase events:', error);
-      return { events: [], error: error.message };
+      console.warn('Requête standard events avec filtre échouée, essai de repli:', error.message);
+      // Fallback si colonnes deleted_at / is_deleted non encore créées
+      const fallback = await client
+        .from('events')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (fallback.error) {
+        return { events: [], error: fallback.error.message };
+      }
+
+      const mapped = (fallback.data || []).map(mapDbEventToItem);
+      if (options?.publicOnly) {
+        return {
+          events: mapped.filter(
+            (e) =>
+              (e.status.toLowerCase() === 'approved') &&
+              !e.deletedAt &&
+              !e.isDeleted
+          ),
+          error: null,
+        };
+      }
+      const filtered = options?.includeDeleted
+        ? mapped
+        : mapped.filter((e) => !e.isDeleted && !e.deletedAt);
+      return { events: filtered, error: null };
     }
 
     const mapped = (data || []).map(mapDbEventToItem);
-    return { events: mapped, error: null };
+    if (options?.publicOnly) {
+      return {
+        events: mapped.filter(
+          (e) =>
+            (e.status.toLowerCase() === 'approved') &&
+            !e.deletedAt &&
+            !e.isDeleted
+        ),
+        error: null,
+      };
+    }
+    const filtered = options?.includeDeleted
+      ? mapped
+      : mapped.filter((e) => !e.isDeleted && !e.deletedAt);
+    return { events: filtered, error: null };
   } catch (err: any) {
     return { events: [], error: err.message || 'Erreur réseau inattendue.' };
   }
+};
+
+/**
+ * Fetching dédié côté boutique/billetterie publique.
+ * Condition stricte : status = 'APPROVED' AND deleted_at IS NULL (et is_deleted = false).
+ */
+export const fetchPublicEventsFromSupabase = async (): Promise<{ events: EventItem[]; error: string | null }> => {
+  return fetchEventsFromSupabase({ publicOnly: true });
 };
 
 export const createEventInSupabase = async (
@@ -5394,16 +5482,96 @@ export const updateEventStatusInSupabase = async (
 
 export const deleteEventFromSupabase = async (
   eventId: string
-): Promise<{ success: boolean; error?: string }> => {
+): Promise<{ success: boolean; error?: string; isConstraintViolation?: boolean }> => {
   const client = getSupabaseClient();
   if (!client) return { success: false, error: 'Supabase non connecté.' };
 
   try {
     const { error } = await client.from('events').delete().eq('id', eventId);
-    if (error) return { success: false, error: error.message };
+    if (error) {
+      // Détection explicite de violation de contrainte d'intégrité (orders_event_id_fkey / PostgreSQL 23503 / 409 Conflict)
+      const isFkError =
+        error.code === '23503' ||
+        error.message?.includes('orders_event_id_fkey') ||
+        error.message?.includes('foreign key constraint') ||
+        error.message?.includes('violates foreign key') ||
+        error.message?.includes('is still referenced');
+
+      if (isFkError) {
+        return {
+          success: false,
+          isConstraintViolation: true,
+          error:
+            "Cet événement contient des transactions financières. Il sera archivé et retiré de la billetterie publique, mais son historique comptable restera conservé.",
+        };
+      }
+      return { success: false, error: error.message };
+    }
     return { success: true };
   } catch (err: any) {
-    return { success: false, error: err.message };
+    const msg = err?.message || String(err);
+    if (
+      msg.includes('23503') ||
+      msg.includes('orders_event_id_fkey') ||
+      msg.includes('foreign key constraint')
+    ) {
+      return {
+        success: false,
+        isConstraintViolation: true,
+        error:
+          "Cet événement contient des transactions financières. Il sera archivé et retiré de la billetterie publique, mais son historique comptable restera conservé.",
+      };
+    }
+    return { success: false, error: msg };
+  }
+};
+
+/**
+ * Soft Delete d'un événement :
+ * Conserve l'événement en base avec is_deleted = true, deleted_at = now(),
+ * bascule le statut en 'archived' et désactive les ventes.
+ * Préserve l'intégrité comptable et l'historique des commandes et transactions.
+ */
+export const softDeleteEventInSupabase = async (
+  eventId: string
+): Promise<{ success: boolean; error?: string }> => {
+  const client = getSupabaseClient();
+  if (!client) return { success: false, error: 'Supabase non connecté.' };
+
+  try {
+    const { error } = await client
+      .from('events')
+      .update({
+        is_deleted: true,
+        deleted_at: new Date().toISOString(),
+        status: 'archived',
+        sales_active: false,
+      })
+      .eq('id', eventId);
+
+    if (error) {
+      // Si les colonnes is_deleted / deleted_at n'existent pas encore dans l'ancienne version du schéma, fallback sur status: 'archived'
+      if (
+        error.message?.includes('is_deleted') ||
+        error.message?.includes('deleted_at') ||
+        error.code === '42703'
+      ) {
+        const fallback = await client
+          .from('events')
+          .update({
+            status: 'archived',
+            sales_active: false,
+          })
+          .eq('id', eventId);
+
+        if (fallback.error) return { success: false, error: fallback.error.message };
+        return { success: true };
+      }
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Erreur lors de l’archivage.' };
   }
 };
 
@@ -5694,6 +5862,7 @@ export const fetchOrdersFromSupabase = async (): Promise<{ orders: OrderRecord[]
       reference: db.reference,
       eventId: db.event_id,
       eventTitle: db.event_title || 'Événement Thièsdn',
+      organizerName: db.organizer_name || 'Organisateur Thièsdn',
       userId: db.user_id,
       tierId: db.tier_id || 'std',
       tierName: db.tier_name || 'Standard',

@@ -23,6 +23,7 @@ export interface OrderRecord {
   reference: string;
   eventId: string;
   eventTitle: string;
+  organizerName?: string;
   userId?: string;
   tierId: string;
   tierName: string;
@@ -91,6 +92,8 @@ export interface EventItem {
   };
   featured?: boolean;
   status: EventStatus;
+  isDeleted?: boolean;
+  deletedAt?: string;
   vipAvailable?: boolean;
   isExclusive?: boolean;
   salesActive?: boolean;
@@ -125,6 +128,7 @@ export interface EventCoproducer {
   id: string;
   eventId: string;
   eventTitle: string;
+  organizerName?: string;
   userId?: string;
   promoterId: string;
   name: string;
