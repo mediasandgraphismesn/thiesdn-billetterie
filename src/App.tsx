@@ -51,6 +51,7 @@ import {
   updateEventStatusInSupabase,
   fetchUserTicketsFromSupabase,
   fetchOrdersFromSupabase,
+  fetchOrderTicketsByToken,
 } from './services/supabase';
 
 const getInitialScanCode = (): string | null => {
@@ -77,7 +78,7 @@ const getInitialClaimToken = (): string | null => {
   const hash = window.location.hash;
   const search = new URLSearchParams(window.location.search);
 
-  const queryCode = search.get('claim') || search.get('token');
+  const queryCode = search.get('claim') || (!search.get('order') ? search.get('token') : null);
   if (queryCode) return queryCode.trim();
 
   const pathMatch = path.match(/\/claim-ticket\/([A-Za-z0-9_-]+)/i);
@@ -113,6 +114,8 @@ export default function App() {
   const [notifications, setNotifications] = useState<NotificationItem[]>(INITIAL_NOTIFICATIONS);
 
   const [activeTab, setActiveTab] = useState<string>('home');
+  const [orderFilter, setOrderFilter] = useState<string | null>(null);
+  const [hasGuestOrderToken, setHasGuestOrderToken] = useState<boolean>(false);
   // Rôle de session réel provenant de Supabase Auth (synchronisé en temps réel avec le contexte)
   const [currentRole, setCurrentRole] = useState<'user' | 'promoter' | 'admin' | 'sales_agent' | 'artist'>(userRole);
   const [ambientShader, setAmbientShader] = useState<boolean>(true);
@@ -184,6 +187,21 @@ export default function App() {
 
       // 8. Retour de paiement Wave ?payment=success ou ?payment=error
       const urlParams = new URLSearchParams(search);
+      const orderRef = urlParams.get('order');
+      const orderToken = urlParams.get('token');
+      if (orderRef) {
+        setActiveTab('tickets');
+        setOrderFilter(orderRef.trim());
+        if (orderToken) {
+          setHasGuestOrderToken(true);
+          fetchOrderTicketsByToken(orderRef.trim(), orderToken.trim()).then((res) => {
+            if (res.success && res.tickets.length > 0) {
+              setTickets(res.tickets);
+              setSelectedTicketForPass(res.tickets[0]);
+            }
+          });
+        }
+      }
       if (urlParams.get('payment') === 'success') {
         setPaymentBannerMessage('Paiement Wave initié ! Votre pass est en cours de validation.');
         setActiveTab('tickets');
@@ -241,7 +259,7 @@ export default function App() {
     }
 
     if (!isAuth) {
-      return ['home', 'explore', 'cgv', 'showcase', 'presentation'].includes(tab);
+      return ['home', 'explore', 'cgv', 'showcase', 'presentation', ...(hasGuestOrderToken ? ['tickets'] : [])].includes(tab);
     }
     if (role === 'admin') {
       return true; // Accès complet
@@ -575,7 +593,7 @@ export default function App() {
     'stations',
     'tickets',
     'profile',
-  ].includes(activeTab);
+  ].includes(activeTab) && !(hasGuestOrderToken && activeTab === 'tickets');
   const isTabPermitted = isTabAllowedForRole(activeTab, effectiveRole, isAuthenticated);
 
   // Sécurité hermétique : si un code de poste de scan est présent dans l'URL (/scan/:code),
@@ -1012,6 +1030,8 @@ export default function App() {
                 <TicketsWalletView
                   tickets={tickets}
                   userName={user.name}
+                  orderFilter={orderFilter}
+                  onClearOrderFilter={() => setOrderFilter(null)}
                   onOpenPass={(tkt) => setSelectedTicketForPass(tkt)}
                   onExploreEvents={() => handleTabChange('home')}
                   onTicketUpdated={(tkt) => {
@@ -1091,6 +1111,7 @@ export default function App() {
           setActiveTab('tickets');
         }}
         userName={user.name}
+        userEmail={user.email}
         isEmailConfirmed={Boolean(user.isEmailConfirmed)}
         isAuthenticated={isAuthenticated}
         onRequireAuth={() => {

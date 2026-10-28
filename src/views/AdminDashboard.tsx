@@ -29,6 +29,7 @@ import {
   fetchEventsFromSupabase,
   fetchAllProfilesFromSupabase,
   getSupabaseClient,
+  fetchFailedEmailsCountLast7Days,
 } from '../services/supabase';
 import { StatsCard } from '../components/admin/StatsCard';
 import { OrdersTable } from '../components/admin/OrdersTable';
@@ -61,6 +62,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [actionSuccessToast, setActionSuccessToast] = useState<string | null>(null);
   const [actionErrorToast, setActionErrorToast] = useState<string | null>(null);
   const [processingOrderId, setProcessingOrderId] = useState<string | null>(null);
+  const [failedEmailsCount, setFailedEmailsCount] = useState<number>(0);
 
   /**
    * Chargement direct de TOUTES les données réelles depuis Supabase
@@ -70,6 +72,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
    */
   const loadSupabaseData = async () => {
     setIsLoading(true);
+    fetchFailedEmailsCountLast7Days().then(setFailedEmailsCount);
     setActionErrorToast(null);
 
     try {
@@ -144,6 +147,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           prev.map((o) => (o.id === order.id ? { ...o, status: 'confirmed' } : o))
         );
         setActionSuccessToast(`Paiement de ${order.customerName} validé ! ${result.tickets.length} billet(s) émis.`);
+        const supabase = getSupabaseClient();
+        if (supabase) {
+          await supabase.functions.invoke('send-order-confirmation', {
+            body: { orderId: order.id },
+          });
+        }
+        fetchFailedEmailsCountLast7Days().then(setFailedEmailsCount);
         setTimeout(() => setActionSuccessToast(null), 4000);
       } else {
         setActionErrorToast(result.message || 'Impossible de confirmer cette commande.');
@@ -197,6 +207,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       )}
 
       {/* Header Back-Office Super Admin */}
+      {failedEmailsCount > 0 && (
+        <div className="p-4 rounded-2xl bg-rose-950/60 border border-rose-500/40 flex items-center justify-between gap-3 text-xs text-rose-200">
+          <div className="flex items-center gap-2.5">
+            <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
+            <span>
+              <strong>Alerte Emails Resend :</strong> {failedEmailsCount} email(s) en échec cette semaine.
+            </span>
+          </div>
+        </div>
+      )}
       <section className="glass-panel rounded-3xl p-6 sm:p-8 relative overflow-hidden border border-[#8A2BE2]/30 shadow-2xl">
         <div className="absolute top-0 right-0 w-80 h-80 bg-gradient-to-bl from-[#8A2BE2]/20 via-[#E9C349]/10 to-transparent rounded-full blur-3xl pointer-events-none" />
 

@@ -36,6 +36,9 @@ export interface OrderRecord {
   paymentProofUrl?: string;
   customerName: string;
   customerPhone: string;
+  customerEmail?: string;
+  guestToken?: string;
+  emailSentAt?: string;
   status: OrderStatus;
   rejectionReason?: string;
   confirmedBy?: string;

@@ -1106,6 +1106,7 @@ export const createOrderWithStockCheck = async (
     customTotal?: number;
     discountAmount?: number;
     promoCodeApplied?: string;
+    email?: string;
   }
 ): Promise<{ success: boolean; order?: OrderRecord; message: string }> => {
   if (quantity <= 0) {
@@ -1155,6 +1156,7 @@ export const createOrderWithStockCheck = async (
             payment_method: customerData.paymentMethod,
             customer_name: customerData.name,
             customer_phone: customerData.phone,
+            customer_email: customerData.email || null,
             status: 'pending',
           })
           .select()
@@ -1190,6 +1192,10 @@ export const createOrderWithStockCheck = async (
 
       if (data && !data.success) {
         return { success: false, message: data.message || 'Erreur lors de la réservation du stock.' };
+      }
+
+      if (data?.order_id && customerData.email) {
+        await client.from('orders').update({ customer_email: customerData.email }).eq('id', data.order_id);
       }
 
       const confirmedOrder: OrderRecord = {
@@ -3688,6 +3694,7 @@ export const confirmManualOrderAtomic = async (
           status: 'confirmed',
           confirmed_at: new Date().toISOString(),
           confirmed_by: adminId || 'admin-thiesdn',
+          guest_token: order.guestToken || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID().replace(/-/g, '') : `${Date.now().toString(16)}${Math.random().toString(16).slice(2, 18)}`),
         })
         .eq('id', order.id);
     } catch (err: any) {
@@ -6415,4 +6422,105 @@ export const verifyAndLockVigileSession = async (
     locationLabel,
     deviceLabel,
   };
+};
+
+
+/**
+ * Récupération sécurisée des billets d'une commande via (?order=CMD-XXX&token=abc123) pour les Guests
+ */
+export const fetchOrderTicketsByToken = async (
+  reference: string,
+  token: string
+): Promise<{ success: boolean; order?: OrderRecord; tickets: UserTicket[]; message?: string }> => {
+  const client = getSupabaseClient();
+  if (!client || !reference || !token) {
+    return { success: false, tickets: [], message: 'Paramètres manquants.' };
+  }
+
+  try {
+    const { data, error } = await client.rpc('get_order_tickets_by_token', {
+      p_reference: reference.trim(),
+      p_token: token.trim(),
+    });
+
+    if (error || !data || !data.success) {
+      return {
+        success: false,
+        tickets: [],
+        message: data?.message || error?.message || 'Commande introuvable ou lien invalide.',
+      };
+    }
+
+    const rawOrder = data.order;
+    const rawTickets: any[] = Array.isArray(data.tickets) ? data.tickets : [];
+
+    const mappedOrder: OrderRecord = {
+      id: rawOrder.id,
+      reference: rawOrder.reference,
+      eventId: rawOrder.event_id,
+      eventTitle: rawOrder.event_title || 'Événement Thièsdn',
+      userId: rawOrder.user_id,
+      tierId: rawOrder.tier_id || 'std',
+      tierName: rawOrder.tier_name || 'Standard',
+      quantity: Number(rawOrder.quantity) || 1,
+      unitPrice: Number(rawOrder.unit_price) || 0,
+      totalAmount: Number(rawOrder.total_amount) || 0,
+      paymentMethod: rawOrder.payment_method || 'wave',
+      customerName: rawOrder.customer_name || 'Client',
+      customerPhone: rawOrder.customer_phone || '',
+      customerEmail: rawOrder.customer_email || undefined,
+      guestToken: rawOrder.guest_token || undefined,
+      emailSentAt: rawOrder.email_sent_at || undefined,
+      status: rawOrder.status || 'confirmed',
+      createdAt: rawOrder.created_at || new Date().toISOString(),
+    };
+
+    const mappedTickets: UserTicket[] = rawTickets.map((t, idx) => ({
+      id: t.id,
+      eventId: t.event_id || mappedOrder.eventId,
+      eventTitle: t.event_title || mappedOrder.eventTitle,
+      eventPoster: t.event_poster || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800',
+      eventDate: t.event_date || 'Date officielle',
+      eventTime: t.event_time || '21:00',
+      eventVenue: t.event_venue || 'Thiès',
+      tierName: t.tier_name || mappedOrder.tierName,
+      price: Number(t.price) || mappedOrder.unitPrice,
+      qrCode: t.qr_code,
+      seatNumber: t.seat_number || `Place ${idx + 1}/${rawTickets.length}`,
+      holderName: t.holder_name || mappedOrder.customerName,
+      holderPhone: t.holder_phone || mappedOrder.customerPhone,
+      purchasedAt: t.created_at || mappedOrder.createdAt,
+      status: t.status || 'valid',
+    }));
+
+    return {
+      success: true,
+      order: mappedOrder,
+      tickets: mappedTickets,
+    };
+  } catch (err: any) {
+    return { success: false, tickets: [], message: err.message };
+  }
+};
+
+/**
+ * Compteur des emails en échec sur les 7 derniers jours (Table email_logs)
+ */
+export const fetchFailedEmailsCountLast7Days = async (): Promise<number> => {
+  const client = getSupabaseClient();
+  if (!client) return 0;
+
+  try {
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const { count, error } = await client
+      .from('email_logs')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'failed')
+      .gte('created_at', sevenDaysAgo);
+
+    if (error) return 0;
+    return count || 0;
+  } catch {
+    return 0;
+  }
 };

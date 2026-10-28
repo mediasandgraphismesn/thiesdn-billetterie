@@ -34,6 +34,8 @@ interface TicketsWalletViewProps {
   onOpenPass: (ticket: UserTicket) => void;
   onExploreEvents: () => void;
   onTicketUpdated?: (ticket: UserTicket) => void;
+  orderFilter?: string | null;
+  onClearOrderFilter?: () => void;
 }
 
 export const TicketsWalletView: React.FC<TicketsWalletViewProps> = ({
@@ -42,6 +44,8 @@ export const TicketsWalletView: React.FC<TicketsWalletViewProps> = ({
   onOpenPass,
   onExploreEvents,
   onTicketUpdated,
+  orderFilter = null,
+  onClearOrderFilter,
 }) => {
   const [activeTab, setActiveTab] = useState<'tickets' | 'orders'>('tickets');
   const [ticketFilter, setTicketFilter] = useState<'upcoming' | 'past'>('upcoming');
@@ -106,7 +110,10 @@ export const TicketsWalletView: React.FC<TicketsWalletViewProps> = ({
     return false;
   };
 
-  const upcomingTickets = tickets.filter((t) => !isTicketPast(t));
+  const filteredByOrderTickets = orderFilter
+    ? tickets.filter((t) => t.qrCode?.includes(orderFilter) || orders.some((o) => o.reference === orderFilter && o.eventId === t.eventId) || tickets.length > 0)
+    : tickets;
+  const upcomingTickets = filteredByOrderTickets.filter((t) => !isTicketPast(t));
   const pastTickets = tickets.filter((t) => isTicketPast(t));
 
   const pendingOrders = orders.filter((o) => o.status === 'pending' || o.status === 'payment_signaled');
@@ -151,6 +158,25 @@ export const TicketsWalletView: React.FC<TicketsWalletViewProps> = ({
       </div>
 
       {/* ONGLET 1 : BILLETS CONFIRMÉS */}
+      {orderFilter && (
+        <div className="p-3.5 rounded-2xl bg-[#8A2BE2]/15 border border-[#8A2BE2]/40 flex items-center justify-between gap-3 text-xs text-white">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-[#E9C349] shrink-0" />
+            <span>
+              Affichage des billets de votre commande <strong className="font-mono text-[#E9C349]">{orderFilter}</strong>
+            </span>
+          </div>
+          {onClearOrderFilter && (
+            <button
+              type="button"
+              onClick={onClearOrderFilter}
+              className="text-[11px] font-bold text-[#DCB8FF] hover:underline"
+            >
+              Voir tout le portefeuille
+            </button>
+          )}
+        </div>
+      )}
       {activeTab === 'tickets' && (
         <div className="space-y-4">
           {/* Sous-filtre : À venir vs Passés & Souvenirs */}

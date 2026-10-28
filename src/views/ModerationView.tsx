@@ -24,6 +24,8 @@ import {
   fetchOrdersFromSupabase,
   confirmManualOrderAtomic,
   rejectManualOrderAtomic,
+  getSupabaseClient,
+  fetchFailedEmailsCountLast7Days,
 } from '../services/supabase';
 
 interface ModerationViewProps {
@@ -61,6 +63,7 @@ export const ModerationView: React.FC<ModerationViewProps> = ({
   const [processingOrderId, setProcessingOrderId] = useState<string | null>(null);
 
   const [orders, setOrders] = useState<OrderRecord[]>([]);
+  const [failedEmailsCount, setFailedEmailsCount] = useState<number>(0);
   const [isLoadingOrders, setIsLoadingOrders] = useState<boolean>(true);
 
   const refreshOrders = async () => {
@@ -73,6 +76,7 @@ export const ModerationView: React.FC<ModerationViewProps> = ({
       setOrders(dbOrders);
     }
     setIsLoadingOrders(false);
+    fetchFailedEmailsCountLast7Days().then(setFailedEmailsCount);
   };
 
   useEffect(() => {
@@ -135,6 +139,13 @@ export const ModerationView: React.FC<ModerationViewProps> = ({
         if (res.tickets && onTicketsCreated) {
           onTicketsCreated(res.tickets);
         }
+        const supabase = getSupabaseClient();
+        if (supabase) {
+          await supabase.functions.invoke('send-order-confirmation', {
+            body: { orderId: order.id },
+          });
+        }
+        fetchFailedEmailsCountLast7Days().then(setFailedEmailsCount);
         setToastMessage(`Paiement validé pour ${order.customerName} : ${order.quantity} billet(s) émis.`);
       }
     } catch (err: any) {
@@ -256,6 +267,16 @@ export const ModerationView: React.FC<ModerationViewProps> = ({
           </div>
 
           {/* Guide Validation Wave Business */}
+          {failedEmailsCount > 0 && (
+            <div className="p-3.5 rounded-2xl bg-rose-950/60 border border-rose-500/40 flex items-center justify-between gap-3 text-xs text-rose-200">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                <span>
+                  <strong>Traçabilité Emails (Resend) :</strong> {failedEmailsCount} email(s) en échec cette semaine.
+                </span>
+              </div>
+            </div>
+          )}
           <div className="p-4 rounded-2xl bg-[#1DC3F4]/10 border border-[#1DC3F4]/25 flex items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2.5">
               <Smartphone className="w-5 h-5 text-[#1DC3F4] shrink-0" />

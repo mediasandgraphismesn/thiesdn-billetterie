@@ -53,6 +53,7 @@ interface EventDetailModalProps {
   onPurchaseSuccess?: (ticket: UserTicket) => void;
   onNavigateToTickets?: () => void;
   userName: string;
+  userEmail?: string;
   isEmailConfirmed?: boolean;
   isAuthenticated?: boolean;
   onRequireAuth?: () => void;
@@ -66,6 +67,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
   onPurchaseSuccess,
   onNavigateToTickets,
   userName,
+  userEmail = '',
   isEmailConfirmed = true,
   isAuthenticated = true,
   onRequireAuth,
@@ -86,6 +88,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
   const [quantity, setQuantity] = useState(1);
   const [customerName, setCustomerName] = useState(userName || 'Client Thièsdn');
   const [phoneNumber, setPhoneNumber] = useState('77 000 00 00');
+  const [customerEmail, setCustomerEmail] = useState(userEmail || '');
   const [isProcessing, setIsProcessing] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -294,6 +297,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
           customTotal: totalPrice,
           discountAmount: discountAmount > 0 ? discountAmount : undefined,
           promoCodeApplied: appliedPromo ? appliedPromo.code : undefined,
+          email: customerEmail.trim() || undefined,
         }
       );
 
@@ -930,6 +934,20 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                       </div>
 
                       {/* Code Promo */}
+                      <div className="bg-[#1C1B1B] p-3.5 rounded-2xl border border-white/5">
+                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
+                          Email (pour recevoir votre billet)
+                        </label>
+                        <input
+                          type="email"
+                          value={customerEmail}
+                          onChange={(e) => setCustomerEmail(e.target.value)}
+                          placeholder="votre@email.com"
+                          className="bg-transparent border-none outline-none text-white text-xs w-full p-0 font-medium"
+                        />
+                      </div>
+
+                      {/* Code Promo Bloc */}
                       <div className="bg-[#1C1B1B] p-3.5 rounded-2xl border border-white/5 space-y-2">
                         <div className="flex items-center justify-between">
                           <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
