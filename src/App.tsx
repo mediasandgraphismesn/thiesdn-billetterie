@@ -364,6 +364,45 @@ export default function App() {
     }
   }, [isAuthenticated, isAuthLoading, effectiveRole]);
 
+  // PRIORITÉ 2 : Guard d'accès et redirection hermétique pour la route /pos
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const isPos = getInitialIsPosRoute();
+    if (!isPos) {
+      setIsPosRoute(false);
+      return;
+    }
+
+    if (!isAuthLoading) {
+      if (isAuthenticated) {
+        if (effectiveRole === 'sales_agent') {
+          setIsPosRoute(true);
+          setActiveTab('sales_agent');
+        } else if (effectiveRole === 'promoter') {
+          setIsPosRoute(false);
+          if (window.location.pathname !== '/') {
+            window.history.replaceState(null, '', '/');
+          }
+          setActiveTab('events_mgmt');
+        } else if (effectiveRole === 'admin') {
+          setIsPosRoute(false);
+          if (window.location.pathname !== '/admin') {
+            window.history.replaceState(null, '', '/admin');
+          }
+          setActiveTab('dashboard');
+        } else {
+          setIsPosRoute(false);
+          if (window.location.pathname !== '/') {
+            window.history.replaceState(null, '', '/');
+          }
+          setActiveTab('home');
+        }
+      } else {
+        setIsPosRoute(true);
+      }
+    }
+  }, [isAuthenticated, isAuthLoading, effectiveRole]);
+
   // Chargement et écoute Realtime des notifications utilisateur (user_notifications)
   useEffect(() => {
     if (!isAuthenticated || !user?.id) {
@@ -467,6 +506,7 @@ export default function App() {
   };
 
   const handleTabChange = (targetTab: string) => {
+    setIsPosRoute(false);
     // Si un admin sans aperçu visiteur clique sur home, le rediriger vers son dashboard back-office
     if (targetTab === 'home' && effectiveRole === 'admin') {
       setActiveTab('dashboard');
@@ -864,6 +904,52 @@ export default function App() {
         <p className="font-heading text-sm font-bold text-white tracking-wide">
           Chargement de votre session...
         </p>
+      </div>
+    );
+  }
+
+  // PRIORITÉ 2 : Isolation hermétique plein écran pour la route POS /pos ou /vendeur
+  if (isPosRoute) {
+    return (
+      <div className="fixed inset-0 z-50 bg-[#0a0a0a] overflow-y-auto font-sans text-[#E5E2E1]">
+        <div className="bg-pattern" />
+        {isAuthenticated && effectiveRole === 'sales_agent' ? (
+          <SalesAgentDashboardView
+            user={user}
+            onNavigateBack={() => {
+              setIsPosRoute(false);
+              if (typeof window !== 'undefined') {
+                window.history.pushState(null, '', '/');
+              }
+              setActiveTab('home');
+            }}
+          />
+        ) : (
+          <PosAuthView
+            onLoginSuccess={(role) => {
+              handleLoginSuccess(role as any);
+              if (role === 'sales_agent') {
+                setIsPosRoute(true);
+                setActiveTab('sales_agent');
+              } else {
+                setIsPosRoute(false);
+                if (typeof window !== 'undefined') {
+                  window.history.pushState(null, '', '/');
+                }
+                if (role === 'admin') setActiveTab('dashboard');
+                else if (role === 'promoter') setActiveTab('events_mgmt');
+                else setActiveTab('home');
+              }
+            }}
+            onNavigateHome={() => {
+              setIsPosRoute(false);
+              if (typeof window !== 'undefined') {
+                window.history.pushState(null, '', '/');
+              }
+              setActiveTab('home');
+            }}
+          />
+        )}
       </div>
     );
   }
@@ -1274,38 +1360,8 @@ export default function App() {
                 />
               )}
 
-              {/* ROUTE DÉDIÉE POINT DE VENTE /pos ou /vendeur */}
-              {isPosRoute && (
-                effectiveRole === 'sales_agent' || effectiveRole === 'admin' ? (
-                  <SalesAgentDashboardView
-                    user={user}
-                    onNavigateBack={() => {
-                      setIsPosRoute(false);
-                      if (typeof window !== 'undefined' && window.location.pathname !== '/') {
-                        window.history.pushState(null, '', '/');
-                      }
-                      setActiveTab('home');
-                    }}
-                  />
-                ) : (
-                  <PosAuthView
-                    onLoginSuccess={(role) => {
-                      handleLoginSuccess(role as any);
-                      setActiveTab('sales_agent');
-                    }}
-                    onNavigateHome={() => {
-                      setIsPosRoute(false);
-                      if (typeof window !== 'undefined' && window.location.pathname !== '/') {
-                        window.history.pushState(null, '', '/');
-                      }
-                      setActiveTab('home');
-                    }}
-                  />
-                )
-              )}
-
               {/* ESPACE COLLABORATEUR / POINT DE VENTE MOBILE (NAVIGATION STANDARD) */}
-              {!isPosRoute && (activeTab === 'sales_agent' || (effectiveRole === 'sales_agent' && activeTab === 'home')) && (
+              {(activeTab === 'sales_agent' || (effectiveRole === 'sales_agent' && activeTab === 'home')) && (
                 <SalesAgentDashboardView
                   user={user}
                   onNavigateBack={() => handleTabChange('profile')}

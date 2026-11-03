@@ -657,11 +657,17 @@ export const fetchUserProfile = async (userId: string, authUser?: any): Promise<
       (authUser && !authUser.email) // Cas particulier si session déjà validée
     );
 
+    const rawName = data.name || data.full_name || authUser?.user_metadata?.full_name || authUser?.user_metadata?.name;
+    const emailCandidate = data.email || authUser?.email || '';
+    const emailPrefix = emailCandidate ? emailCandidate.split('@')[0] : '';
+    const formattedPrefix = emailPrefix ? emailPrefix.charAt(0).toUpperCase() + emailPrefix.slice(1) : '';
+    const cleanName = rawName && rawName.trim().toLowerCase() !== 'utilisateur' ? rawName.trim() : (formattedPrefix || 'Membre Thièsdn');
+
     return {
       id: data.id,
-      name: data.name || 'Utilisateur',
-      username: data.username || data.name || 'user',
-      email: data.email || authUser?.email || '',
+      name: cleanName,
+      username: data.username || cleanName || 'user',
+      email: emailCandidate,
       phone: data.phone || '',
       city: data.city || 'Thiès',
       address: data.address || '',

@@ -403,7 +403,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         <div className="flex-1 text-center md:text-left space-y-2 z-10">
           <div className="flex flex-wrap items-center justify-center md:justify-start gap-2">
             <h2 className="font-heading text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-              {user.name && user.name.toLowerCase() !== 'visiteur' ? user.name : 'Mon Espace Client'}
+              {user.name && user.name.toLowerCase() !== 'visiteur' && user.name.toLowerCase() !== 'utilisateur'
+                ? user.name
+                : user.email ? user.email.split('@')[0] : 'Mon Espace Client'}
             </h2>
             {user.isVip && (
               <span className="bg-[#E9C349] text-[#241A00] font-extrabold text-xs px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-sm">

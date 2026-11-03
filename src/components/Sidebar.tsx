@@ -162,7 +162,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
               <h2 className="font-heading text-sm font-bold text-white truncate">
-                {user.name}
+                {user.name && user.name.trim().toLowerCase() !== 'utilisateur'
+                  ? user.name
+                  : user.email ? user.email.split('@')[0] : 'Membre Thièsdn'}
               </h2>
             </div>
             <p className="text-xs text-[#E9C349] font-medium flex items-center gap-1">

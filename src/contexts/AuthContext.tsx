@@ -53,29 +53,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .eq('id', userId)
         .single();
 
+      // PRIORITÉ 3 : Fallback intelligent pour le nom (jamais la chaîne brute 'Utilisateur')
+      const rawName =
+        profile?.name ||
+        profile?.full_name ||
+        authUser?.user_metadata?.full_name ||
+        authUser?.user_metadata?.name ||
+        authUser?.user_metadata?.user_name;
+
+      const emailCandidate = profile?.email || authUser?.email || '';
+      const emailPrefix = emailCandidate ? emailCandidate.split('@')[0] : '';
+      const formattedEmailPrefix = emailPrefix ? emailPrefix.charAt(0).toUpperCase() + emailPrefix.slice(1) : '';
+
+      const cleanName =
+        rawName && rawName.trim().toLowerCase() !== 'utilisateur'
+          ? rawName.trim()
+          : formattedEmailPrefix || 'Membre Thièsdn';
+
       if (profile && !error) {
         const isEmailConfirmed = Boolean(
           authUser?.email_confirmed_at || authUser?.confirmed_at || profile.email
         );
         const mappedRole = (profile.role as UserRole) || 'user';
 
-        // Tâche 4 : Nettoyage / Reconnexion si le rôle JWT diffère du rôle réel
         const jwtRole = authUser?.user_metadata?.role || authUser?.app_metadata?.role;
         if (jwtRole && jwtRole !== mappedRole) {
           console.info(`Rôle mis à jour en base (${jwtRole} -> ${mappedRole}). Synchronisation session.`);
-          // Rafraîchir les métadonnées si besoin sans bloquer
         }
 
         const updatedProfile: UserProfile = {
           id: profile.id,
-          name: profile.name || 'Utilisateur',
-          username: profile.username || profile.name || 'user',
-          email: profile.email || authUser?.email || '',
-          phone: profile.phone || '',
+          name: cleanName,
+          username: profile.username || cleanName || 'user',
+          email: emailCandidate,
+          phone: profile.phone || authUser?.phone || '',
           city: profile.city || 'Thiès',
           address: profile.address || '',
           quartier: profile.quartier || profile.address || '',
-          avatar: profile.avatar || '',
+          avatar: profile.avatar || authUser?.user_metadata?.avatar_url || '',
           isVip: Boolean(profile.is_vip),
           role: mappedRole,
           isEmailConfirmed,
@@ -89,11 +104,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(updatedProfile);
         setUserRole(mappedRole);
         setIsAuthenticated(true);
-      } else {
-        // Fallback métadonnées
+      } else if (authUser) {
+        // Fallback métadonnées si la ligne profiles n'existe pas encore
         const role = (authUser?.user_metadata?.role as UserRole) || 'user';
+        const fallbackProfile: UserProfile = {
+          id: authUser.id,
+          name: cleanName,
+          username: cleanName,
+          email: emailCandidate,
+          phone: authUser.phone || '',
+          city: 'Thiès',
+          address: '',
+          quartier: '',
+          avatar: authUser?.user_metadata?.avatar_url || '',
+          isVip: false,
+          role: role,
+          isEmailConfirmed: Boolean(authUser.email_confirmed_at || authUser.confirmed_at),
+          termsAccepted: true,
+          connectedAccounts: { facebook: false, instagram: false, tiktok: false },
+          privacySettings: { publicProfile: true, biometricLogin: false, emailNotifications: true },
+        };
+        setUser(fallbackProfile);
         setUserRole(role);
-        setIsAuthenticated(Boolean(authUser));
+        setIsAuthenticated(true);
       }
     } catch (err) {
       console.warn('Erreur chargement profil temps réel:', err);
