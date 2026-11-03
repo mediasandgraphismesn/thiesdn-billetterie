@@ -912,7 +912,7 @@ export const fetchAllProfilesFromSupabase = async (): Promise<{ profiles: UserPr
  */
 export const updateUserRoleOrVip = async (
   userId: string,
-  updates: { role?: 'user' | 'promoter' | 'admin'; isVip?: boolean }
+  updates: { role?: 'user' | 'promoter' | 'admin' | 'sales_agent' | 'artist'; isVip?: boolean }
 ): Promise<{ success: boolean; data?: any; error?: string }> => {
   const client = getSupabaseClient();
   if (!client || !userId) {

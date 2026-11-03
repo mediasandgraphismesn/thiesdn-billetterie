@@ -30,7 +30,7 @@ export const UsersManagementView: React.FC<UsersManagementViewProps> = ({
   const { user: currentAuthUser, refreshUserProfile } = useAuth();
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [roleFilter, setRoleFilter] = useState<'all' | 'user' | 'promoter' | 'admin'>('all');
+  const [roleFilter, setRoleFilter] = useState<'all' | 'user' | 'promoter' | 'sales_agent' | 'admin'>('all');
   const [isLoading, setIsLoading] = useState(true);
   const [successToast, setSuccessToast] = useState<string | null>(null);
   const [errorToast, setErrorToast] = useState<string | null>(null);
@@ -72,7 +72,7 @@ export const UsersManagementView: React.FC<UsersManagementViewProps> = ({
     }
   };
 
-  const handleChangeRole = async (user: UserProfile, newRole: 'user' | 'promoter' | 'admin') => {
+  const handleChangeRole = async (user: UserProfile, newRole: 'user' | 'promoter' | 'admin' | 'sales_agent') => {
     setUpdatingUserId(user.id);
     const res = await updateUserRoleOrVip(user.id, { role: newRole });
     setUpdatingUserId(null);
@@ -167,7 +167,7 @@ export const UsersManagementView: React.FC<UsersManagementViewProps> = ({
         </div>
 
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
-          {(['all', 'user', 'promoter', 'admin'] as const).map((r) => (
+          {(['all', 'user', 'promoter', 'sales_agent', 'admin'] as const).map((r) => (
             <button
               key={r}
               onClick={() => setRoleFilter(r)}
@@ -183,6 +183,8 @@ export const UsersManagementView: React.FC<UsersManagementViewProps> = ({
                 ? `Clients (${profiles.filter((p) => p.role === 'user').length})`
                 : r === 'promoter'
                 ? `Promoteurs (${profiles.filter((p) => p.role === 'promoter').length})`
+                : r === 'sales_agent'
+                ? `Vendeurs (${profiles.filter((p) => p.role === 'sales_agent').length})`
                 : `Admins (${profiles.filter((p) => p.role === 'admin').length})`}
             </button>
           ))}
@@ -222,6 +224,8 @@ export const UsersManagementView: React.FC<UsersManagementViewProps> = ({
                         ? 'bg-[#8A2BE2]/20 text-[#DCB8FF] border border-[#8A2BE2]/30'
                         : user.role === 'promoter'
                         ? 'bg-[#E9C349]/20 text-[#E9C349] border border-[#E9C349]/30'
+                        : user.role === 'sales_agent'
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-extrabold'
                         : 'bg-white/10 text-gray-300'
                     }`}
                   >
@@ -229,6 +233,8 @@ export const UsersManagementView: React.FC<UsersManagementViewProps> = ({
                       ? 'Super Administrateur'
                       : user.role === 'promoter'
                       ? 'Promoteur / Artiste'
+                      : user.role === 'sales_agent'
+                      ? 'Vendeur / Point de Vente'
                       : 'Client Standard'}
                   </span>
                 </div>
@@ -323,6 +329,7 @@ export const UsersManagementView: React.FC<UsersManagementViewProps> = ({
               >
                 <option value="user">Rôle : Client</option>
                 <option value="promoter">Rôle : Promoteur</option>
+                <option value="sales_agent">Vendeur / Point de Vente</option>
                 <option value="admin">Rôle : Super Admin</option>
               </select>
             </div>
