@@ -7,7 +7,7 @@ import { EventDetailModal } from './components/EventDetailModal';
 import { TicketPassModal } from './components/TicketPassModal';
 import { Footer } from './components/Footer';
 import { PWAInstallPrompt } from './components/PWAInstallPrompt';
-import { ShieldAlert, Eye, ArrowRight } from 'lucide-react';
+import { ShieldAlert, Eye, ArrowRight, X } from 'lucide-react';
 
 import { HomeView } from './views/HomeView';
 import { ExploreView } from './views/ExploreView';
@@ -31,6 +31,7 @@ import {
 import { UsersManagementView } from './views/UsersManagementView';
 import { PlatformSettingsView } from './views/PlatformSettingsView';
 import { SalesAgentDashboardView } from './views/SalesAgentDashboardView';
+import { PosAuthView } from './views/PosAuthView';
 import { ArtistDashboardView } from './views/ArtistDashboardView';
 import { AccreditationsView } from './views/AccreditationsView';
 import { ScanStationsView } from './views/ScanStationsView';
@@ -78,6 +79,27 @@ const getInitialScanCode = (): string | null => {
   if (hashMatch && hashMatch[1]) return hashMatch[1].trim();
 
   return null;
+};
+
+const getInitialIsPosRoute = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  const path = window.location.pathname.toLowerCase();
+  const hash = window.location.hash.toLowerCase();
+  const search = new URLSearchParams(window.location.search);
+
+  return (
+    path === '/pos' ||
+    path === '/vendeur' ||
+    path.startsWith('/pos/') ||
+    path.startsWith('/vendeur/') ||
+    hash === '#pos' ||
+    hash === '#vendeur' ||
+    hash.startsWith('#/pos') ||
+    hash.startsWith('#/vendeur') ||
+    search.get('tab') === 'pos' ||
+    search.get('tab') === 'vendeur' ||
+    search.get('pos') === 'true'
+  );
 };
 
 const getInitialTicketId = (): string | null => {
@@ -131,6 +153,7 @@ export default function App() {
   const [scanStationCode, setScanStationCode] = useState<string | null>(getInitialScanCode());
   const [claimToken, setClaimToken] = useState<string | null>(getInitialClaimToken());
   const [directTicketId, setDirectTicketId] = useState<string | null>(getInitialTicketId());
+  const [isPosRoute, setIsPosRoute] = useState<boolean>(getInitialIsPosRoute());
   const [isAuthenticated, setIsAuthenticated] = useState(authIsAuthenticated);
   const [user, setUser] = useState<UserProfile>(contextUser || INITIAL_USER);
   const [events, setEvents] = useState<EventItem[]>([]);
@@ -215,6 +238,14 @@ export default function App() {
       // 2. Mode Aperçu Client
       if (search.includes('preview=client')) {
         setIsAdminPreview(true);
+      }
+
+      // 2.5 Route dédiée Point de Vente /pos ou /vendeur
+      if (getInitialIsPosRoute()) {
+        setIsPosRoute(true);
+        if (effectiveRole === 'sales_agent' || effectiveRole === 'admin') {
+          setActiveTab('sales_agent');
+        }
       }
 
       // 3. Route d'administration sécurisée /admin
@@ -426,7 +457,7 @@ export default function App() {
     if (role === 'artist') {
       return ['home', 'explore', 'create', 'artist', 'profile', 'accreditations', 'cgv'].includes(tab);
     }
-    if (role === 'sales_agent') {
+    if (role === 'sales_agent' || isPosRoute) {
       return ['sales_agent', 'profile', 'cgv'].includes(tab);
     }
     if (role === 'user') {
@@ -1243,8 +1274,38 @@ export default function App() {
                 />
               )}
 
-              {/* ESPACE COLLABORATEUR / POINT DE VENTE MOBILE */}
-              {(activeTab === 'sales_agent' || (effectiveRole === 'sales_agent' && activeTab === 'home')) && (
+              {/* ROUTE DÉDIÉE POINT DE VENTE /pos ou /vendeur */}
+              {isPosRoute && (
+                effectiveRole === 'sales_agent' || effectiveRole === 'admin' ? (
+                  <SalesAgentDashboardView
+                    user={user}
+                    onNavigateBack={() => {
+                      setIsPosRoute(false);
+                      if (typeof window !== 'undefined' && window.location.pathname !== '/') {
+                        window.history.pushState(null, '', '/');
+                      }
+                      setActiveTab('home');
+                    }}
+                  />
+                ) : (
+                  <PosAuthView
+                    onLoginSuccess={(role) => {
+                      handleLoginSuccess(role as any);
+                      setActiveTab('sales_agent');
+                    }}
+                    onNavigateHome={() => {
+                      setIsPosRoute(false);
+                      if (typeof window !== 'undefined' && window.location.pathname !== '/') {
+                        window.history.pushState(null, '', '/');
+                      }
+                      setActiveTab('home');
+                    }}
+                  />
+                )
+              )}
+
+              {/* ESPACE COLLABORATEUR / POINT DE VENTE MOBILE (NAVIGATION STANDARD) */}
+              {!isPosRoute && (activeTab === 'sales_agent' || (effectiveRole === 'sales_agent' && activeTab === 'home')) && (
                 <SalesAgentDashboardView
                   user={user}
                   onNavigateBack={() => handleTabChange('profile')}

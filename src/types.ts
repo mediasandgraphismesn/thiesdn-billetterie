@@ -180,6 +180,20 @@ export interface SalesAgent {
   createdAt: string;
 }
 
+export interface TicketAllocation {
+  id: string;
+  agentId: string;
+  agentName?: string;
+  eventId: string;
+  eventTitle?: string;
+  ticketType: string;
+  quantity: number;
+  allocatedBy?: string;
+  notes?: string;
+  status: 'active' | 'settled' | 'cancelled';
+  createdAt: string;
+}
+
 export type TicketAssignmentStatus = 'unassigned' | 'pending' | 'accepted' | 'declined';
 
 export interface UserTicket {

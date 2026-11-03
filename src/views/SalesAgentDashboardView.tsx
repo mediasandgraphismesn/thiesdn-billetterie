@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Html5Qrcode } from 'html5-qrcode';
 import {
   Store,
   Ticket,
@@ -20,6 +21,8 @@ import {
   ShieldCheck,
   Percent,
   Scan,
+  Camera,
+  CameraOff,
   Check,
   CheckCheck,
   Search,
@@ -74,6 +77,86 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
   const [buyerPhone, setBuyerPhone] = useState('');
   const [saleSuccessMessage, setSaleSuccessMessage] = useState<string | null>(null);
   const [saleErrorMessage, setSaleErrorMessage] = useState<string | null>(null);
+  const [isCameraScanning, setIsCameraScanning] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
+  const lastScannedTimeRef = useRef<number>(0);
+
+  const stopCameraScanner = async () => {
+    if (scannerRef.current) {
+      try {
+        if (scannerRef.current.isScanning) {
+          await scannerRef.current.stop();
+        }
+      } catch {
+        // ignore
+      }
+      scannerRef.current = null;
+    }
+    setIsCameraScanning(false);
+  };
+
+  const startCameraScanner = async () => {
+    setCameraError(null);
+    setIsCameraScanning(true);
+
+    setTimeout(async () => {
+      const elementId = 'pos-camera-viewfinder';
+      const el = document.getElementById(elementId);
+      if (!el) return;
+
+      try {
+        if (scannerRef.current) {
+          try {
+            await scannerRef.current.stop();
+          } catch {}
+          scannerRef.current = null;
+        }
+
+        const html5Qr = new Html5Qrcode(elementId);
+        scannerRef.current = html5Qr;
+
+        await html5Qr.start(
+          { facingMode: 'environment' },
+          {
+            fps: 10,
+            qrbox: (viewfinderWidth, viewfinderHeight) => {
+              const edge = Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.75);
+              return { width: edge, height: edge };
+            },
+            aspectRatio: 1.0,
+          },
+          (decodedText) => {
+            const now = Date.now();
+            if (now - lastScannedTimeRef.current < 2500) return;
+            lastScannedTimeRef.current = now;
+
+            const clean = decodedText.trim().toUpperCase();
+            setManualTicketCode(clean);
+            handleCheckTicketForSale(clean);
+            stopCameraScanner();
+          },
+          () => {}
+        );
+      } catch (err: any) {
+        console.warn('Erreur activation camera POS:', err);
+        setCameraError("Impossible d'activer la caméra. Vérifiez les autorisations de votre navigateur.");
+      }
+    }, 200);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (scannerRef.current) {
+        try {
+          if (scannerRef.current.isScanning) {
+            scannerRef.current.stop();
+          }
+        } catch {}
+        scannerRef.current = null;
+      }
+    };
+  }, []);
 
   // Modale de demande de reversement
   const [showSettlementModal, setShowSettlementModal] = useState(false);

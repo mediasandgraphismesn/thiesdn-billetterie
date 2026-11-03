@@ -1,3 +1,4 @@
+export type { TicketAllocation } from '../types';
 import { createClient, SupabaseClient, User } from '@supabase/supabase-js';
 import {
   EventItem,
@@ -9,6 +10,7 @@ import {
   OrderStatus,
   PlatformPaymentSettings,
   SalesAgent,
+  TicketAllocation,
   EventCoproducer,
   CoproducerRole,
   GuestTicket,
@@ -1735,10 +1737,96 @@ export const generatePhysicalTicketBatch = async (
   };
 };
 
+const STORAGE_ALLOCATIONS_KEY = 'thiesdn_ticket_allocations_v1';
+
+export const getStoredTicketAllocations = (): TicketAllocation[] => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(STORAGE_ALLOCATIONS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
+export const saveStoredTicketAllocations = (allocations: TicketAllocation[]): void => {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(STORAGE_ALLOCATIONS_KEY, JSON.stringify(allocations));
+  } catch (e) {
+    console.warn('Erreur sauvegarde allocations locales:', e);
+  }
+};
+
+export const fetchTicketAllocationsFromSupabase = async (
+  eventId?: string,
+  agentId?: string
+): Promise<{ allocations: TicketAllocation[]; error: string | null }> => {
+  const client = getSupabaseClient();
+  const localAllocations = getStoredTicketAllocations();
+
+  if (!client) {
+    let filtered = localAllocations;
+    if (eventId) filtered = filtered.filter((a) => a.eventId === eventId);
+    if (agentId) filtered = filtered.filter((a) => a.agentId === agentId);
+    return { allocations: filtered, error: null };
+  }
+
+  try {
+    let query = client
+      .from('ticket_allocations')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (isValidUUID(eventId)) {
+      query = query.eq('event_id', eventId);
+    }
+    if (isValidUUID(agentId)) {
+      query = query.eq('agent_id', agentId);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      console.warn('Sync Supabase fetchTicketAllocations:', error.message);
+      let filtered = localAllocations;
+      if (eventId) filtered = filtered.filter((a) => a.eventId === eventId);
+      if (agentId) filtered = filtered.filter((a) => a.agentId === agentId);
+      return { allocations: filtered, error: null };
+    }
+
+    const mapped: TicketAllocation[] = (data || []).map((row: any) => ({
+      id: row.id,
+      agentId: row.agent_id,
+      eventId: row.event_id,
+      ticketType: row.ticket_type || 'Standard',
+      quantity: Number(row.quantity) || 0,
+      allocatedBy: row.allocated_by,
+      notes: row.notes,
+      status: row.status || 'active',
+      createdAt: row.created_at || new Date().toISOString(),
+    }));
+
+    saveStoredTicketAllocations(mapped);
+    return { allocations: mapped, error: null };
+  } catch (err: any) {
+    return { allocations: localAllocations, error: err.message };
+  }
+};
+
 export const assignTicketsToAgent = async (
   agentId: string,
-  count: number
-): Promise<{ success: boolean; assignedCount: number; message: string }> => {
+  count: number,
+  metadata?: {
+    ticketType?: string;
+    allocatedBy?: string;
+    notes?: string;
+  }
+): Promise<{
+  success: boolean;
+  assignedCount: number;
+  allocation?: TicketAllocation;
+  message: string;
+}> => {
   const agents = getStoredSalesAgents();
   const agentIndex = agents.findIndex((a) => a.id === agentId);
   if (agentIndex === -1) {
@@ -1808,9 +1896,45 @@ export const assignTicketsToAgent = async (
     }
   }
 
+  // Création et persistance du lot dans ticket_allocations
+  const ticketType = metadata?.ticketType || toAssign[0]?.tierName || 'Standard';
+  const newAllocation: TicketAllocation = {
+    id: `alloc-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`,
+    agentId: agent.id,
+    agentName: agent.pointDeVente,
+    eventId: agent.eventId,
+    eventTitle: agent.eventTitle,
+    ticketType,
+    quantity: toAssign.length,
+    allocatedBy: metadata?.allocatedBy || agent.promoterId,
+    notes: metadata?.notes,
+    status: 'active',
+    createdAt: new Date().toISOString(),
+  };
+
+  const currentAllocations = getStoredTicketAllocations();
+  saveStoredTicketAllocations([newAllocation, ...currentAllocations]);
+
+  if (client) {
+    try {
+      await client.from('ticket_allocations').insert({
+        agent_id: agent.id,
+        event_id: agent.eventId,
+        ticket_type: ticketType,
+        quantity: toAssign.length,
+        allocated_by: metadata?.allocatedBy || agent.promoterId,
+        notes: metadata?.notes || null,
+        status: 'active',
+      });
+    } catch (allocErr: any) {
+      console.warn('Sync Supabase ticket_allocations insert:', allocErr.message);
+    }
+  }
+
   return {
     success: true,
     assignedCount: toAssign.length,
+    allocation: newAllocation,
     message: `${toAssign.length} billets physiques attribués avec succès au point de vente "${agent.pointDeVente}". Statut : printed_not_sold.`,
   };
 };

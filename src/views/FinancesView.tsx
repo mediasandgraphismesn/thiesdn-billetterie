@@ -33,6 +33,7 @@ import {
   ArrowRight,
   Printer,
   Store,
+  History,
   Plus,
   X,
   FileText,
@@ -56,8 +57,11 @@ import {
   getStoredTickets,
   getStoredSalesAgents,
   createSalesAgent,
+  TicketAllocation,
   generatePhysicalTicketBatch,
   assignTicketsToAgent,
+  getStoredTicketAllocations,
+  fetchTicketAllocationsFromSupabase,
   recordAgentSettlement,
   deactivateUnsoldPhysicalTickets,
   getStoredCoproducers,
@@ -135,6 +139,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
   // ====================================================================
   const [agents, setAgents] = useState<SalesAgent[]>(getStoredSalesAgents());
   const [coproducers, setCoproducers] = useState<EventCoproducer[]>(getStoredCoproducers());
+  const [allocations, setAllocations] = useState<TicketAllocation[]>(getStoredTicketAllocations());
   const [previewCoproducer, setPreviewCoproducer] = useState<EventCoproducer | null>(null);
 
   // Formulaire d'ajout rapide co-producteur dans Cockpit
@@ -180,6 +185,12 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
     setTickets(getStoredTickets());
     setAgents(getStoredSalesAgents());
     setCoproducers(getStoredCoproducers());
+    fetchTicketAllocationsFromSupabase(selectedEventId === 'all' ? undefined : selectedEventId).then((res) => {
+      if (res.allocations) setAllocations(res.allocations);
+    });
+    fetchTicketAllocationsFromSupabase().then((res) => {
+      if (res.allocations) setAllocations(res.allocations);
+    });
     fetchOrdersFromSupabase().then((res) => {
       if (res.orders && res.orders.length > 0) {
         setOrders(res.orders);
@@ -623,7 +634,10 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
       return;
     }
 
-    const res = await assignTicketsToAgent(selectedAgentForAssign.id, count);
+    const res = await assignTicketsToAgent(selectedAgentForAssign.id, count, {
+      ticketType: activeEvent?.tiers?.[0]?.name || 'Standard',
+      allocatedBy: promoterName || 'Promoteur',
+    });
     if (res.success) {
       setTickets(getStoredTickets());
       setAgents(getStoredSalesAgents());
