@@ -187,7 +187,7 @@ export const EventCard: React.FC<EventCardProps> = ({
                 <span>Voir</span>
               </>
             ) : (
-              'Réserver'
+              'Acheter'
             )}
           </button>
         </div>
@@ -308,7 +308,7 @@ export const EventCard: React.FC<EventCardProps> = ({
                 <span>Voir l'événement</span>
               </>
             ) : (
-              'Réserver'
+              'Acheter'
             )}
           </button>
         </div>

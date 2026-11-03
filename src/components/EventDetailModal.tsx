@@ -1373,7 +1373,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                 onClick={handleStartBooking}
                 className="py-3 px-6 rounded-2xl font-heading font-extrabold text-xs sm:text-sm tracking-wider uppercase flex items-center gap-2 transition-all shadow-lg bg-[#E9C349] hover:bg-[#F3D779] text-[#241A00] shadow-[#E9C349]/20 active:scale-95 cursor-pointer"
               >
-                <span>Réserver mes places</span>
+                <span>Acheter mes places</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>

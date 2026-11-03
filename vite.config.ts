@@ -11,25 +11,26 @@ export default defineConfig(() => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['logo-tight.png', 'logo.png', 'poster-kmou-jango.jpg', 'poster-saly-jazz.jpg'],
+        includeAssets: ['icon-192x192.png', 'icon-512x512.png', 'logo-tight.png', 'logo.png', 'poster-kmou-jango.jpg', 'poster-saly-jazz.jpg'],
         manifest: {
-          name: 'Thiès Days and Nights',
+          name: 'Thièsdn',
           short_name: 'Thièsdn',
-          description: 'La billetterie officielle des événements de prestige au Sénégal.',
-          theme_color: '#0A0A0A',
-          background_color: '#0A0A0A',
+          description: 'Application Thièsdn',
+          theme_color: '#E1E32B',
+          background_color: '#ffffff',
           display: 'standalone',
           orientation: 'portrait',
           start_url: '/',
           scope: '/',
           icons: [
             {
-              src: '/logo-tight.png',
+              src: '/icon-192x192.png',
               sizes: '192x192',
               type: 'image/png',
+              purpose: 'any maskable',
             },
             {
-              src: '/logo-tight.png',
+              src: '/icon-512x512.png',
               sizes: '512x512',
               type: 'image/png',
               purpose: 'any maskable',
