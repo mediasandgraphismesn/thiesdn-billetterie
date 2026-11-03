@@ -6991,3 +6991,95 @@ export const fetchFailedEmailsCountLast7Days = async (): Promise<number> => {
     return 0;
   }
 };
+
+/**
+ * Récupération sécurisée d'un billet spécifique via son ID public (/ticket/:id)
+ * Accessible même sans session utilisateur (Guest WhatsApp / SMS)
+ */
+export const fetchTicketByPublicId = async (
+  ticketId: string
+): Promise<{ success: boolean; ticket?: UserTicket; message?: string }> => {
+  if (!ticketId || typeof ticketId !== 'string') {
+    return { success: false, message: 'Identifiant de billet manquant.' };
+  }
+
+  const cleanId = ticketId.trim();
+  const client = getSupabaseClient();
+
+  // 1. Essai mémoire locale d'abord
+  const localMatch = getStoredTickets().find((t) => t.id === cleanId);
+
+  if (!client) {
+    if (localMatch) return { success: true, ticket: localMatch };
+    return { success: false, message: 'Base de données Supabase déconnectée.' };
+  }
+
+  try {
+    // 2. Appel RPC sécurisée (accessible aux anonymes sans RLS bloquante)
+    const { data: rpcData, error: rpcError } = await client.rpc('get_ticket_by_public_id', {
+      p_ticket_id: cleanId,
+    });
+
+    if (!rpcError && rpcData && rpcData.success && rpcData.ticket) {
+      const t = rpcData.ticket;
+      const mappedTicket: UserTicket = {
+        id: t.id,
+        eventId: t.event_id,
+        eventTitle: t.event_title || 'Événement Thièsdn Billetterie',
+        eventPoster: t.event_poster || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800',
+        eventDate: t.event_date || 'Date officielle',
+        eventTime: t.event_time || '20:00',
+        eventVenue: t.event_venue || 'Thiès, Sénégal',
+        tierName: t.tier_name || 'Standard',
+        price: Number(t.price) || 0,
+        qrCode: t.qr_code,
+        seatNumber: t.seat_number,
+        holderName: t.holder_name || 'Pass Officiel',
+        holderPhone: t.holder_phone || undefined,
+        holderEmail: t.holder_email || undefined,
+        purchasedAt: t.created_at || new Date().toISOString(),
+        status: t.status || 'valid',
+        isPhysical: Boolean(t.is_physical),
+        agentId: t.agent_id || undefined,
+        agentName: t.agent_name || undefined,
+        userId: t.user_id,
+      };
+      return { success: true, ticket: mappedTicket };
+    }
+
+    // 3. Repli requête directe table tickets (si utilisateur connecté ou admin)
+    const { data, error } = await client.from('tickets').select('*').eq('id', cleanId).maybeSingle();
+    if (data) {
+      const t = data;
+      const mappedTicket: UserTicket = {
+        id: t.id,
+        eventId: t.event_id,
+        eventTitle: t.event_title || 'Événement Thièsdn Billetterie',
+        eventPoster: t.event_poster || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800',
+        eventDate: t.event_date || 'Date officielle',
+        eventTime: t.event_time || '20:00',
+        eventVenue: t.event_venue || 'Thiès, Sénégal',
+        tierName: t.tier_name || 'Standard',
+        price: Number(t.price) || 0,
+        qrCode: t.qr_code,
+        seatNumber: t.seat_number,
+        holderName: t.holder_name || 'Pass Officiel',
+        holderPhone: t.holder_phone || undefined,
+        holderEmail: t.holder_email || undefined,
+        purchasedAt: t.created_at || new Date().toISOString(),
+        status: t.status || 'valid',
+        isPhysical: Boolean(t.is_physical),
+        agentId: t.agent_id || undefined,
+        agentName: t.agent_name || undefined,
+        userId: t.user_id,
+      };
+      return { success: true, ticket: mappedTicket };
+    }
+
+    if (localMatch) return { success: true, ticket: localMatch };
+    return { success: false, message: 'Billet introuvable.' };
+  } catch (err: any) {
+    if (localMatch) return { success: true, ticket: localMatch };
+    return { success: false, message: err?.message || 'Erreur lors du chargement du billet.' };
+  }
+};

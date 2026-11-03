@@ -59,6 +59,7 @@ import {
   fetchUserTicketsFromSupabase,
   fetchOrdersFromSupabase,
   fetchOrderTicketsByToken,
+  fetchTicketByPublicId,
 } from './services/supabase';
 
 const getInitialScanCode = (): string | null => {
@@ -74,6 +75,24 @@ const getInitialScanCode = (): string | null => {
   if (pathMatch && pathMatch[1]) return pathMatch[1].trim();
 
   const hashMatch = hash.match(/#\/?scan\/([A-Za-z0-9_-]+)/i);
+  if (hashMatch && hashMatch[1]) return hashMatch[1].trim();
+
+  return null;
+};
+
+const getInitialTicketId = (): string | null => {
+  if (typeof window === 'undefined') return null;
+  const path = window.location.pathname;
+  const hash = window.location.hash;
+  const search = new URLSearchParams(window.location.search);
+
+  const queryCode = search.get('ticket') || search.get('t');
+  if (queryCode) return queryCode.trim();
+
+  const pathMatch = path.match(/\/ticket\/([A-Za-z0-9_-]+)/i) || path.match(/\/t\/([A-Za-z0-9_-]+)/i);
+  if (pathMatch && pathMatch[1]) return pathMatch[1].trim();
+
+  const hashMatch = hash.match(/#\/?ticket\/([A-Za-z0-9_-]+)/i) || hash.match(/#\/?t\/([A-Za-z0-9_-]+)/i);
   if (hashMatch && hashMatch[1]) return hashMatch[1].trim();
 
   return null;
@@ -111,6 +130,7 @@ export default function App() {
 
   const [scanStationCode, setScanStationCode] = useState<string | null>(getInitialScanCode());
   const [claimToken, setClaimToken] = useState<string | null>(getInitialClaimToken());
+  const [directTicketId, setDirectTicketId] = useState<string | null>(getInitialTicketId());
   const [isAuthenticated, setIsAuthenticated] = useState(authIsAuthenticated);
   const [user, setUser] = useState<UserProfile>(contextUser || INITIAL_USER);
   const [events, setEvents] = useState<EventItem[]>([]);
@@ -224,7 +244,7 @@ export default function App() {
 
       // 8. Retour de paiement Wave ?payment=success ou ?payment=error
       const urlParams = new URLSearchParams(search);
-      const orderRef = urlParams.get('order');
+      const orderRef = urlParams.get('order') || urlParams.get('ref');
       const orderToken = urlParams.get('token');
       if (orderRef) {
         setActiveTab('tickets');
@@ -470,6 +490,25 @@ export default function App() {
       }
     });
   }, []);
+
+  // Détection et ouverture automatique d'un billet digital via lien direct (/ticket/:id ou ?ticket=ID)
+  useEffect(() => {
+    const ticketId = directTicketId || getInitialTicketId();
+    if (!ticketId) return;
+
+    fetchTicketByPublicId(ticketId).then((res) => {
+      if (res.success && res.ticket) {
+        setSelectedTicketForPass(res.ticket);
+        setTickets((prev) => {
+          const exists = prev.some((t) => t.id === res.ticket!.id);
+          return exists ? prev : [res.ticket!, ...prev];
+        });
+        if (effectiveRole !== 'admin') {
+          setActiveTab('tickets');
+        }
+      }
+    });
+  }, [directTicketId, effectiveRole]);
 
   // Détection et ouverture automatique d'un événement partagé par lien WhatsApp (?event=ID, ?id=ID ou /event/ID)
   useEffect(() => {
