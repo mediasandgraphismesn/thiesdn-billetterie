@@ -1,7 +1,7 @@
 -- ============================================================================
 -- MIGRATION : Table ticket_allocations (Historique des remises de billets)
 -- Projet : Thièsdn Billetterie
--- Date : 2026-11-03
+-- Date : 2026-11-03 (Corrigé avec cast explicite ::text pour compatibilité UUID/TEXT)
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS public.ticket_allocations (
@@ -31,12 +31,15 @@ USING (
   OR EXISTS (
     SELECT 1 FROM public.events
     WHERE events.id = ticket_allocations.event_id
-      AND (events.promoter_id = auth.uid()::text OR events.promoter_id = (SELECT email FROM public.profiles WHERE id = auth.uid()))
+      AND events.promoter_id::text = auth.uid()::text
   )
   OR EXISTS (
     SELECT 1 FROM public.sales_agents
     WHERE sales_agents.id = ticket_allocations.agent_id
-      AND (sales_agents.user_id = auth.uid() OR sales_agents.promoter_id = auth.uid()::text)
+      AND (
+        sales_agents.user_id::text = auth.uid()::text 
+        OR sales_agents.promoter_id::text = auth.uid()::text
+      )
   )
 );
 
@@ -47,12 +50,12 @@ WITH CHECK (
   OR EXISTS (
     SELECT 1 FROM public.events
     WHERE events.id = ticket_allocations.event_id
-      AND (events.promoter_id = auth.uid()::text OR events.promoter_id = (SELECT email FROM public.profiles WHERE id = auth.uid()))
+      AND events.promoter_id::text = auth.uid()::text
   )
   OR EXISTS (
     SELECT 1 FROM public.sales_agents
     WHERE sales_agents.id = ticket_allocations.agent_id
-      AND (sales_agents.promoter_id = auth.uid()::text)
+      AND sales_agents.promoter_id::text = auth.uid()::text
   )
 );
 
@@ -63,6 +66,6 @@ USING (
   OR EXISTS (
     SELECT 1 FROM public.events
     WHERE events.id = ticket_allocations.event_id
-      AND (events.promoter_id = auth.uid()::text OR events.promoter_id = (SELECT email FROM public.profiles WHERE id = auth.uid()))
+      AND events.promoter_id::text = auth.uid()::text
   )
 );
