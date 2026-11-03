@@ -122,9 +122,9 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
   );
   const [settingsSaved, setSettingsSaved] = useState(false);
 
-  // Pour le promoteur : choix entre "stats", "finances", "network", "unsold", "coprod", "accreditations" et "stations"
-  const [promoterTab, setPromoterTab] = useState<'stats' | 'finances' | 'network' | 'unsold' | 'coprod' | 'accreditations' | 'stations'>(
-    initialTab || 'stats'
+  // Pour le promoteur ou admin : choix entre "compta", "stats", "finances", "network", "unsold", "coprod", "accreditations" et "stations"
+  const [promoterTab, setPromoterTab] = useState<'compta' | 'stats' | 'finances' | 'network' | 'unsold' | 'coprod' | 'accreditations' | 'stations'>(
+    initialTab || (currentRole === 'admin' ? 'compta' : 'stats')
   );
 
   useEffect(() => {
@@ -185,6 +185,11 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
     setTickets(getStoredTickets());
     setAgents(getStoredSalesAgents());
     setCoproducers(getStoredCoproducers());
+    fetchSalesAgentsFromSupabase().then((res) => {
+      if (res.agents && res.agents.length > 0) {
+        setAgents(res.agents);
+      }
+    });
     fetchTicketAllocationsFromSupabase(selectedEventId === 'all' ? undefined : selectedEventId).then((res) => {
       if (res.allocations) setAllocations(res.allocations);
     });
@@ -286,6 +291,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
 
   const promoterEvents = useMemo(() => {
     if (safeEvents.length === 0) return [];
+    if (currentRole === 'admin') return safeEvents;
     if (!promoterName) return safeEvents;
     const filtered = safeEvents.filter((e) =>
       e.promoter?.name?.toLowerCase().includes(promoterName.toLowerCase())
@@ -784,9 +790,9 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
   }, [signaledOrders]);
 
   // ====================================================================
-  // 1. VUE PROMOTEUR : LE COCKPIT ORGANISATEUR & STATISTIQUES EN DIRECT
+  // 1. VUE PROMOTEUR & GESTION RÉSEAU / BILLETS PHYSIQUES (ADMIN & PROMOTEUR)
   // ====================================================================
-  if (currentRole === 'promoter') {
+  if (currentRole === 'promoter' || promoterTab !== 'compta') {
     return (
       <div className="max-w-6xl mx-auto space-y-8 pb-20 animate-in fade-in duration-300">
         {/* Header Bar Promoteur */}
@@ -820,9 +826,23 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
           </div>
         </div>
 
-        {/* Barre d'onglets du Cockpit Promoteur */}
+        {/* Barre d'onglets du Cockpit Promoteur & Réseau */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
-          <div className="flex bg-[#1C1B1B] p-1 rounded-2xl border border-white/10 self-start sm:self-auto">
+          <div className="flex bg-[#1C1B1B] p-1 rounded-2xl border border-white/10 self-start sm:self-auto overflow-x-auto max-w-full">
+            {currentRole === 'admin' && (
+              <button
+                type="button"
+                onClick={() => setPromoterTab('compta')}
+                className={`px-4 py-2 rounded-xl text-xs font-heading font-extrabold tracking-wider uppercase transition-all flex items-center gap-2 ${
+                  promoterTab === 'compta'
+                    ? 'bg-[#8A2BE2] text-white shadow-md shadow-[#8A2BE2]/40'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                <Wallet className="w-4 h-4" />
+                <span>Comptabilité Plateforme (Option 3)</span>
+              </button>
+            )}
             <button
               onClick={() => setPromoterTab('stats')}
               className={`px-4 py-2 rounded-xl text-xs font-heading font-extrabold tracking-wider uppercase transition-all flex items-center gap-2 ${
@@ -1504,10 +1524,24 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedAgentForAssign(networkAgents[0] || agents[0] || null);
+                      setAssignCountInput(100);
+                      setShowAssignModal(true);
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-sky-500 to-[#8A2BE2] hover:from-sky-400 hover:to-[#9B3BF2] text-white text-xs font-heading font-extrabold flex items-center gap-2 transition-all shadow-md shadow-[#8A2BE2]/30 cursor-pointer"
+                  >
+                    <Truck className="w-4 h-4" />
+                    <span>Attribuer des Billets</span>
+                  </button>
+
+                  <button
+                    type="button"
                     onClick={() => setShowAddAgentModal(true)}
-                    className="px-4 py-2.5 rounded-xl bg-[#8A2BE2] hover:bg-[#7b24cc] text-white text-xs font-heading font-bold flex items-center gap-2 transition-all shadow-md shadow-[#8A2BE2]/30"
+                    className="px-4 py-2.5 rounded-xl bg-[#1C1B1B] hover:bg-[#2A2A2A] border border-white/10 text-white text-xs font-heading font-bold flex items-center gap-2 transition-all cursor-pointer"
                   >
                     <Plus className="w-4 h-4" />
                     <span>Ajouter un Point de Vente</span>
@@ -1625,15 +1659,17 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                               <div className="flex items-center justify-end gap-1.5">
                                 {/* Bouton Distribuer des Billets */}
                                 <button
+                                  type="button"
                                   onClick={() => {
                                     setSelectedAgentForAssign(agent);
-                                    setAssignCountInput(20);
+                                    setAssignCountInput(100);
                                     setShowAssignModal(true);
                                   }}
-                                  className="p-2 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/30 transition-colors"
-                                  title="Confier un nouveau lot de billets"
+                                  className="px-2.5 py-1.5 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/30 text-[11px] font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                                  title="Attribuer un lot de billets physiques"
                                 >
                                   <Truck className="w-3.5 h-3.5" />
+                                  <span>Attribuer</span>
                                 </button>
 
                                 {/* Bouton Encaisser Versement */}
@@ -1798,66 +1834,109 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
             )}
 
             {/* MODALE : ATTRIBUER DES BILLETS PHYSIQUES */}
-            {showAssignModal && selectedAgentForAssign && (
+            {showAssignModal && (
               <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
                 <div className="glass-panel w-full max-w-md p-6 sm:p-8 rounded-3xl border border-white/20 shadow-2xl space-y-6">
                   <div className="flex items-center justify-between border-b border-white/10 pb-4">
                     <div className="flex items-center gap-2">
                       <Truck className="w-5 h-5 text-sky-400" />
                       <h3 className="font-heading font-extrabold text-lg text-white">
-                        Confier des Billets
+                        Attribuer des Billets Physiques
                       </h3>
                     </div>
                     <button
+                      type="button"
                       onClick={() => setShowAssignModal(false)}
-                      className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white"
+                      className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white cursor-pointer"
                     >
                       <X className="w-4 h-4" />
                     </button>
                   </div>
 
                   <div className="space-y-4">
-                    <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-1">
-                      <p className="text-xs text-gray-400 uppercase font-bold">Destinataire</p>
-                      <h4 className="font-heading font-extrabold text-white text-base">
-                        {selectedAgentForAssign.pointDeVente}
-                      </h4>
-                      <p className="text-xs text-gray-300">
-                        Gérant : {selectedAgentForAssign.gerantName} ({selectedAgentForAssign.quartier})
-                      </p>
+                    {/* Choix de l'Agent / Point de Vente */}
+                    {agents.length === 0 ? (
+                      <div className="p-4 rounded-2xl bg-amber-950/30 border border-amber-500/30 text-amber-200 text-xs">
+                        Aucun point de vente n'est encore enregistré. Veuillez d'abord cliquer sur "Ajouter un Point de Vente".
+                      </div>
+                    ) : (
+                      <div>
+                        <label className="text-xs font-bold uppercase tracking-wider text-gray-300 block mb-1">
+                          Point de Vente (Agent Destinataire)
+                        </label>
+                        <select
+                          value={selectedAgentForAssign?.id || ''}
+                          onChange={(e) => {
+                            const ag = agents.find((a) => a.id === e.target.value) || null;
+                            setSelectedAgentForAssign(ag);
+                          }}
+                          className="w-full bg-[#1A1A1A] border border-white/15 rounded-2xl px-4 py-3 text-sm font-bold text-white outline-none focus:border-[#E9C349] cursor-pointer"
+                        >
+                          <option value="" disabled>-- Choisir le point de vente --</option>
+                          {agents.map((ag) => (
+                            <option key={ag.id} value={ag.id} className="bg-[#1C1B1B] text-white">
+                              🏪 {ag.pointDeVente} ({ag.gerantName} - {ag.quartier})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {/* Choix de l'Événement */}
+                    <div>
+                      <label className="text-xs font-bold uppercase tracking-wider text-gray-300 block mb-1">
+                        Événement Concerné
+                      </label>
+                      <select
+                        value={selectedEventId}
+                        onChange={(e) => setSelectedEventId(e.target.value)}
+                        className="w-full bg-[#1A1A1A] border border-white/15 rounded-2xl px-4 py-2.5 text-xs font-medium text-white outline-none focus:border-[#E9C349] cursor-pointer"
+                      >
+                        {safeEvents.map((evt) => (
+                          <option key={evt.id} value={evt.id} className="bg-[#1C1B1B] text-white">
+                            🎟️ {evt.title} ({evt.city})
+                          </option>
+                        ))}
+                      </select>
                     </div>
 
-                    <div className="p-4 rounded-2xl bg-sky-950/30 border border-sky-500/30 text-xs text-sky-200">
-                      Stock d’impression disponible pour cet événement :{' '}
+                    <div className="p-3.5 rounded-2xl bg-sky-950/30 border border-sky-500/30 text-xs text-sky-200">
+                      Stock physique déjà imprimé pour cet événement :{' '}
                       <strong className="text-white font-mono text-sm">
                         {unassignedPhysicalTickets.length} billets
                       </strong>
+                      <p className="text-[11px] text-gray-300 mt-0.5">
+                        Si votre quantité dépasse le stock disponible, le système génère et active automatiquement le complément dans Supabase.
+                      </p>
                     </div>
 
                     <form onSubmit={handleAssignTicketsSubmit} className="space-y-4">
                       <div>
                         <label className="text-xs font-bold uppercase tracking-wider text-gray-300 flex justify-between">
                           <span>Quantité à attribuer</span>
-                          <span className="text-[#E9C349] font-mono">{assignCountInput} billets</span>
+                          <span className="text-[#E9C349] font-mono font-bold text-sm">{assignCountInput} billets</span>
                         </label>
                         <input
                           type="number"
                           min="1"
-                          max={Math.max(1, unassignedPhysicalTickets.length)}
                           value={assignCountInput}
-                          onChange={(e) => setAssignCountInput(Number(e.target.value))}
+                          onChange={(e) => setAssignCountInput(Math.max(1, Number(e.target.value) || 1))}
                           className="input-glass w-full rounded-2xl px-4 py-3 text-lg font-mono font-bold text-white mt-1 outline-none focus:border-[#E9C349]"
                         />
 
                         <div className="flex gap-2 mt-2">
-                          {[10, 20, 50, 100].map((n) => (
+                          {[20, 50, 100, 200].map((n) => (
                             <button
                               key={n}
                               type="button"
                               onClick={() => setAssignCountInput(n)}
-                              className="flex-1 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-xs text-gray-300 font-mono border border-white/5"
+                              className={`flex-1 py-1.5 rounded-xl border text-xs font-mono transition-colors cursor-pointer ${
+                                assignCountInput === n
+                                  ? 'bg-[#E9C349]/20 border-[#E9C349] text-[#E9C349] font-bold'
+                                  : 'bg-white/5 border-white/5 text-gray-300 hover:bg-white/10'
+                              }`}
                             >
-                              +{n}
+                              {n}
                             </button>
                           ))}
                         </div>
@@ -1867,14 +1946,14 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                         <button
                           type="button"
                           onClick={() => setShowAssignModal(false)}
-                          className="flex-1 py-3 rounded-2xl bg-white/5 hover:bg-white/10 text-white font-bold text-xs uppercase"
+                          className="flex-1 py-3 rounded-2xl bg-white/5 hover:bg-white/10 text-white font-bold text-xs uppercase cursor-pointer"
                         >
                           Annuler
                         </button>
                         <button
                           type="submit"
-                          disabled={unassignedPhysicalTickets.length === 0}
-                          className="flex-1 py-3 rounded-2xl bg-gradient-to-r from-sky-600 to-[#8A2BE2] text-white font-heading font-extrabold text-xs uppercase tracking-wider shadow-lg disabled:opacity-40"
+                          disabled={!selectedAgentForAssign || assignCountInput <= 0}
+                          className="flex-1 py-3 rounded-2xl bg-gradient-to-r from-sky-600 to-[#8A2BE2] hover:from-sky-500 hover:to-[#9B3BF2] text-white font-heading font-extrabold text-xs uppercase tracking-wider shadow-lg disabled:opacity-40 cursor-pointer"
                         >
                           Confirmer l’Attribution
                         </button>
@@ -2603,6 +2682,52 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
   // ====================================================================
   return (
     <div className="max-w-6xl mx-auto space-y-8 pb-20 animate-in fade-in duration-300">
+      {/* Navigation par Onglets Administrateur */}
+      <div className="flex bg-[#1C1B1B] p-1 rounded-2xl border border-white/10 overflow-x-auto max-w-full">
+        <button
+          type="button"
+          onClick={() => setPromoterTab('compta')}
+          className={`px-4 py-2 rounded-xl text-xs font-heading font-extrabold tracking-wider uppercase transition-all flex items-center gap-2 ${
+            promoterTab === 'compta'
+              ? 'bg-[#8A2BE2] text-white shadow-md shadow-[#8A2BE2]/40'
+              : 'text-gray-400 hover:text-white'
+          }`}
+        >
+          <Wallet className="w-4 h-4" />
+          <span>Comptabilité Plateforme (Option 3)</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setPromoterTab('network')}
+          className="px-4 py-2 rounded-xl text-xs font-heading font-extrabold tracking-wider uppercase transition-all flex items-center gap-2 text-gray-400 hover:text-white cursor-pointer"
+        >
+          <Store className="w-4 h-4 text-[#E9C349]" />
+          <span>Réseau & Billets Physiques</span>
+          <span className="bg-[#E9C349]/20 text-[#E9C349] text-[10px] font-extrabold px-1.5 py-0.5 rounded-full">
+            {networkAgents.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setPromoterTab('unsold')}
+          className="px-4 py-2 rounded-xl text-xs font-heading font-extrabold tracking-wider uppercase transition-all flex items-center gap-2 text-gray-400 hover:text-white cursor-pointer"
+        >
+          <AlertCircle className="w-4 h-4 text-rose-400" />
+          <span>Billets Non Vendus</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setPromoterTab('stats')}
+          className="px-4 py-2 rounded-xl text-xs font-heading font-extrabold tracking-wider uppercase transition-all flex items-center gap-2 text-gray-400 hover:text-white cursor-pointer"
+        >
+          <BarChart3 className="w-4 h-4 text-sky-400" />
+          <span>Cockpit Organisateur</span>
+        </button>
+      </div>
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>

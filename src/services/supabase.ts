@@ -1826,6 +1826,7 @@ export const assignTicketsToAgent = async (
     ticketType?: string;
     allocatedBy?: string;
     notes?: string;
+    event?: EventItem;
   }
 ): Promise<{
   success: boolean;
@@ -1841,8 +1842,10 @@ export const assignTicketsToAgent = async (
 
   const agent = agents[agentIndex];
   const allTickets = getStoredTickets();
+  const safeCount = Math.max(1, count);
+  const isValidUuid = (id?: string) => Boolean(id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
 
-  // Filtrer les billets physiques imprimés et non encore assignés pour cet événement
+  // 1. Filtrer les billets physiques imprimés et non encore assignés pour cet événement
   const unassigned = allTickets.filter(
     (t) =>
       t.eventId === agent.eventId &&
@@ -1851,22 +1854,53 @@ export const assignTicketsToAgent = async (
       !t.agentId
   );
 
-  if (unassigned.length === 0) {
-    return {
-      success: false,
-      assignedCount: 0,
-      message: 'Aucun billet physique disponible en stock d’impression pour cet événement. Veuillez d’abord générer un lot de billets.',
+  const existingToAssign = unassigned.slice(0, safeCount);
+  const existingToAssignIds = new Set(existingToAssign.map((t) => t.id));
+  const neededNewCount = safeCount - existingToAssign.length;
+
+  // 2. Générer automatiquement les billets physiques manquants si le stock non assigné est inférieur à count
+  const newCreatedTickets: UserTicket[] = [];
+  const event = metadata?.event;
+  const batchDate = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const batchNumber = `BATCH-${batchDate}-${Math.floor(100 + Math.random() * 900)}`;
+  const cityCode = ((event?.city || 'Thiès').slice(0, 3) || 'THS').toUpperCase();
+  const ticketType = metadata?.ticketType || event?.tiers?.[0]?.name || 'Prévente Porteur';
+  const ticketPrice = event?.tiers?.[0]?.price || 3000;
+
+  for (let i = 1; i <= neededNewCount; i++) {
+    const randomHex = Math.floor(100000 + Math.random() * 900000);
+    const serialNum = (agent.allocatedCount || 0) + existingToAssign.length + i;
+    const qrCode = `BPT-PHY-${cityCode}-${randomHex}`;
+
+    const newTkt: UserTicket = {
+      id: `tkt-phy-${Date.now()}-${i}-${Math.floor(100 + Math.random() * 900)}`,
+      eventId: agent.eventId,
+      eventTitle: event?.title || agent.eventTitle || 'Birthday Kmou Jango',
+      eventPoster: event?.posterUrl || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800',
+      eventDate: event?.date || 'Date officielle',
+      eventTime: event?.time || '20:00',
+      eventVenue: event?.venue ? `${event.venue}${event.quartier ? ` (${event.quartier})` : ''}, ${event.city}` : 'Thiès, Sénégal',
+      tierName: ticketType,
+      price: ticketPrice,
+      qrCode,
+      seatNumber: `PHY-${String(serialNum).padStart(4, '0')}`,
+      holderName: 'Billet Physique Porteur',
+      purchasedAt: new Date().toISOString(),
+      status: 'printed_not_sold' as const,
+      isPhysical: true,
+      agentId: agent.id,
+      agentName: agent.pointDeVente,
+      batchNumber,
+      serialNumber: serialNum,
     };
+    newCreatedTickets.push(newTkt);
   }
 
-  const toAssign = unassigned.slice(0, count);
-  const toAssignIds = new Set(toAssign.map((t) => t.id));
-
-  const updatedTickets = allTickets.map((t) => {
-    if (toAssignIds.has(t.id)) {
+  // 3. Mettre à jour les billets existants pris dans le lot
+  const updatedExistingTickets = allTickets.map((t) => {
+    if (existingToAssignIds.has(t.id)) {
       return {
         ...t,
-        // Les billets restent printed_not_sold (inactifs) jusqu'à déclaration de vente effective
         status: 'printed_not_sold' as const,
         agentId: agent.id,
         agentName: agent.pointDeVente,
@@ -1875,35 +1909,71 @@ export const assignTicketsToAgent = async (
     return t;
   });
 
-  saveStoredTickets(updatedTickets);
+  // Fusionner tous les billets en mémoire locale
+  const finalAllTickets = [...newCreatedTickets, ...updatedExistingTickets];
+  saveStoredTickets(finalAllTickets);
 
-  agent.allocatedCount += toAssign.length;
+  // 4. Mettre à jour le compteur du collaborateur
+  agent.allocatedCount = (agent.allocatedCount || 0) + safeCount;
   agents[agentIndex] = agent;
   saveSalesAgents(agents);
 
+  // 5. Synchronisation Supabase
   const client = getSupabaseClient();
   if (client) {
     try {
-      await client
-        .from('tickets')
-        .update({
-          agent_id: agent.id,
+      // Insertion des nouveaux billets créés
+      if (newCreatedTickets.length > 0) {
+        const inserts = newCreatedTickets.map((t) => ({
+          event_id: isValidUuid(t.eventId) ? t.eventId : undefined,
+          event_title: t.eventTitle,
+          event_poster: t.eventPoster,
+          event_date: t.eventDate,
+          event_time: t.eventTime,
+          event_venue: t.eventVenue,
+          tier_name: t.tierName,
+          price: t.price,
+          qr_code: t.qrCode,
+          seat_number: t.seatNumber,
+          holder_name: t.holderName,
+          status: 'printed_not_sold',
+          is_physical: true,
+          agent_id: isValidUuid(agent.id) ? agent.id : null,
+          agent_name: agent.pointDeVente,
+          batch_number: t.batchNumber,
+          serial_number: t.serialNumber,
+        }));
+        await client.from('tickets').insert(inserts);
+      }
+
+      // Mise à jour des billets existants réassignés
+      if (existingToAssignIds.size > 0) {
+        const updatePayload: Record<string, any> = {
           agent_name: agent.pointDeVente,
           status: 'printed_not_sold',
-        })
-        .in('id', Array.from(toAssignIds));
+        };
+        if (isValidUuid(agent.id)) {
+          updatePayload.agent_id = agent.id;
+        }
+        await client
+          .from('tickets')
+          .update(updatePayload)
+          .in('id', Array.from(existingToAssignIds));
+      }
 
-      await client
-        .from('sales_agents')
-        .update({ allocated_count: agent.allocatedCount })
-        .eq('id', agent.id);
+      // Mise à jour de allocated_count dans sales_agents
+      if (isValidUuid(agent.id)) {
+        await client
+          .from('sales_agents')
+          .update({ allocated_count: agent.allocatedCount })
+          .eq('id', agent.id);
+      }
     } catch (e: any) {
       console.warn('Sync Supabase assignTicketsToAgent:', e.message);
     }
   }
 
-  // Création et persistance du lot dans ticket_allocations
-  const ticketType = metadata?.ticketType || toAssign[0]?.tierName || 'Standard';
+  // 6. Création et persistance du lot dans ticket_allocations
   const newAllocation: TicketAllocation = {
     id: `alloc-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`,
     agentId: agent.id,
@@ -1911,7 +1981,7 @@ export const assignTicketsToAgent = async (
     eventId: agent.eventId,
     eventTitle: agent.eventTitle,
     ticketType,
-    quantity: toAssign.length,
+    quantity: safeCount,
     allocatedBy: metadata?.allocatedBy || agent.promoterId,
     notes: metadata?.notes,
     status: 'active',
@@ -1923,15 +1993,18 @@ export const assignTicketsToAgent = async (
 
   if (client) {
     try {
-      await client.from('ticket_allocations').insert({
-        agent_id: agent.id,
-        event_id: agent.eventId,
+      const allocInsertPayload: Record<string, any> = {
+        event_id: isValidUuid(agent.eventId) ? agent.eventId : undefined,
         ticket_type: ticketType,
-        quantity: toAssign.length,
+        quantity: safeCount,
         allocated_by: metadata?.allocatedBy || agent.promoterId,
         notes: metadata?.notes || null,
         status: 'active',
-      });
+      };
+      if (isValidUuid(agent.id)) {
+        allocInsertPayload.agent_id = agent.id;
+      }
+      await client.from('ticket_allocations').insert(allocInsertPayload);
     } catch (allocErr: any) {
       console.warn('Sync Supabase ticket_allocations insert:', allocErr.message);
     }
@@ -1939,9 +2012,9 @@ export const assignTicketsToAgent = async (
 
   return {
     success: true,
-    assignedCount: toAssign.length,
+    assignedCount: safeCount,
     allocation: newAllocation,
-    message: `${toAssign.length} billets physiques attribués avec succès au point de vente "${agent.pointDeVente}". Statut : printed_not_sold.`,
+    message: `${safeCount} billets physiques attribués avec succès au point de vente "${agent.pointDeVente}". Statut : printed_not_sold (activation par vente nominative requise).`,
   };
 };
 

@@ -31,11 +31,14 @@ import { SalesAgent, UserTicket, EventItem, UserProfile } from '../types';
 import {
   getStoredSalesAgents,
   getStoredTickets,
+  saveStoredTickets,
   recordAgentSale,
   recordAgentSettlement,
   saveSalesAgents,
   lookupPhysicalTicketForSale,
   confirmSinglePhysicalTicketSale,
+  fetchSalesAgentsFromSupabase,
+  getSupabaseClient,
 } from '../services/supabase';
 
 interface SalesAgentDashboardViewProps {
