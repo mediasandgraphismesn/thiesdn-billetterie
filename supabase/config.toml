@@ -417,3 +417,7 @@ enabled = true
 
 [functions.notify-admin-payment]
 verify_jwt = false
+
+
+[functions.notify-promoter]
+verify_jwt = false

@@ -22,6 +22,12 @@ import { FinancesView } from './views/FinancesView';
 import { AdminDashboard } from './views/AdminDashboard';
 import { AdminSidebar } from './components/admin/AdminSidebar';
 import { AdminNotificationCenter } from './components/admin/AdminNotificationCenter';
+import {
+  fetchUserNotifications,
+  markNotificationAsRead,
+  markAllNotificationsAsRead,
+  playNotificationChime,
+} from './services/userNotificationService';
 import { UsersManagementView } from './views/UsersManagementView';
 import { PlatformSettingsView } from './views/PlatformSettingsView';
 import { SalesAgentDashboardView } from './views/SalesAgentDashboardView';
@@ -126,7 +132,8 @@ export default function App() {
   const [eventsError, setEventsError] = useState<string | null>(null);
   const [paymentBannerMessage, setPaymentBannerMessage] = useState<string | null>(null);
   const [tickets, setTickets] = useState<UserTicket[]>(INITIAL_TICKETS);
-  const [notifications, setNotifications] = useState<NotificationItem[]>(INITIAL_NOTIFICATIONS);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [userAlertToast, setUserAlertToast] = useState<{ id: string; title: string; body: string; url?: string } | null>(null);
 
   const [activeTab, setActiveTab] = useState<string>('home');
   const [orderFilter, setOrderFilter] = useState<string | null>(null);
@@ -270,28 +277,91 @@ export default function App() {
     }
   }, []);
 
-  // Gestion du lien profond ?tab=orders (Push / E-mail notification)
+  // Gestion des liens profonds ?tab=... (Push / E-mail notifications pour tous les rôles)
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const urlParams = new URLSearchParams(window.location.search);
     const tabParam = urlParams.get('tab');
 
-    if (tabParam === 'orders') {
+    if (tabParam) {
       if (!isAuthLoading) {
-        if (isAuthenticated && effectiveRole === 'admin') {
-          setActiveTab('orders');
+        if (isAuthenticated && isTabAllowedForRole(tabParam, effectiveRole, isAuthenticated)) {
+          setActiveTab(tabParam);
           // Retirer le paramètre de l'URL une fois connecté et routé
           urlParams.delete('tab');
           const newSearch = urlParams.toString() ? '?' + urlParams.toString() : '';
           window.history.replaceState(null, '', window.location.pathname + newSearch + window.location.hash);
         } else if (!isAuthenticated) {
-          // L'administrateur n'est pas encore connecté : on conserve ?tab=orders dans l'URL
-          // et on bascule sur l'écran d'authentification
+          // Utilisateur non encore connecté : on conserve ?tab=... dans l'URL et on ouvre la connexion
           setActiveTab('profile');
         }
       }
     }
   }, [isAuthenticated, isAuthLoading, effectiveRole]);
+
+  // Chargement et écoute Realtime des notifications utilisateur (user_notifications)
+  useEffect(() => {
+    if (!isAuthenticated || !user?.id) {
+      setNotifications([]);
+      return;
+    }
+
+    // Chargement initial depuis la base
+    fetchUserNotifications(user.id).then((notifs) => {
+      setNotifications(notifs);
+    });
+
+    const client = getSupabaseClient();
+    if (!client) return;
+
+    // Écoute Realtime sur user_notifications filtrée sur l'utilisateur connecté
+    const channel = client
+      .channel(`user-notifications-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'user_notifications',
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const row = payload.new as any;
+          if (!row) return;
+
+          // Carillon sonore Web Audio & vibration haptique
+          playNotificationChime();
+          if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+            navigator.vibrate([300, 150, 300, 150, 600]);
+          }
+
+          const newItem: NotificationItem = {
+            id: row.id,
+            title: row.title,
+            message: row.body,
+            timestamp: row.created_at,
+            read: false,
+            type: row.kind,
+            url: row.url || undefined,
+          };
+
+          setNotifications((prev) => [newItem, ...prev]);
+
+          // Toast interactif natif
+          setUserAlertToast({
+            id: row.id,
+            title: row.title,
+            body: row.body,
+            url: row.url || undefined,
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      client.removeChannel(channel);
+    };
+  }, [isAuthenticated, user?.id]);
 
   // Contrôle d'accès strict par rôle aux onglets (Route Guards)
   const isTabAllowedForRole = (tab: string, role: 'user' | 'promoter' | 'admin' | 'sales_agent' | 'artist', isAuth: boolean): boolean => {
@@ -625,13 +695,23 @@ export default function App() {
     setUser((prev) => ({ ...prev, ...updated }));
   };
 
-  const handleMarkNotificationRead = (id: string) => {
+  const handleMarkNotificationRead = (id: string, url?: string) => {
+    markNotificationAsRead(id);
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, read: true } : n))
     );
+    if (url) {
+      const match = url.match(/[?&]tab=([a-zA-Z0-9_-]+)/);
+      if (match && match[1]) {
+        handleTabChange(match[1]);
+      }
+    }
   };
 
   const handleClearNotifications = () => {
+    if (user?.id) {
+      markAllNotificationsAsRead(user.id);
+    }
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
   };
 
@@ -770,6 +850,51 @@ export default function App() {
               isAdminPreview={isAdminPreview}
             />
           )
+        )}
+
+        {/* Toast In-App Temps Réel pour Promoteurs, Artistes & Clients */}
+        {userAlertToast && (
+          <div className="fixed top-6 right-6 z-[9999] max-w-sm w-full animate-in slide-in-from-top-4 duration-300 pointer-events-auto">
+            <div className="glass-panel p-4 rounded-2xl border-2 border-[#8A2BE2] bg-[#0E0E14]/95 shadow-2xl shadow-[#8A2BE2]/25 flex flex-col gap-2.5">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <h4 className="font-heading font-extrabold text-xs text-[#DCB8FF]">
+                    {userAlertToast.title}
+                  </h4>
+                  <p className="text-[11px] text-gray-300 font-medium mt-0.5">
+                    {userAlertToast.body}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setUserAlertToast(null)}
+                  className="text-gray-400 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              {userAlertToast.url && (
+                <div className="flex justify-end pt-1 border-t border-white/10">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (userAlertToast.url) {
+                        const match = userAlertToast.url.match(/[?&]tab=([a-zA-Z0-9_-]+)/);
+                        if (match && match[1]) {
+                          handleTabChange(match[1]);
+                        }
+                      }
+                      setUserAlertToast(null);
+                    }}
+                    className="btn-primary-glow py-1 px-3 rounded-xl font-heading font-bold text-[10px] uppercase tracking-wider flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>Consulter</span>
+                    <ArrowRight className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         )}
 
         {/* Coquille Admin : Centre de Notifications Realtime & Push (Monté UNE fois pour l'admin) */}

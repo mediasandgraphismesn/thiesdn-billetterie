@@ -14,7 +14,7 @@ import { NotificationItem, UserProfile } from '../types';
 interface HeaderProps {
   user: UserProfile;
   notifications: NotificationItem[];
-  onMarkNotificationRead: (id: string) => void;
+  onMarkNotificationRead: (id: string, url?: string) => void;
   onClearNotifications: () => void;
   currentRole: 'user' | 'promoter' | 'admin' | 'sales_agent' | 'artist';
   isAuthenticated?: boolean;
@@ -180,7 +180,7 @@ export const Header: React.FC<HeaderProps> = ({
                     notifications.map((notif) => (
                       <div
                         key={notif.id}
-                        onClick={() => onMarkNotificationRead(notif.id)}
+                        onClick={() => onMarkNotificationRead(notif.id, notif.url)}
                         className={`p-3 rounded-xl transition-all cursor-pointer ${
                           notif.read ? 'opacity-60' : 'bg-white/5'
                         }`}

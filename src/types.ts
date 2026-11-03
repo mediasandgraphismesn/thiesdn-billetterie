@@ -270,7 +270,8 @@ export interface NotificationItem {
   message: string;
   timestamp: string;
   read: boolean;
-  type: 'event' | 'ticket' | 'moderation' | 'vip';
+  type: 'event' | 'ticket' | 'moderation' | 'vip' | 'event_status' | 'sales' | 'stock' | 'payout' | 'decompte' | string;
+  url?: string;
 }
 
 export type AccreditationType = 'staff' | 'invite' | 'presse';

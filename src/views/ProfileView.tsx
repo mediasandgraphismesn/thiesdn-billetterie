@@ -25,6 +25,21 @@ import {
 } from 'lucide-react';
 import { UserProfile, UserTicket } from '../types';
 import {
+  Bell,
+  Smartphone,
+  Volume2,
+  Sparkles,
+} from 'lucide-react';
+import {
+  fetchNotificationPrefs,
+  saveNotificationPrefs,
+  subscribeDeviceToPush,
+  checkDevicePushSubscription,
+  playNotificationChime,
+  DEFAULT_NOTIFICATION_PREFS,
+  type NotificationPrefs,
+} from '../services/userNotificationService';
+import {
   getSupabaseClient,
   uploadAvatarToSupabase,
   updateUserProfileInSupabase,
@@ -57,6 +72,55 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const [privacySettings, setPrivacySettings] = useState(user.privacySettings);
   const [isEditing, setIsEditing] = useState(false);
   const [savedToast, setSavedToast] = useState(false);
+
+  // Préférences de notifications
+  const [notificationPrefs, setNotificationPrefs] = useState<NotificationPrefs>(DEFAULT_NOTIFICATION_PREFS);
+  const [loadingPrefs, setLoadingPrefs] = useState(false);
+  const [savingPrefs, setSavingPrefs] = useState(false);
+  const [prefsMessage, setPrefsMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [isPushSubscribed, setIsPushSubscribed] = useState(false);
+  const [subscribingPush, setSubscribingPush] = useState(false);
+
+  // Détection iPhone hors PWA installée
+  const isIos = typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+  const isStandalone = typeof window !== 'undefined' && (window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true);
+  const isIosNeedsInstall = isIos && !isStandalone;
+
+  useEffect(() => {
+    if (user.id) {
+      setLoadingPrefs(true);
+      fetchNotificationPrefs(user.id).then((prefs) => {
+        setNotificationPrefs(prefs);
+        setLoadingPrefs(false);
+      });
+      checkDevicePushSubscription().then((sub) => setIsPushSubscribed(sub));
+    }
+  }, [user.id]);
+
+  const handleSubscribePush = async () => {
+    setSubscribingPush(true);
+    setPrefsMessage(null);
+    const res = await subscribeDeviceToPush(user.id);
+    if (res.success) {
+      setIsPushSubscribed(true);
+      setPrefsMessage({ type: 'success', text: res.message });
+    } else {
+      setPrefsMessage({ type: 'error', text: res.message });
+    }
+    setSubscribingPush(false);
+  };
+
+  const handleSavePrefs = async () => {
+    setSavingPrefs(true);
+    setPrefsMessage(null);
+    const res = await saveNotificationPrefs(user.id, notificationPrefs);
+    if (res.success) {
+      setPrefsMessage({ type: 'success', text: res.message });
+    } else {
+      setPrefsMessage({ type: 'error', text: res.message });
+    }
+    setSavingPrefs(false);
+  };
 
   useEffect(() => {
     setName(user.name);
@@ -718,6 +782,137 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                   <span>Changer</span>
                 </button>
               </div>
+            </div>
+          </section>
+
+          {/* Préférences d'Alertes & Notifications */}
+          <section className="glass-panel rounded-3xl p-6 space-y-5">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center gap-2.5">
+                <Bell className="w-5 h-5 text-[#E9C349]" />
+                <h3 className="font-heading font-bold text-base text-[#E9C349]">
+                  Préférences d'Alertes & Notifications
+                </h3>
+              </div>
+              <span className="text-[11px] text-[#DCB8FF] font-medium">Temps Réel</span>
+            </div>
+
+            {/* Avertissement iOS */}
+            {isIosNeedsInstall && (
+              <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <strong className="block font-bold">Sur iPhone / iPad :</strong>
+                  Installez d'abord l'application sur l'écran d'accueil pour recevoir les notifications Push système.
+                </div>
+              </div>
+            )}
+
+            {/* Activation Push sur cet Appareil */}
+            {['admin', 'promoter', 'artist'].includes(user.role) && (
+              <div className="p-4 rounded-2xl bg-white/5 border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-[#8A2BE2]/20 border border-[#8A2BE2]/40 text-[#DCB8FF] flex items-center justify-center shrink-0">
+                    <Smartphone className="w-4 h-4 text-[#E9C349]" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-white">Notifications Push Système</h4>
+                    <p className="text-[11px] text-gray-400">
+                      Recevez des alertes sonores et vibrations sur cet appareil
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleSubscribePush}
+                  disabled={subscribingPush}
+                  className="btn-primary-glow px-4 py-2 rounded-xl text-xs font-heading font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:opacity-50 shrink-0"
+                >
+                  <Bell className="w-3.5 h-3.5" />
+                  <span>{subscribingPush ? 'Activation...' : isPushSubscribed ? 'Appareil Activé' : 'Activer cet appareil'}</span>
+                </button>
+              </div>
+            )}
+
+            {/* Grille des Interrupteurs Push / E-mail par Catégorie */}
+            <div className="space-y-3 pt-2">
+              <h4 className="font-heading font-bold text-xs uppercase tracking-wider text-gray-400">
+                Canaux d'alerte par catégorie
+              </h4>
+
+              {[
+                { key: 'event_status', label: "Statut d'Événement", desc: "Validation ou refus de vos créations d'événements" },
+                { key: 'sales', label: "Ventes de Billets", desc: "Notification lors de chaque billet vendu (sans données client)" },
+                { key: 'stock', label: "Alertes de Stock", desc: "Avertissement quand le stock passe sous 10 places ou en rupture" },
+                { key: 'payout', label: "Reversements Collaborateurs", desc: "Déclarations de reversement des points de vente physiques" },
+                { key: 'decompte', label: "Décomptes Co-Production", desc: "Validation officielle des décomptes artistes et partenaires" },
+              ].map(({ key, label, desc }) => {
+                const k = key as keyof NotificationPrefs;
+                return (
+                  <div key={key} className="p-3.5 rounded-2xl bg-[#141416] border border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <span className="text-xs font-bold text-white block">{label}</span>
+                      <span className="text-[11px] text-gray-400 block">{desc}</span>
+                    </div>
+
+                    <div className="flex items-center gap-4 shrink-0">
+                      <label className="flex items-center gap-1.5 cursor-pointer text-xs text-gray-300">
+                        <input
+                          type="checkbox"
+                          checked={notificationPrefs[k]?.push ?? true}
+                          onChange={(e) => {
+                            setNotificationPrefs((prev) => ({
+                              ...prev,
+                              [k]: { ...prev[k], push: e.target.checked },
+                            }));
+                          }}
+                          className="rounded border-white/20 text-[#8A2BE2] focus:ring-[#8A2BE2] bg-black/40"
+                        />
+                        <span>Push</span>
+                      </label>
+
+                      <label className="flex items-center gap-1.5 cursor-pointer text-xs text-gray-300">
+                        <input
+                          type="checkbox"
+                          checked={notificationPrefs[k]?.email ?? false}
+                          onChange={(e) => {
+                            setNotificationPrefs((prev) => ({
+                              ...prev,
+                              [k]: { ...prev[k], email: e.target.checked },
+                            }));
+                          }}
+                          className="rounded border-white/20 text-[#8A2BE2] focus:ring-[#8A2BE2] bg-black/40"
+                        />
+                        <span>E-mail</span>
+                      </label>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Message de statut */}
+            {prefsMessage && (
+              <div className={`p-3 rounded-2xl text-xs flex items-center gap-2 border ${
+                prefsMessage.type === 'success'
+                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                  : 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+              }`}>
+                <span>{prefsMessage.text}</span>
+              </div>
+            )}
+
+            {/* Bouton Enregistrer */}
+            <div className="pt-2 border-t border-white/10 flex justify-end">
+              <button
+                type="button"
+                onClick={handleSavePrefs}
+                disabled={savingPrefs}
+                className="btn-gold-glow px-5 py-2.5 rounded-xl font-heading font-extrabold text-xs uppercase tracking-wider transition-all cursor-pointer disabled:opacity-50"
+              >
+                {savingPrefs ? 'Enregistrement...' : 'Enregistrer mes préférences'}
+              </button>
             </div>
           </section>
         </div>
