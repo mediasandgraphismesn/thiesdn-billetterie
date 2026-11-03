@@ -314,6 +314,7 @@ export interface ScanStation {
   id: string;
   eventId: string;
   eventTitle: string;
+  organizerName?: string;
   name: string; // ex: "Entrée Principale", "Entrée VIP", "Entrée Presse"
   accessCode: string; // ex: "STA-VIP-123"
   createdBy: string;

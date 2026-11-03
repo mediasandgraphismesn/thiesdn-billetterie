@@ -18,6 +18,7 @@ import {
   AccreditationType,
   AccreditationStatus,
   ScanStation,
+  EventPreRegistration,
   LoginHistoryRecord,
   VigileSessionRecord,
 } from '../types';
@@ -6321,6 +6322,8 @@ export const fetchAllSoldTicketsFromSupabase = async (): Promise<{ tickets: User
       isPhysical: Boolean(t.is_physical),
       agentId: t.agent_id || undefined,
       agentName: t.agent_name || undefined,
+      batchNumber: t.batch_number || undefined,
+      serialNumber: t.serial_number || undefined,
       userId: t.user_id,
       assignedToProfileId: t.assigned_to_profile_id || undefined,
       assignedToName: t.assigned_to_name || undefined,
@@ -6332,6 +6335,14 @@ export const fetchAllSoldTicketsFromSupabase = async (): Promise<{ tickets: User
       claimedAt: t.claimed_at || undefined,
       claimToken: t.claim_token || undefined,
     }));
+
+    if (mapped.length > 0) {
+      const local = getStoredTickets();
+      const remoteMap = new Map(mapped.map((m) => [m.id, m]));
+      const merged = [...mapped, ...local.filter((l) => !remoteMap.has(l.id))];
+      saveStoredTickets(merged);
+      return { tickets: merged, error: null };
+    }
 
     return { tickets: mapped, error: null };
   } catch (err: any) {
@@ -6376,6 +6387,8 @@ export const fetchUserTicketsFromSupabase = async (
       isPhysical: Boolean(t.is_physical),
       agentId: t.agent_id || undefined,
       agentName: t.agent_name || undefined,
+      batchNumber: t.batch_number || undefined,
+      serialNumber: t.serial_number || undefined,
       userId: t.user_id,
       assignedToProfileId: t.assigned_to_profile_id || undefined,
       assignedToName: t.assigned_to_name || undefined,
@@ -6387,6 +6400,14 @@ export const fetchUserTicketsFromSupabase = async (
       claimedAt: t.claimed_at || undefined,
       claimToken: t.claim_token || undefined,
     }));
+
+    if (mapped.length > 0) {
+      const local = getStoredTickets();
+      const remoteMap = new Map(mapped.map((m) => [m.id, m]));
+      const merged = [...mapped, ...local.filter((l) => !remoteMap.has(l.id))];
+      saveStoredTickets(merged);
+      return { tickets: merged, error: null };
+    }
 
     return { tickets: mapped, error: null };
   } catch (err: any) {

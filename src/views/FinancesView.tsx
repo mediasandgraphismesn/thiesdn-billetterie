@@ -55,6 +55,7 @@ import {
   getStoredPaymentSettings,
   savePaymentSettings,
   getStoredTickets,
+  fetchAllSoldTicketsFromSupabase,
   getStoredSalesAgents,
   fetchSalesAgentsFromSupabase,
   createSalesAgent,
@@ -194,26 +195,51 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
     fetchTicketAllocationsFromSupabase(selectedEventId === 'all' ? undefined : selectedEventId).then((res) => {
       if (res.allocations) setAllocations(res.allocations);
     });
-    fetchTicketAllocationsFromSupabase().then((res) => {
-      if (res.allocations) setAllocations(res.allocations);
-    });
     fetchOrdersFromSupabase().then((res) => {
       if (res.orders && res.orders.length > 0) {
         setOrders(res.orders);
       }
     });
+    fetchAllSoldTicketsFromSupabase().then((res) => {
+      if (res.tickets && res.tickets.length > 0) {
+        setTickets(res.tickets);
+      }
+    });
   }, []);
+
+  // Rafraîchissement automatique des allocations lors du changement d'événement
+  useEffect(() => {
+    fetchTicketAllocationsFromSupabase(selectedEventId === 'all' ? undefined : selectedEventId).then((res) => {
+      if (res.allocations) setAllocations(res.allocations);
+    });
+  }, [selectedEventId]);
 
   const handleRefresh = async () => {
     setTransactions(getStoredTransactions());
     setTickets(getStoredTickets());
     setAgents(getStoredSalesAgents());
     setCoproducers(getStoredCoproducers());
-    const res = await fetchOrdersFromSupabase();
-    if (res.orders && res.orders.length > 0) {
-      setOrders(res.orders);
+
+    const [ordersRes, agentsRes, ticketsRes, allocRes] = await Promise.all([
+      fetchOrdersFromSupabase(),
+      fetchSalesAgentsFromSupabase(),
+      fetchAllSoldTicketsFromSupabase(),
+      fetchTicketAllocationsFromSupabase(selectedEventId === 'all' ? undefined : selectedEventId),
+    ]);
+
+    if (ordersRes.orders && ordersRes.orders.length > 0) {
+      setOrders(ordersRes.orders);
     } else {
       setOrders(getStoredOrders());
+    }
+    if (agentsRes.agents && agentsRes.agents.length > 0) {
+      setAgents(agentsRes.agents);
+    }
+    if (ticketsRes.tickets && ticketsRes.tickets.length > 0) {
+      setTickets(ticketsRes.tickets);
+    }
+    if (allocRes.allocations) {
+      setAllocations(allocRes.allocations);
     }
   };
 
@@ -436,12 +462,16 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
 
   // Billets imprimés en stock promoteur non encore alloués
   const unassignedPhysicalTickets = useMemo(() => {
-    return eventPhysicalTickets.filter((t) => t.status === 'physical_printed');
+    return eventPhysicalTickets.filter(
+      (t) => (t.status === 'printed_not_sold' || t.status === 'physical_printed') && !t.agentId
+    );
   }, [eventPhysicalTickets]);
 
-  // Billets alloués aux points de vente
+  // Billets alloués aux points de vente (statut printed_not_sold ou physical_allocated avec agentId)
   const allocatedPhysicalTickets = useMemo(() => {
-    return eventPhysicalTickets.filter((t) => t.status === 'physical_allocated');
+    return eventPhysicalTickets.filter(
+      (t) => (t.status === 'printed_not_sold' || t.status === 'physical_allocated') && Boolean(t.agentId)
+    );
   }, [eventPhysicalTickets]);
 
   // Billets physiques vendus ou scannés
@@ -455,9 +485,23 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
     );
   }, [eventPhysicalTickets]);
 
+  // Total consolidé des billets distribués au réseau (agrégation billets physiques alloués + agents)
+  const totalPhysicalDistributed = useMemo(() => {
+    const fromTickets = allocatedPhysicalTickets.length + soldPhysicalTickets.length;
+    const fromAgents = networkAgents.reduce((sum, a) => sum + (a.allocatedCount || 0), 0);
+    return Math.max(fromTickets, fromAgents);
+  }, [allocatedPhysicalTickets, soldPhysicalTickets, networkAgents]);
+
+  // Total consolidé des billets vendus et déclarés par les points de vente
+  const totalPhysicalSold = useMemo(() => {
+    const fromTickets = soldPhysicalTickets.length;
+    const fromAgents = networkAgents.reduce((sum, a) => sum + (a.soldCount || 0), 0);
+    return Math.max(fromTickets, fromAgents);
+  }, [soldPhysicalTickets, networkAgents]);
+
   // Billets physiques non vendus (inactifs) pour l'événement sélectionné
   const totalUnsoldTickets = useMemo(() => {
-    return tickets.filter((t) => {
+    const countFromTickets = tickets.filter((t) => {
       const matchEvt = !activeEvent || t.eventId === activeEvent.id;
       return (
         matchEvt &&
@@ -467,7 +511,8 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
           t.status === 'physical_printed')
       );
     }).length;
-  }, [tickets, activeEvent]);
+    return Math.max(countFromTickets, totalPhysicalDistributed - totalPhysicalSold);
+  }, [tickets, activeEvent, totalPhysicalDistributed, totalPhysicalSold]);
 
   // Statistiques détaillées des Billets Physiques Non Vendus par Collaborateur
   const physicalTicketsByAgent = useMemo(() => {
@@ -649,6 +694,17 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
       setTickets(getStoredTickets());
       setAgents(getStoredSalesAgents());
 
+      // Synchronisation asynchrone instantanée depuis Supabase
+      fetchSalesAgentsFromSupabase().then((r) => {
+        if (r.agents && r.agents.length > 0) setAgents(r.agents);
+      });
+      fetchAllSoldTicketsFromSupabase().then((r) => {
+        if (r.tickets && r.tickets.length > 0) setTickets(r.tickets);
+      });
+      fetchTicketAllocationsFromSupabase(selectedEventId === 'all' ? undefined : selectedEventId).then((r) => {
+        if (r.allocations) setAllocations(r.allocations);
+      });
+
       // Construire le lien WhatsApp d'attribution
       const cleanPhone = selectedAgentForAssign.telephone.replace(/[^0-9]/g, '');
       const eventTitle = activeEvent ? activeEvent.title : 'Événement Thièsdn';
@@ -742,6 +798,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
           orderId: co.id,
           eventId: co.eventId,
           eventTitle: co.eventTitle || 'Événement Thièsdn',
+          promoterId: (co as any).promoterId || co.organizerName || 'promoter-thiesdn',
           promoterName: co.organizerName || 'Promoteur Thièsdn',
           customerName: co.customerName,
           customerPhone: co.customerPhone,
@@ -1476,7 +1533,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                 </div>
                 <p className="text-xs uppercase tracking-wider text-gray-400 font-bold">Distribués en Boutique</p>
                 <h3 className="font-heading text-2xl font-black text-amber-300">
-                  {allocatedPhysicalTickets.length + soldPhysicalTickets.length} <span className="text-xs text-white font-bold">billets</span>
+                  {totalPhysicalDistributed} <span className="text-xs text-white font-bold">billets</span>
                 </h3>
                 <p className="text-[11px] text-gray-400">Confier à {networkAgents.length} partenaires</p>
               </div>
@@ -1488,7 +1545,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                 </div>
                 <p className="text-xs uppercase tracking-wider text-gray-400 font-bold">Vendus & Déclarés</p>
                 <h3 className="font-heading text-2xl font-black text-emerald-300">
-                  {soldPhysicalTickets.length} <span className="text-xs text-white font-bold">billets</span>
+                  {totalPhysicalSold} <span className="text-xs text-white font-bold">billets</span>
                 </h3>
                 <p className="text-[11px] text-gray-400">
                   CA Réseau : {networkTotalGrossCollected.toLocaleString('fr-FR')} FCFA
@@ -2126,7 +2183,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                   Billets Imprimés
                 </p>
                 <h4 className="font-heading text-2xl font-black text-white">
-                  {eventPhysicalTickets.length}{' '}
+                  {Math.max(eventPhysicalTickets.length, unassignedPhysicalTickets.length + totalPhysicalDistributed)}{' '}
                   <span className="text-xs font-bold text-gray-400">billets</span>
                 </h4>
                 <p className="text-[10px] text-gray-400">Total lots physiques générés</p>
@@ -2137,7 +2194,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                   Déclarés Vendus
                 </p>
                 <h4 className="font-heading text-2xl font-black text-emerald-300">
-                  {soldPhysicalTickets.length}{' '}
+                  {totalPhysicalSold}{' '}
                   <span className="text-xs font-bold text-white">activés</span>
                 </h4>
                 <p className="text-[10px] text-emerald-400/80">Statut sold_valid (Accès autorisé)</p>
