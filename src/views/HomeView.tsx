@@ -8,6 +8,7 @@ import { getEventEndDatetime } from '../services/supabase';
 interface HomeViewProps {
   events: EventItem[];
   isLoading?: boolean;
+  isPromoterView?: boolean;
   onSelectEvent: (event: EventItem) => void;
   onNavigateToExplore: () => void;
   onNavigateToCreate: () => void;
@@ -16,6 +17,7 @@ interface HomeViewProps {
 export const HomeView: React.FC<HomeViewProps> = ({
   events,
   isLoading = false,
+  isPromoterView = false,
   onSelectEvent,
   onNavigateToExplore,
   onNavigateToCreate,
@@ -43,8 +45,13 @@ export const HomeView: React.FC<HomeViewProps> = ({
     }
   });
 
-  // Si tous les événements sont passés, afficher approvedEvents en repli pour ne pas avoir une page vide
-  const displayPool = activeEvents.length > 0 ? activeEvents : approvedEvents;
+  // Si en vue promoteur, afficher tous ses événements (même en attente de modération)
+  // Sinon filtrer sur les événements actifs/approuvés pour le public
+  const displayPool = isPromoterView
+    ? safeEvents
+    : activeEvents.length > 0
+    ? activeEvents
+    : approvedEvents;
 
   const filteredEvents = displayPool.filter((e) => {
     if (!e) return false;
@@ -153,10 +160,12 @@ export const HomeView: React.FC<HomeViewProps> = ({
       <section className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="font-heading text-xl sm:text-2xl font-bold text-white tracking-tight">
-            Événements à Venir
+            {isPromoterView ? 'Mes Événements Organisés' : 'Événements à Venir'}
           </h2>
           <span className="text-xs text-gray-400 font-medium">
-            {isLoading ? 'Chargement...' : `${upcomingEvents.length} événements`}
+            {isLoading
+              ? 'Chargement...'
+              : `${upcomingEvents.length} événement${upcomingEvents.length > 1 ? 's' : ''}`}
           </span>
         </div>
 
@@ -166,16 +175,40 @@ export const HomeView: React.FC<HomeViewProps> = ({
               <EventCardSkeleton key={`upcoming-skel-${idx}`} variant="list" />
             ))}
           </div>
-        ) : approvedEvents.length === 0 ? (
-          <div className="glass-panel p-12 rounded-3xl text-center space-y-3 border border-white/10">
-            <div className="w-12 h-12 rounded-2xl bg-[#E9C349]/10 text-[#E9C349] flex items-center justify-center mx-auto border border-[#E9C349]/20">
-              <Calendar className="w-6 h-6" />
+        ) : displayPool.length === 0 ? (
+          isPromoterView ? (
+            <div className="glass-panel p-10 sm:p-14 rounded-3xl text-center space-y-4 border border-white/10">
+              <div className="w-14 h-14 rounded-2xl bg-[#8A2BE2]/20 text-[#DCB8FF] flex items-center justify-center mx-auto border border-[#8A2BE2]/30">
+                <Calendar className="w-7 h-7 text-[#E9C349]" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="font-heading font-bold text-lg text-white">
+                  Vous n'avez pas encore d'événement organisé
+                </h3>
+                <p className="text-gray-400 text-xs max-w-md mx-auto">
+                  Créez votre premier événement pour débloquer la vente de vos billets en ligne, votre réseau de points de vente physiques et vos scanners d'accès.
+                </p>
+              </div>
+              <div className="pt-2">
+                <button
+                  onClick={onNavigateToCreate}
+                  className="btn-gold-glow py-3 px-6 rounded-2xl font-heading font-extrabold text-xs tracking-wider uppercase cursor-pointer"
+                >
+                  Créer mon premier événement
+                </button>
+              </div>
             </div>
-            <h3 className="font-heading font-bold text-base text-white">Aucun événement disponible pour le moment</h3>
-            <p className="text-gray-400 text-xs max-w-md mx-auto">
-              Revenez bientôt pour découvrir les prochains événements officiels à Thiès, Mbour, Saly et Dakar.
-            </p>
-          </div>
+          ) : (
+            <div className="glass-panel p-12 rounded-3xl text-center space-y-3 border border-white/10">
+              <div className="w-12 h-12 rounded-2xl bg-[#E9C349]/10 text-[#E9C349] flex items-center justify-center mx-auto border border-[#E9C349]/20">
+                <Calendar className="w-6 h-6" />
+              </div>
+              <h3 className="font-heading font-bold text-base text-white">Aucun événement disponible pour le moment</h3>
+              <p className="text-gray-400 text-xs max-w-md mx-auto">
+                Revenez bientôt pour découvrir les prochains événements officiels à Thiès, Mbour, Saly et Dakar.
+              </p>
+            </div>
+          )
         ) : upcomingEvents.length === 0 ? (
           <div className="glass-panel p-10 rounded-2xl text-center space-y-3">
             <p className="text-gray-400 text-sm">
@@ -205,27 +238,29 @@ export const HomeView: React.FC<HomeViewProps> = ({
         )}
       </section>
 
-      {/* VIP Promotion Banner */}
-      <div className="glass-panel-gold rounded-3xl p-6 relative overflow-hidden flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="space-y-1 text-center sm:text-left z-10">
-          <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#E9C349]">
-            Club Privé Thiesdn
-          </span>
-          <h3 className="font-heading text-lg sm:text-xl font-bold text-white">
-            Devenez Promoteur Officiel
-          </h3>
-          <p className="text-xs text-gray-300 max-w-md">
-            Publiez vos soirées, vendez vos billets en ligne en FCFA avec Wave/Orange Money et gérez vos accès VIP.
-          </p>
-        </div>
+      {/* VIP Promotion Banner (Masquée pour les promoteurs déjà certifiés) */}
+      {!isPromoterView && (
+        <div className="glass-panel-gold rounded-3xl p-6 relative overflow-hidden flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="space-y-1 text-center sm:text-left z-10">
+            <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#E9C349]">
+              Club Privé Thiesdn
+            </span>
+            <h3 className="font-heading text-lg sm:text-xl font-bold text-white">
+              Devenez Promoteur Officiel
+            </h3>
+            <p className="text-xs text-gray-300 max-w-md">
+              Publiez vos soirées, vendez vos billets en ligne en FCFA avec Wave/Orange Money et gérez vos accès VIP.
+            </p>
+          </div>
 
-        <button
-          onClick={onNavigateToCreate}
-          className="btn-gold-glow py-3 px-6 rounded-2xl font-heading font-extrabold text-xs tracking-wider uppercase flex-shrink-0 z-10"
-        >
-          Créer un Événement
-        </button>
-      </div>
+          <button
+            onClick={onNavigateToCreate}
+            className="btn-gold-glow py-3 px-6 rounded-2xl font-heading font-extrabold text-xs tracking-wider uppercase flex-shrink-0 z-10"
+          >
+            Créer un Événement
+          </button>
+        </div>
+      )}
     </div>
   );
 };

@@ -128,6 +128,20 @@ export default function App() {
       return status === 'approved' && !isArchived;
     });
   }, [safeEvents]);
+
+  // Événements organisés exclusivement par le promoteur / artiste connecté
+  const myEvents = useMemo(() => {
+    if (!user?.id && !user?.name) return [];
+    return safeEvents.filter((e) => {
+      if (e.isDeleted) return false;
+      const matchId = user.id && e.promoter?.id && String(e.promoter.id).toLowerCase() === String(user.id).toLowerCase();
+      const matchName = user.name && e.promoter?.name && e.promoter.name.trim().toLowerCase() === user.name.trim().toLowerCase();
+      const matchEmail = user.email && e.promoter?.name && e.promoter.name.trim().toLowerCase() === user.email.trim().toLowerCase();
+      return Boolean(matchId || matchName || matchEmail);
+    });
+  }, [safeEvents, user?.id, user?.name, user?.email]);
+
+  const myEventsCount = myEvents.length;
   const [isLoadingEvents, setIsLoadingEvents] = useState<boolean>(true);
   const [eventsError, setEventsError] = useState<string | null>(null);
   const [paymentBannerMessage, setPaymentBannerMessage] = useState<string | null>(null);
@@ -383,7 +397,11 @@ export default function App() {
       return true; // Accès complet
     }
     if (role === 'promoter') {
-      return ['home', 'explore', 'create', 'finances', 'points_de_vente', 'artist', 'profile', 'accreditations', 'stations', 'cgv'].includes(tab);
+      const allowed = ['home', 'explore', 'create', 'profile', 'cgv'];
+      if (myEventsCount > 0) {
+        allowed.push('finances', 'points_de_vente', 'artist', 'accreditations', 'stations');
+      }
+      return allowed.includes(tab);
     }
     if (role === 'artist') {
       return ['home', 'explore', 'create', 'artist', 'profile', 'accreditations', 'cgv'].includes(tab);
@@ -845,7 +863,8 @@ export default function App() {
               onOpenCreateModal={() => handleTabChange('create')}
               pendingModerationCount={pendingModerationCount}
               pendingOrdersCount={pendingOrdersCount}
-              totalEventsCount={events.filter((e) => e.status === 'approved').length}
+              totalEventsCount={effectiveRole === 'promoter' ? myEventsCount : events.filter((e) => e.status === 'approved').length}
+              myEventsCount={myEventsCount}
               onToggleAdminPreview={currentRole === 'admin' ? () => setIsAdminPreview(!isAdminPreview) : undefined}
               isAdminPreview={isAdminPreview}
             />
@@ -1058,8 +1077,9 @@ export default function App() {
               {/* VUE ACCUEIL CLIENT / PROMOTEUR (Strictement pour les non-admins ou en mode aperçu) */}
               {activeTab === 'home' && effectiveRole !== 'admin' && (
                 <HomeView
-                  events={events}
+                  events={effectiveRole === 'promoter' ? myEvents : events}
                   isLoading={isLoadingEvents}
+                  isPromoterView={effectiveRole === 'promoter'}
                   onSelectEvent={(evt) => setSelectedEventForDetail(evt)}
                   onNavigateToExplore={() => handleTabChange('explore')}
                   onNavigateToCreate={() => handleTabChange('create')}

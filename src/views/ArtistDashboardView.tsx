@@ -63,14 +63,14 @@ export const ArtistDashboardView: React.FC<ArtistDashboardViewProps> = ({
   // Déterminer la fiche co-producteur active pour cet utilisateur
   const activeCoproducer = useMemo(() => {
     if (initialCoproducer) return initialCoproducer;
-    // Recherche par userId ou téléphone ou nom ou premier artiste disponible
+    // Recherche par userId ou téléphone ou nom exact
     const byUser = coproducers.find(
-      (c) => c.userId === user.id || c.phone.replace(/[^0-9]/g, '') === user.phone.replace(/[^0-9]/g, '')
+      (c) =>
+        (user.id && c.userId === user.id) ||
+        (user.phone && c.phone && c.phone.replace(/[^0-9]/g, '') === user.phone.replace(/[^0-9]/g, '')) ||
+        (user.name && c.name && c.name.trim().toLowerCase() === user.name.trim().toLowerCase())
     );
-    if (byUser) return byUser;
-
-    const firstArtist = coproducers.find((c) => c.roleType === 'artiste' || c.roleType === 'staff_artiste');
-    return firstArtist || coproducers[0] || null;
+    return byUser || null;
   }, [coproducers, initialCoproducer, user]);
 
   // Événement lié
@@ -253,10 +253,7 @@ export const ArtistDashboardView: React.FC<ArtistDashboardViewProps> = ({
             </span>
           </div>
 
-          <h1 className="font-heading text-2xl sm:text-3xl font-extrabold text-white tracking-tight mt-2 flex items-center gap-2">
-            <span>Cockpit Artiste : {activeCoproducer?.name || user.name}</span>
-          </h1>
-          <p className="text-sm text-gray-400 mt-1 max-w-2xl">
+          <p className="text-sm text-gray-400 mt-2 max-w-2xl">
             Suivez en temps réel et en toute transparence les ventes de billets, les recettes générées par votre nom, le taux de remplissage de la salle et gérez vos invités.
           </p>
         </div>

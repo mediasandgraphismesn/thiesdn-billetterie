@@ -30,6 +30,7 @@ interface SidebarProps {
   pendingModerationCount: number;
   pendingOrdersCount?: number;
   totalEventsCount: number;
+  myEventsCount?: number;
   onToggleAdminPreview?: () => void;
   isAdminPreview?: boolean;
 }
@@ -42,6 +43,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   pendingModerationCount,
   pendingOrdersCount = 0,
   totalEventsCount,
+  myEventsCount,
   onToggleAdminPreview,
   isAdminPreview = false,
 }) => {
@@ -81,17 +83,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
 
     if (user.role === 'promoter') {
-      return [
-        { id: 'home', label: 'Mes Événements', icon: LayoutDashboard, badge: totalEventsCount > 0 ? `${totalEventsCount}` : undefined },
+      const promoterCount = myEventsCount ?? 0;
+      const hasOrganizedEvents = promoterCount > 0;
+      const items = [
+        {
+          id: 'home',
+          label: 'Mes Événements',
+          icon: LayoutDashboard,
+          badge: hasOrganizedEvents ? `${promoterCount}` : undefined,
+        },
         { id: 'explore', label: 'Explorer la Carte', icon: Compass },
         { id: 'create', label: 'Créer un Événement', icon: PlusCircle },
-        { id: 'points_de_vente', label: 'Points de Vente', icon: Store, badge: 'Physique', badgeStyle: 'bg-[#E9C349]/20 text-[#E9C349]' },
-        { id: 'finances', label: 'Cockpit & Réseau Vente', icon: BarChart3, badge: 'Direct', badgeStyle: 'bg-[#E9C349]/20 text-[#E9C349]' },
-        { id: 'accreditations', label: 'Accréditations Staff/Presse', icon: ShieldCheck, badge: 'Badges', badgeStyle: 'bg-[#8A2BE2]/20 text-[#DCB8FF]' },
-        { id: 'stations', label: 'Postes de Contrôle (Scanners)', icon: Smartphone, badge: 'Multi-Entrées', badgeStyle: 'bg-emerald-500/20 text-emerald-400' },
-        { id: 'artist', label: 'Vue Artiste & Co-Prod', icon: Award },
-        { id: 'profile', label: 'Mon Profil Organisateur', icon: Settings },
       ];
+
+      // Options opérationnelles visibles UNIQUEMENT si le promoteur a organisé au moins 1 événement
+      if (hasOrganizedEvents) {
+        items.push(
+          { id: 'points_de_vente', label: 'Points de Vente', icon: Store, badge: 'Physique', badgeStyle: 'bg-[#E9C349]/20 text-[#E9C349]' },
+          { id: 'finances', label: 'Cockpit & Réseau Vente', icon: BarChart3, badge: 'Direct', badgeStyle: 'bg-[#E9C349]/20 text-[#E9C349]' },
+          { id: 'accreditations', label: 'Accréditations Staff/Presse', icon: ShieldCheck, badge: 'Badges', badgeStyle: 'bg-[#8A2BE2]/20 text-[#DCB8FF]' },
+          { id: 'stations', label: 'Postes de Contrôle (Scanners)', icon: Smartphone, badge: 'Multi-Entrées', badgeStyle: 'bg-emerald-500/20 text-emerald-400' },
+          { id: 'artist', label: 'Vue Artiste & Co-Prod', icon: Award }
+        );
+      }
+
+      items.push({ id: 'profile', label: 'Mon Profil Organisateur', icon: Settings });
+      return items;
     }
 
     if (user.role === 'artist') {

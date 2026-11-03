@@ -166,73 +166,7 @@ export const INITIAL_SALES_AGENTS: SalesAgent[] = [
 export const STORAGE_COPRODUCERS_KEY = 'thiesdn_coproducers_v1';
 export const STORAGE_GUEST_TICKETS_KEY = 'thiesdn_guest_tickets_v1';
 
-export const INITIAL_COPRODUCERS: EventCoproducer[] = [
-  {
-    id: 'coprod-waly-1',
-    eventId: 'evt-soiree-prestige',
-    eventTitle: 'Nuit du Baobab Prestige',
-    promoterId: 'prom-thiesdn',
-    userId: 'usr-artist-waly',
-    name: 'Waly Ballago Seck',
-    phone: '+221 77 555 12 34',
-    email: 'waly.seck@thiesdn.sn',
-    roleType: 'artiste',
-    revenueShare: 50, // 50% pour l'artiste vedette
-    guestTicketsAllocated: 25,
-    guestTicketsUsed: 14,
-    notes: 'Contrat Co-Prod Exclusif Thiès 2026. Accord de transparence signé.',
-    decompteValidated: false,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'coprod-manager-2',
-    eventId: 'evt-soiree-prestige',
-    eventTitle: 'Nuit du Baobab Prestige',
-    promoterId: 'prom-thiesdn',
-    name: 'Djiby Ndiaye (Manager Staff)',
-    phone: '+221 78 222 33 44',
-    email: 'management@walyseck.sn',
-    roleType: 'staff_artiste',
-    revenueShare: 0,
-    guestTicketsAllocated: 15,
-    guestTicketsUsed: 8,
-    notes: 'Coordination régie, accueil VIP & loges.',
-    decompteValidated: false,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'coprod-latdior-3',
-    eventId: 'evt-soiree-prestige',
-    eventTitle: 'Nuit du Baobab Prestige',
-    promoterId: 'prom-thiesdn',
-    name: 'Lat Dior Productions (Producteur Principal)',
-    phone: '+221 77 123 45 67',
-    email: 'latdior.prod@gmail.com',
-    roleType: 'producteur_principal',
-    revenueShare: 40, // 40% pour la production
-    guestTicketsAllocated: 20,
-    guestTicketsUsed: 10,
-    notes: 'Financement salle, sono, sécurité et logistique.',
-    decompteValidated: false,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'coprod-lieu-4',
-    eventId: 'evt-soiree-prestige',
-    eventTitle: 'Nuit du Baobab Prestige',
-    promoterId: 'prom-thiesdn',
-    name: 'Direction Baobab Lounge Thiès',
-    phone: '+221 76 888 99 00',
-    email: 'baobab.thies@gmail.com',
-    roleType: 'gerant_lieu',
-    revenueShare: 10, // 10% pour le lieu
-    guestTicketsAllocated: 10,
-    guestTicketsUsed: 5,
-    notes: 'Mise à disposition salle & bar.',
-    decompteValidated: false,
-    createdAt: new Date().toISOString(),
-  },
-];
+export const INITIAL_COPRODUCERS: EventCoproducer[] = [];
 
 export const INITIAL_GUEST_TICKETS: GuestTicket[] = [
   {
@@ -2281,8 +2215,17 @@ export const getStoredCoproducers = (): EventCoproducer[] => {
   }
   try {
     const parsed = JSON.parse(raw);
-    inMemoryCoproducers = parsed;
-    return parsed;
+    const cleaned = Array.isArray(parsed)
+      ? parsed.filter(
+          (c) =>
+            c &&
+            c.id !== 'coprod-waly-1' &&
+            c.name !== 'Waly Ballago Seck' &&
+            c.eventId !== 'evt-soiree-prestige'
+        )
+      : [];
+    inMemoryCoproducers = cleaned;
+    return cleaned;
   } catch {
     return inMemoryCoproducers;
   }
