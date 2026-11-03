@@ -4978,14 +4978,22 @@ CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS BOOLEAN
 LANGUAGE sql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = ''
 STABLE
 AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM public.profiles
-    WHERE id = auth.uid() AND role = 'admin'
+  SELECT coalesce(
+    (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+    OR (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
+    OR EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = (SELECT auth.uid())
+      AND role = 'admin'
+    ),
+    false
   );
 $$;
+
+GRANT EXECUTE ON FUNCTION public.is_admin() TO authenticated, service_role;
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.platform_settings ENABLE ROW LEVEL SECURITY;
@@ -4994,14 +5002,28 @@ ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tickets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY;
 
--- Profiles : lecture privée restreinte au propriétaire, admins et co-producteurs (anti-fuite de données)
+-- Nettoyage des anciennes politiques RLS sur profiles
 DROP POLICY IF EXISTS "Profiles select policy" ON public.profiles;
-CREATE POLICY "Profiles select policy" ON public.profiles FOR SELECT 
-USING (
-  auth.uid()::text = id::text 
-  OR public.is_admin() 
-  OR EXISTS (SELECT 1 FROM public.event_coproducers WHERE user_id::text = auth.uid()::text AND promoter_id::text = profiles.id::text)
-);
+DROP POLICY IF EXISTS "Profiles update policy" ON public.profiles;
+DROP POLICY IF EXISTS "Enable update for admins" ON public.profiles;
+DROP POLICY IF EXISTS "Admins can update all profiles" ON public.profiles;
+DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Users can view own profile" ON public.profiles;
+
+-- 1. SELECT : Chaque utilisateur voit son propre profil sans récursion
+CREATE POLICY "Users can view own profile" ON public.profiles
+FOR SELECT TO authenticated
+USING (id = (SELECT auth.uid()));
+
+-- 2. SELECT : Les admins peuvent voir tous les profils
+CREATE POLICY "Admins can view all profiles" ON public.profiles
+FOR SELECT TO authenticated
+USING ((SELECT public.is_admin()));
+
+-- 3. SELECT : Co-producteurs
+CREATE POLICY "Coproducers can view partner profile" ON public.profiles
+FOR SELECT TO authenticated
+USING (EXISTS (SELECT 1 FROM public.event_coproducers WHERE user_id::text = (SELECT auth.uid())::text AND promoter_id::text = profiles.id::text));
 
 -- Vue publique sanitisée pour les visiteurs non connectés (sans email ni téléphone)
 DROP VIEW IF EXISTS public.public_profiles;
@@ -5009,8 +5031,17 @@ CREATE VIEW public.public_profiles WITH (security_invoker = false) AS
   SELECT id, name, username, avatar, role FROM public.profiles;
 GRANT SELECT ON public.public_profiles TO anon, authenticated, service_role;
 
-DROP POLICY IF EXISTS "Profiles update policy" ON public.profiles;
-CREATE POLICY "Profiles update policy" ON public.profiles FOR UPDATE USING (auth.uid() = id OR public.is_admin());
+-- 4. UPDATE : Chaque utilisateur met à jour son propre profil
+CREATE POLICY "Users can update own profile" ON public.profiles
+FOR UPDATE TO authenticated
+USING (id = (SELECT auth.uid()))
+WITH CHECK (id = (SELECT auth.uid()));
+
+-- 5. UPDATE : Les admins peuvent modifier tous les profils (rôle, VIP, etc.)
+CREATE POLICY "Admins can update all profiles" ON public.profiles
+FOR UPDATE TO authenticated
+USING ((SELECT public.is_admin()))
+WITH CHECK ((SELECT public.is_admin()));
 
 -- Settings : lecture par tous, modification par les admins
 DROP POLICY IF EXISTS "Settings read public" ON public.platform_settings;
