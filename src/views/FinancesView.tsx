@@ -184,47 +184,47 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
   const isConnected = isSupabaseConfigured();
 
   useEffect(() => {
-    setTickets(getStoredTickets());
+    const targetEventId = selectedEventId === 'all' ? (activeEvent?.id || undefined) : selectedEventId;
+
     setAgents(getStoredSalesAgents());
     setCoproducers(getStoredCoproducers());
+
     fetchSalesAgentsFromSupabase().then((res) => {
       if (res.agents && res.agents.length > 0) {
         setAgents(res.agents);
       }
     });
-    fetchTicketAllocationsFromSupabase(selectedEventId === 'all' ? undefined : selectedEventId).then((res) => {
+
+    fetchTicketAllocationsFromSupabase(targetEventId).then((res) => {
       if (res.allocations) setAllocations(res.allocations);
     });
+
     fetchOrdersFromSupabase().then((res) => {
       if (res.orders && res.orders.length > 0) {
         setOrders(res.orders);
       }
     });
-    fetchAllSoldTicketsFromSupabase().then((res) => {
-      if (res.tickets && res.tickets.length > 0) {
+
+    // Chargement filtré strictement par event_id et is_physical = true
+    fetchAllSoldTicketsFromSupabase({ eventId: targetEventId, isPhysical: true }).then((res) => {
+      if (res.tickets) {
         setTickets(res.tickets);
       }
     });
-  }, []);
-
-  // Rafraîchissement automatique des allocations lors du changement d'événement
-  useEffect(() => {
-    fetchTicketAllocationsFromSupabase(selectedEventId === 'all' ? undefined : selectedEventId).then((res) => {
-      if (res.allocations) setAllocations(res.allocations);
-    });
-  }, [selectedEventId]);
+  }, [selectedEventId, activeEvent?.id]);
 
   const handleRefresh = async () => {
     setTransactions(getStoredTransactions());
-    setTickets(getStoredTickets());
     setAgents(getStoredSalesAgents());
     setCoproducers(getStoredCoproducers());
+
+    const targetEventId = selectedEventId === 'all' ? (activeEvent?.id || undefined) : selectedEventId;
 
     const [ordersRes, agentsRes, ticketsRes, allocRes] = await Promise.all([
       fetchOrdersFromSupabase(),
       fetchSalesAgentsFromSupabase(),
-      fetchAllSoldTicketsFromSupabase(),
-      fetchTicketAllocationsFromSupabase(selectedEventId === 'all' ? undefined : selectedEventId),
+      fetchAllSoldTicketsFromSupabase({ eventId: targetEventId, isPhysical: true }),
+      fetchTicketAllocationsFromSupabase(targetEventId),
     ]);
 
     if (ordersRes.orders && ordersRes.orders.length > 0) {
@@ -235,7 +235,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
     if (agentsRes.agents && agentsRes.agents.length > 0) {
       setAgents(agentsRes.agents);
     }
-    if (ticketsRes.tickets && ticketsRes.tickets.length > 0) {
+    if (ticketsRes.tickets) {
       setTickets(ticketsRes.tickets);
     }
     if (allocRes.allocations) {
@@ -454,11 +454,16 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
     return agents.filter((a) => !a.eventId || a.eventId === activeEvent.id);
   }, [agents, activeEvent]);
 
-  // Billets physiques de l'événement actif
+  // ID de l'événement actif à cibler strictement
+  const currentEventId = selectedEventId !== 'all' ? selectedEventId : activeEvent?.id;
+
+  // Billets physiques de l'événement actif UNIQUEMENT
   const eventPhysicalTickets = useMemo(() => {
-    if (!activeEvent) return tickets.filter((t) => t.isPhysical);
-    return tickets.filter((t) => t.isPhysical && t.eventId === activeEvent.id);
-  }, [tickets, activeEvent]);
+    return tickets.filter((t) => {
+      const matchEvt = !currentEventId || t.eventId === currentEventId;
+      return t.isPhysical && matchEvt;
+    });
+  }, [tickets, currentEventId]);
 
   // Billets imprimés en stock promoteur non encore alloués
   const unassignedPhysicalTickets = useMemo(() => {
@@ -485,34 +490,26 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
     );
   }, [eventPhysicalTickets]);
 
-  // Total consolidé des billets distribués au réseau (agrégation billets physiques alloués + agents)
+  // Total consolidé des billets distribués au réseau (billets physiques alloués + déclarés vendus)
   const totalPhysicalDistributed = useMemo(() => {
     const fromTickets = allocatedPhysicalTickets.length + soldPhysicalTickets.length;
     const fromAgents = networkAgents.reduce((sum, a) => sum + (a.allocatedCount || 0), 0);
-    return Math.max(fromTickets, fromAgents);
+    if (fromTickets > 0) return fromTickets;
+    return fromAgents;
   }, [allocatedPhysicalTickets, soldPhysicalTickets, networkAgents]);
 
   // Total consolidé des billets vendus et déclarés par les points de vente
   const totalPhysicalSold = useMemo(() => {
     const fromTickets = soldPhysicalTickets.length;
     const fromAgents = networkAgents.reduce((sum, a) => sum + (a.soldCount || 0), 0);
-    return Math.max(fromTickets, fromAgents);
+    if (fromTickets > 0) return fromTickets;
+    return fromAgents;
   }, [soldPhysicalTickets, networkAgents]);
 
-  // Billets physiques non vendus (inactifs) pour l'événement sélectionné
+  // Billets physiques non vendus (réserve promoteur + en circulation non vendus)
   const totalUnsoldTickets = useMemo(() => {
-    const countFromTickets = tickets.filter((t) => {
-      const matchEvt = !activeEvent || t.eventId === activeEvent.id;
-      return (
-        matchEvt &&
-        t.isPhysical &&
-        (t.status === 'printed_not_sold' ||
-          t.status === 'physical_allocated' ||
-          t.status === 'physical_printed')
-      );
-    }).length;
-    return Math.max(countFromTickets, totalPhysicalDistributed - totalPhysicalSold);
-  }, [tickets, activeEvent, totalPhysicalDistributed, totalPhysicalSold]);
+    return unassignedPhysicalTickets.length + Math.max(0, totalPhysicalDistributed - totalPhysicalSold);
+  }, [unassignedPhysicalTickets, totalPhysicalDistributed, totalPhysicalSold]);
 
   // Statistiques détaillées des Billets Physiques Non Vendus par Collaborateur
   const physicalTicketsByAgent = useMemo(() => {
@@ -695,13 +692,14 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
       setAgents(getStoredSalesAgents());
 
       // Synchronisation asynchrone instantanée depuis Supabase
+      const targetEventId = selectedEventId === 'all' ? (activeEvent?.id || undefined) : selectedEventId;
       fetchSalesAgentsFromSupabase().then((r) => {
         if (r.agents && r.agents.length > 0) setAgents(r.agents);
       });
-      fetchAllSoldTicketsFromSupabase().then((r) => {
+      fetchAllSoldTicketsFromSupabase({ eventId: targetEventId, isPhysical: true }).then((r) => {
         if (r.tickets && r.tickets.length > 0) setTickets(r.tickets);
       });
-      fetchTicketAllocationsFromSupabase(selectedEventId === 'all' ? undefined : selectedEventId).then((r) => {
+      fetchTicketAllocationsFromSupabase(targetEventId).then((r) => {
         if (r.allocations) setAllocations(r.allocations);
       });
 
@@ -2183,7 +2181,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                   Billets Imprimés
                 </p>
                 <h4 className="font-heading text-2xl font-black text-white">
-                  {Math.max(eventPhysicalTickets.length, unassignedPhysicalTickets.length + totalPhysicalDistributed)}{' '}
+                  {unassignedPhysicalTickets.length + totalPhysicalDistributed}{' '}
                   <span className="text-xs font-bold text-gray-400">billets</span>
                 </h4>
                 <p className="text-[10px] text-gray-400">Total lots physiques générés</p>

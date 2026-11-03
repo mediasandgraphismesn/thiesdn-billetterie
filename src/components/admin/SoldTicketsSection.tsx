@@ -17,25 +17,41 @@ import {
   MessageCircle,
   FileText,
 } from 'lucide-react';
-import { UserTicket } from '../../types';
+import { UserTicket, EventItem } from '../../types';
 
 interface SoldTicketsSectionProps {
   tickets: UserTicket[];
+  events?: EventItem[];
   onOpenTicketModal: (ticket: UserTicket) => void;
   isLoading?: boolean;
 }
 
 export const SoldTicketsSection: React.FC<SoldTicketsSectionProps> = ({
   tickets,
+  events = [],
   onOpenTicketModal,
   isLoading = false,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedEventId, setSelectedEventId] = useState<string>('all');
+  const [channelFilter, setChannelFilter] = useState<'all' | 'physical' | 'online'>('all');
   const [filterStatus, setFilterStatus] = useState<'all' | 'valid' | 'used'>('all');
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  // Filtrage des billets
-  const filteredTickets = tickets.filter((t) => {
+  // Base tickets filtrée par événement et canal (physique / web)
+  const baseTickets = tickets.filter((t) => {
+    const matchEvent = selectedEventId === 'all' || t.eventId === selectedEventId;
+    const matchChannel =
+      channelFilter === 'all'
+        ? true
+        : channelFilter === 'physical'
+        ? t.isPhysical === true
+        : t.isPhysical === false || !t.isPhysical;
+    return matchEvent && matchChannel;
+  });
+
+  // Filtrage des billets par recherche et statut
+  const filteredTickets = baseTickets.filter((t) => {
     const term = searchTerm.toLowerCase();
     const matchSearch =
       (t.holderName && t.holderName.toLowerCase().includes(term)) ||
@@ -48,8 +64,8 @@ export const SoldTicketsSection: React.FC<SoldTicketsSectionProps> = ({
       filterStatus === 'all'
         ? true
         : filterStatus === 'valid'
-        ? t.status === 'valid'
-        : t.status === 'used';
+        ? t.status === 'valid' || t.status === 'sold_valid'
+        : t.status === 'used' || t.status === 'scanned';
 
     return matchSearch && matchStatus;
   });
@@ -110,7 +126,7 @@ export const SoldTicketsSection: React.FC<SoldTicketsSectionProps> = ({
               <h2 className="text-base sm:text-lg font-heading font-bold text-white flex items-center gap-2">
                 <span>Billets Vendus & Émis</span>
                 <span className="px-2 py-0.5 rounded-full bg-[#8A2BE2]/20 border border-[#8A2BE2]/40 text-[#DCB8FF] text-xs font-semibold">
-                  {filteredTickets.length} / {tickets.length}
+                  {filteredTickets.length} / {baseTickets.length}
                 </span>
               </h2>
               <p className="text-xs text-gray-400 mt-0.5">
@@ -120,8 +136,55 @@ export const SoldTicketsSection: React.FC<SoldTicketsSectionProps> = ({
           </div>
         </div>
 
-        {/* Filtres de recherche */}
+        {/* Filtres de recherche, événement et canal */}
         <div className="flex flex-wrap items-center gap-2">
+          {events && events.length > 0 && (
+            <select
+              value={selectedEventId}
+              onChange={(e) => setSelectedEventId(e.target.value)}
+              className="bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8A2BE2] transition-colors"
+            >
+              <option value="all">Tous les événements</option>
+              {events.map((evt) => (
+                <option key={evt.id} value={evt.id}>
+                  {evt.title}
+                </option>
+              ))}
+            </select>
+          )}
+
+          <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/10 text-xs">
+            <button
+              onClick={() => setChannelFilter('all')}
+              className={`px-2.5 py-1.5 rounded-lg transition-all ${
+                channelFilter === 'all'
+                  ? 'bg-white/20 text-white font-bold'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Tous
+            </button>
+            <button
+              onClick={() => setChannelFilter('physical')}
+              className={`px-2.5 py-1.5 rounded-lg transition-all ${
+                channelFilter === 'physical'
+                  ? 'bg-[#E9C349] text-[#241A00] font-bold'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Physiques
+            </button>
+            <button
+              onClick={() => setChannelFilter('online')}
+              className={`px-2.5 py-1.5 rounded-lg transition-all ${
+                channelFilter === 'online'
+                  ? 'bg-[#8A2BE2] text-white font-bold'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              En Ligne
+            </button>
+          </div>
           <div className="relative">
             <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input

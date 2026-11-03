@@ -1847,9 +1847,10 @@ export const assignTicketsToAgent = async (
   const isValidUuid = (id?: string) => Boolean(id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
 
   // 1. Filtrer les billets physiques imprimés et non encore assignés pour cet événement
+  const targetEventId = metadata?.event?.id || agent.eventId;
   const unassigned = allTickets.filter(
     (t) =>
-      t.eventId === agent.eventId &&
+      (t.eventId === targetEventId || t.eventId === agent.eventId) &&
       t.isPhysical &&
       (t.status === 'printed_not_sold' || t.status === 'physical_printed') &&
       !t.agentId
@@ -6284,21 +6285,46 @@ export const scanTicketWithSupabase = async (
 /**
  * Récupération de TOUS les billets de la table tickets pour l'administration
  */
-export const fetchAllSoldTicketsFromSupabase = async (): Promise<{ tickets: UserTicket[]; error: string | null }> => {
+export const fetchAllSoldTicketsFromSupabase = async (
+  options?: {
+    eventId?: string;
+    isPhysical?: boolean;
+    status?: string;
+  }
+): Promise<{ tickets: UserTicket[]; error: string | null }> => {
   const client = getSupabaseClient();
+  const eventId = options?.eventId && options.eventId !== 'all' ? options.eventId : undefined;
+  const isPhysical = options?.isPhysical;
+  const status = options?.status;
+
   if (!client) {
-    return { tickets: getStoredTickets(), error: null };
+    let fallback = getStoredTickets();
+    if (eventId) fallback = fallback.filter((t) => t.eventId === eventId);
+    if (isPhysical !== undefined) fallback = fallback.filter((t) => t.isPhysical === isPhysical);
+    if (status) fallback = fallback.filter((t) => t.status === status);
+    return { tickets: fallback, error: null };
   }
 
   try {
-    const { data, error } = await client
-      .from('tickets')
-      .select('*')
-      .order('created_at', { ascending: false });
+    let query = client.from('tickets').select('*');
+    if (eventId) {
+      query = query.eq('event_id', eventId);
+    }
+    if (isPhysical !== undefined) {
+      query = query.eq('is_physical', isPhysical);
+    }
+    if (status) {
+      query = query.eq('status', status);
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false });
 
     if (error) {
       console.warn('Erreur fetchAllSoldTicketsFromSupabase:', error.message);
-      return { tickets: getStoredTickets(), error: error.message };
+      let fallback = getStoredTickets();
+      if (eventId) fallback = fallback.filter((t) => t.eventId === eventId);
+      if (isPhysical !== undefined) fallback = fallback.filter((t) => t.isPhysical === isPhysical);
+      return { tickets: fallback, error: error.message };
     }
 
     const mapped: UserTicket[] = (data || []).map((t: any) => ({

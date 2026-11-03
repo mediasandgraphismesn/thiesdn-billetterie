@@ -474,6 +474,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {/* SECTION BILLETS VENDUS & ÉMIS AVEC QR CODES BRANDÉS */}
       <SoldTicketsSection
         tickets={soldTickets}
+        events={events}
         isLoading={isLoading}
         onOpenTicketModal={(tkt) => setSelectedTicketForPass(tkt)}
       />
