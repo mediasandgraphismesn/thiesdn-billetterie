@@ -13,6 +13,7 @@ import {
   Ticket,
   History,
   Radio,
+  Bell,
 } from 'lucide-react';
 import { UserProfile } from '../../types';
 
@@ -25,6 +26,7 @@ interface AdminSidebarProps {
   totalEventsCount?: number;
   onToggleAdminPreview?: () => void;
   isAdminPreview?: boolean;
+  onOpenNotificationsModal?: () => void;
 }
 
 export const AdminSidebar: React.FC<AdminSidebarProps> = ({
@@ -36,6 +38,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
   totalEventsCount,
   onToggleAdminPreview,
   isAdminPreview = false,
+  onOpenNotificationsModal,
 }) => {
   const navItems = [
     {
@@ -154,6 +157,24 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
           </span>
         </div>
       </div>
+
+      {/* Alertes Paiements Push & Sonores */}
+      {onOpenNotificationsModal && (
+        <button
+          onClick={onOpenNotificationsModal}
+          className="w-full mb-3 py-2.5 px-3.5 rounded-xl flex items-center justify-between font-heading font-bold text-xs tracking-wider uppercase transition-all bg-[#8A2BE2]/15 hover:bg-[#8A2BE2]/25 text-[#DCB8FF] border border-[#8A2BE2]/30 active:scale-95 cursor-pointer shadow-sm"
+        >
+          <div className="flex items-center gap-2">
+            <Bell className="w-4 h-4 text-[#E9C349]" />
+            <span>Alertes Paiements</span>
+          </div>
+          {pendingOrdersCount > 0 && (
+            <span className="bg-rose-500 text-white font-extrabold text-[10px] px-2 py-0.5 rounded-full shadow-sm animate-pulse">
+              {pendingOrdersCount}
+            </span>
+          )}
+        </button>
+      )}
 
       {/* Bouton d'action directe : Créer un Événement (visible uniquement pour admin et promoter) */}
       {(user.role === 'admin' || user.role === 'promoter') && (

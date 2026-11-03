@@ -21,6 +21,7 @@ import { TicketsWalletView } from './views/TicketsWalletView';
 import { FinancesView } from './views/FinancesView';
 import { AdminDashboard } from './views/AdminDashboard';
 import { AdminSidebar } from './components/admin/AdminSidebar';
+import { AdminNotificationCenter } from './components/admin/AdminNotificationCenter';
 import { UsersManagementView } from './views/UsersManagementView';
 import { PlatformSettingsView } from './views/PlatformSettingsView';
 import { SalesAgentDashboardView } from './views/SalesAgentDashboardView';
@@ -134,6 +135,7 @@ export default function App() {
   const [currentRole, setCurrentRole] = useState<'user' | 'promoter' | 'admin' | 'sales_agent' | 'artist'>(userRole);
   const [ambientShader, setAmbientShader] = useState<boolean>(true);
   const [pendingOrdersCount, setPendingOrdersCount] = useState<number>(0);
+  const [isNotificationsModalOpen, setIsNotificationsModalOpen] = useState<boolean>(false);
 
   const [selectedEventForDetail, setSelectedEventForDetail] = useState<EventItem | null>(null);
   const [selectedTicketForPass, setSelectedTicketForPass] = useState<UserTicket | null>(null);
@@ -267,6 +269,29 @@ export default function App() {
       return () => window.removeEventListener('popstate', handlePopState);
     }
   }, []);
+
+  // Gestion du lien profond ?tab=orders (Push / E-mail notification)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const urlParams = new URLSearchParams(window.location.search);
+    const tabParam = urlParams.get('tab');
+
+    if (tabParam === 'orders') {
+      if (!isAuthLoading) {
+        if (isAuthenticated && effectiveRole === 'admin') {
+          setActiveTab('orders');
+          // Retirer le paramètre de l'URL une fois connecté et routé
+          urlParams.delete('tab');
+          const newSearch = urlParams.toString() ? '?' + urlParams.toString() : '';
+          window.history.replaceState(null, '', window.location.pathname + newSearch + window.location.hash);
+        } else if (!isAuthenticated) {
+          // L'administrateur n'est pas encore connecté : on conserve ?tab=orders dans l'URL
+          // et on bascule sur l'écran d'authentification
+          setActiveTab('profile');
+        }
+      }
+    }
+  }, [isAuthenticated, isAuthLoading, effectiveRole]);
 
   // Contrôle d'accès strict par rôle aux onglets (Route Guards)
   const isTabAllowedForRole = (tab: string, role: 'user' | 'promoter' | 'admin' | 'sales_agent' | 'artist', isAuth: boolean): boolean => {
@@ -730,6 +755,7 @@ export default function App() {
               totalEventsCount={events.length}
               onToggleAdminPreview={currentRole === 'admin' ? () => setIsAdminPreview(!isAdminPreview) : undefined}
               isAdminPreview={isAdminPreview}
+              onOpenNotificationsModal={() => setIsNotificationsModalOpen(true)}
             />
           ) : (
             <Sidebar
@@ -744,6 +770,25 @@ export default function App() {
               isAdminPreview={isAdminPreview}
             />
           )
+        )}
+
+        {/* Coquille Admin : Centre de Notifications Realtime & Push (Monté UNE fois pour l'admin) */}
+        {isAuthenticated && effectiveRole === 'admin' && (
+          <AdminNotificationCenter
+            user={{ ...user, role: 'admin' }}
+            onNavigateToOrders={() => handleTabChange('orders')}
+            onNewSignaledOrder={() => {
+              fetchOrdersFromSupabase().then(({ orders }) => {
+                if (orders) {
+                  setPendingOrdersCount(
+                    orders.filter((o) => o.status === 'pending' || o.status === 'payment_signaled').length
+                  );
+                }
+              });
+            }}
+            isOpenModal={isNotificationsModalOpen}
+            onCloseModal={() => setIsNotificationsModalOpen(false)}
+          />
         )}
 
         {/* Dynamic Main View Canvas : Marges adaptées (Plein écran pour visiteurs, décalé pour clients connectés) */}

@@ -11,7 +11,7 @@ export default defineConfig(() => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['icon-192x192.png', 'icon-512x512.png', 'logo-tight.png', 'logo.png', 'poster-kmou-jango.jpg', 'poster-saly-jazz.jpg'],
+        includeAssets: ['icon-192x192.png', 'icon-512x512.png', 'logo-tight.png', 'logo.png', 'poster-kmou-jango.jpg', 'poster-saly-jazz.jpg', 'push-handler.js'],
         manifest: {
           name: 'Thièsdn',
           short_name: 'Thièsdn',
@@ -39,6 +39,7 @@ export default defineConfig(() => {
         },
         workbox: {
           skipWaiting: true,
+          importScripts: ['/push-handler.js'],
           clientsClaim: true,
           maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5 Mo pour autoriser le precache du bundle
           globPatterns: ['**/*.{js,css,html,png,svg,woff2,ico}'],
