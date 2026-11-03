@@ -567,14 +567,6 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                 )}
               </button>
             </form>
-
-            {/* Note de Sécurité Officielle (Zéro bouton démo) */}
-            <div className="pt-2 text-center">
-              <span className="text-[10px] text-gray-500 font-medium inline-flex items-center gap-1.5">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                Connexion sécurisée par chiffrement Supabase Auth (TLS 1.3)
-              </span>
-            </div>
           </div>
         )}
 
