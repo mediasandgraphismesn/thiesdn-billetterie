@@ -1,8 +1,9 @@
 import { jsPDF } from 'jspdf';
 import QRCode from 'qrcode';
 import JsBarcode from 'jsbarcode';
-import { EventItem, TicketTier, UserTicket } from '../types';
+import { EventItem, TicketTier, UserTicket, TicketSalesAgentJoin } from '../types';
 import { LOGO_TIGHT_DATA_URL } from '../assets/logoTightBase64';
+import { getSupabaseClient, TICKET_SELECT_WITH_AGENT, fetchTicketWithAgent } from './supabase';
 
 export interface GeneratePdfOptions {
   batchName?: string;
@@ -32,6 +33,67 @@ function drawCropMark(doc: jsPDF, x: number, y: number): void {
   doc.setLineWidth(0.2);
   doc.line(x - arm, y, x + arm, y);
   doc.line(x, y - arm, x, y + arm);
+}
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const PREFETCH_CHUNK_SIZE = 150; // limite la longueur d'URL PostgREST ; 300 billets = 2 requêtes
+
+/**
+ * Pré-chargement groupé (batch prefetch) du point de vente de tous les billets du lot.
+ * Une requête `in('id', ticketIds)` par tranche de 150 billets au lieu d'une requête par billet.
+ * Ne touche qu'aux billets dont la jointure sales_agents n'a pas encore été résolue.
+ */
+async function prefetchSalesAgents(tickets: UserTicket[]): Promise<UserTicket[]> {
+  const client = getSupabaseClient();
+  if (!client) return tickets;
+
+  const idsToFetch = tickets
+    .filter((t) => t.sales_agents === undefined && UUID_REGEX.test(t.id))
+    .map((t) => t.id);
+  if (idsToFetch.length === 0) return tickets;
+
+  const agentByTicketId = new Map<string, TicketSalesAgentJoin | null>();
+  try {
+    for (let i = 0; i < idsToFetch.length; i += PREFETCH_CHUNK_SIZE) {
+      const chunk = idsToFetch.slice(i, i + PREFETCH_CHUNK_SIZE);
+      const { data, error } = await client
+        .from('tickets')
+        .select(TICKET_SELECT_WITH_AGENT)
+        .in('id', chunk);
+      if (error) {
+        console.warn('Prefetch point de vente (sales_agents) indisponible:', error.message);
+        return tickets;
+      }
+      const rows = (data || []) as unknown as Array<{
+        id: string;
+        sales_agents: TicketSalesAgentJoin | null;
+      }>;
+      rows.forEach((row) => agentByTicketId.set(row.id, row.sales_agents ?? null));
+    }
+  } catch (err) {
+    console.warn('Prefetch point de vente échoué:', err);
+    return tickets;
+  }
+
+  return tickets.map((t) =>
+    agentByTicketId.has(t.id) ? { ...t, sales_agents: agentByTicketId.get(t.id) ?? null } : t
+  );
+}
+
+/**
+ * Résout le libellé « POINT DE VENTE » d'un billet :
+ * 1. Nom joint depuis sales_agents (ex : "DJ CRAZY")
+ * 2. Nom miroir agentName (agent_name / guichet saisi)
+ * 3. "Vente en Ligne" pour un billet web sans agent_id
+ * 4. "Point de Vente" en dernier recours (billet physique sans nom)
+ */
+export function resolvePointDeVenteLabel(ticket: UserTicket): string {
+  const fromJoin = sanitizeForPdf(ticket.sales_agents?.point_de_vente);
+  if (fromJoin) return fromJoin;
+  const fromMirror = sanitizeForPdf(ticket.agentName);
+  if (fromMirror) return fromMirror;
+  if (!ticket.agentId && !ticket.isPhysical) return 'Vente en Ligne';
+  return 'Point de Vente';
 }
 
 // DataURL d'un PNG 500x1 pixels pré-généré avec un dégradé linéaire horizontal ultra-lisse (296 octets décodés)
@@ -304,9 +366,12 @@ function generateBarcode1DDataUrl(text: string): string {
 export const generatePhysicalTicketsPdf = async (
   event: EventItem,
   tier: TicketTier,
-  tickets: UserTicket[],
+  inputTickets: UserTicket[],
   options: GeneratePdfOptions = {}
 ): Promise<Blob> => {
+  // 0. Pré-chargement groupé du point de vente (jointure sales_agents) pour tout le lot
+  const tickets = await prefetchSalesAgents(inputTickets);
+
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -390,10 +455,12 @@ export const generatePhysicalTicketsPdf = async (
     } catch (gradErr) {
       // Fallback overlay uni si problème d'insertion du PNG dégradé
       try {
+        type GStateArg = Parameters<jsPDF['setGState']>[0];
+        const GStateCtor = (doc as unknown as { GState: new (opts: { opacity: number }) => GStateArg }).GState;
         doc.setFillColor(10, 10, 12);
-        doc.setGState(new doc.GState({ opacity: 0.68 }));
+        doc.setGState(new GStateCtor({ opacity: 0.68 }));
         doc.rect(marginX, startY, ticketWidth, ticketHeight, 'F');
-        doc.setGState(new doc.GState({ opacity: 1.0 }));
+        doc.setGState(new GStateCtor({ opacity: 1.0 }));
       } catch (e) {
         doc.rect(marginX, startY, ticketWidth, ticketHeight, 'F');
       }
@@ -618,9 +685,24 @@ export const generatePhysicalTicketsPdf = async (
 
     doc.setTextColor(255, 255, 255);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(5.0);
-    const agentDisplay = sanitizeForPdf(ticket.agentName) || 'Point de Vente Agree';
-    doc.text(agentDisplay.slice(0, 18), rightStartX + 3.2, startY + 36.5);
+    const agentDisplay = resolvePointDeVenteLabel(ticket);
+
+    // Police adaptative selon la longueur du nom (aucune troncature fixe)
+    let agentFontSize = 5.0;
+    if (agentDisplay.length > 18) {
+      agentFontSize = 4.2;
+    } else if (agentDisplay.length > 13) {
+      agentFontSize = 4.6;
+    }
+    doc.setFontSize(agentFontSize);
+
+    // Garde-fou : le nom doit tenir dans le cartouche (28 mm - marges = 25 mm utiles)
+    const agentMaxWidth = 25;
+    while (doc.getTextWidth(agentDisplay) > agentMaxWidth && agentFontSize > 3.4) {
+      agentFontSize -= 0.2;
+      doc.setFontSize(agentFontSize);
+    }
+    doc.text(agentDisplay, rightStartX + 3.2, startY + 36.5, { maxWidth: agentMaxWidth });
 
     // Label billetterie dynamique
     doc.setTextColor(138, 43, 226);
@@ -656,4 +738,47 @@ export const generatePhysicalTicketsPdf = async (
   }
 
   return doc.output('blob');
+};
+
+/**
+ * Génère le PDF d'un billet unique depuis son identifiant Supabase (usage admin).
+ * Le point de vente est lu via la jointure sales_agents:agent_id.
+ */
+export const generatePhysicalTicketPdfById = async (
+  ticketId: string,
+  event: EventItem,
+  tier: TicketTier
+): Promise<Blob> => {
+  const { data: ticketData, error } = await fetchTicketWithAgent(ticketId);
+  if (error || !ticketData) {
+    throw new Error(error || 'Billet introuvable.');
+  }
+
+  const str = (value: unknown, fallback = ''): string =>
+    typeof value === 'string' && value ? value : fallback;
+  const agentId = str(ticketData.agent_id) || undefined;
+
+  const ticket: UserTicket = {
+    id: ticketData.id,
+    eventId: str(ticketData.event_id, event.id),
+    eventTitle: str(ticketData.event_title, event.title),
+    eventPoster: str(ticketData.event_poster, event.posterUrl),
+    eventDate: str(ticketData.event_date, event.date),
+    eventTime: str(ticketData.event_time, event.time),
+    eventVenue: str(ticketData.event_venue, event.venue),
+    tierName: str(ticketData.tier_name, tier.name),
+    price: Number(ticketData.price) || tier.price,
+    qrCode: str(ticketData.qr_code, ticketData.id),
+    holderName: str(ticketData.holder_name, 'Nom non renseigne'),
+    purchasedAt: str(ticketData.created_at, new Date().toISOString()),
+    status: str(ticketData.status, 'printed_not_sold') as UserTicket['status'],
+    isPhysical: Boolean(ticketData.is_physical),
+    agentId,
+    agentName: ticketData.sales_agents?.point_de_vente || str(ticketData.agent_name) || undefined,
+    sales_agents: ticketData.sales_agents ?? null,
+    batchNumber: str(ticketData.batch_number) || undefined,
+    serialNumber: Number(ticketData.serial_number) || undefined,
+  };
+
+  return generatePhysicalTicketsPdf(event, tier, [ticket]);
 };

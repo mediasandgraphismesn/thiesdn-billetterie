@@ -362,6 +362,18 @@ let inMemorySettings: PlatformPaymentSettings = {
 
 let cachedClient: SupabaseClient | null = null;
 
+/**
+ * Sélection des billets avec jointure LEFT sur le point de vente (sales_agents via tickets.agent_id).
+ * Billets web (agent_id NULL) : la ligne est quand même retournée avec sales_agents = null.
+ */
+export const TICKET_SELECT_WITH_AGENT: string = `
+  *,
+  sales_agents:agent_id (
+    point_de_vente,
+    gerant_name
+  )
+`;
+
 export const getSupabaseClient = (): SupabaseClient | null => {
   const currentUrl = normalizeSupabaseUrl(getEnvVar('VITE_SUPABASE_URL'));
   const currentKey = getEnvVar('VITE_SUPABASE_ANON_KEY').trim();
@@ -6315,18 +6327,27 @@ export const fetchAllSoldTicketsFromSupabase = async (
   }
 
   try {
-    let query = client.from('tickets').select('*');
-    if (eventId) {
-      query = query.eq('event_id', eventId);
-    }
-    if (isPhysical !== undefined) {
-      query = query.eq('is_physical', isPhysical);
-    }
-    if (status) {
-      query = query.eq('status', status);
-    }
+    const buildQuery = (selectClause: string) => {
+      let query = client.from('tickets').select(selectClause);
+      if (eventId) {
+        query = query.eq('event_id', eventId);
+      }
+      if (isPhysical !== undefined) {
+        query = query.eq('is_physical', isPhysical);
+      }
+      if (status) {
+        query = query.eq('status', status);
+      }
+      return query.order('created_at', { ascending: false });
+    };
 
-    const { data, error } = await query.order('created_at', { ascending: false });
+    // Jointure LEFT sur sales_agents (billets web : sales_agents = null).
+    // Si la relation est indisponible (ancien schéma), repli sur select('*').
+    let { data, error } = await buildQuery(TICKET_SELECT_WITH_AGENT);
+    if (error) {
+      console.warn('Jointure sales_agents indisponible, repli select(*):', error.message);
+      ({ data, error } = await buildQuery('*'));
+    }
 
     if (error) {
       console.warn('Erreur fetchAllSoldTicketsFromSupabase:', error.message);
@@ -6356,7 +6377,8 @@ export const fetchAllSoldTicketsFromSupabase = async (
       status: t.status || 'valid',
       isPhysical: Boolean(t.is_physical),
       agentId: t.agent_id || undefined,
-      agentName: t.agent_name || undefined,
+      agentName: t.sales_agents?.point_de_vente || t.agent_name || undefined,
+      sales_agents: t.sales_agents ?? null,
       batchNumber: t.batch_number || undefined,
       serialNumber: t.serial_number || undefined,
       userId: t.user_id,
@@ -6421,7 +6443,8 @@ export const fetchUserTicketsFromSupabase = async (
       status: t.status || 'valid',
       isPhysical: Boolean(t.is_physical),
       agentId: t.agent_id || undefined,
-      agentName: t.agent_name || undefined,
+      agentName: t.sales_agents?.point_de_vente || t.agent_name || undefined,
+      sales_agents: t.sales_agents ?? null,
       batchNumber: t.batch_number || undefined,
       serialNumber: t.serial_number || undefined,
       userId: t.user_id,
@@ -7338,7 +7361,16 @@ export const fetchTicketByPublicId = async (
     }
 
     // 3. Repli requête directe table tickets (si utilisateur connecté ou admin)
-    const { data, error } = await client.from('tickets').select('*').eq('id', cleanId).maybeSingle();
+    //    Jointure LEFT sales_agents ; repli select('*') si la relation est indisponible.
+    //    (cast '*' : même forme de ligne brute pour le typage, sales_agents en plus)
+    let { data, error } = await client
+      .from('tickets')
+      .select(TICKET_SELECT_WITH_AGENT as '*')
+      .eq('id', cleanId)
+      .maybeSingle();
+    if (error) {
+      ({ data, error } = await client.from('tickets').select('*').eq('id', cleanId).maybeSingle());
+    }
     if (data) {
       const t = data;
       const mappedTicket: UserTicket = {
@@ -7360,7 +7392,8 @@ export const fetchTicketByPublicId = async (
         status: t.status || 'valid',
         isPhysical: Boolean(t.is_physical),
         agentId: t.agent_id || undefined,
-        agentName: t.agent_name || undefined,
+        agentName: t.sales_agents?.point_de_vente || t.agent_name || undefined,
+        sales_agents: t.sales_agents ?? null,
         userId: t.user_id,
       };
       return { success: true, ticket: mappedTicket };
@@ -7372,4 +7405,32 @@ export const fetchTicketByPublicId = async (
     if (localMatch) return { success: true, ticket: localMatch };
     return { success: false, message: err?.message || 'Erreur lors du chargement du billet.' };
   }
+};
+
+/** Ligne brute de la table tickets enrichie du point de vente joint (sales_agents via agent_id). */
+export type TicketWithAgentRow = Record<string, unknown> & {
+  id: string;
+  agent_id: string | null;
+  agent_name?: string | null;
+  sales_agents: { point_de_vente?: string | null; gerant_name?: string | null } | null;
+};
+
+/**
+ * Récupère un billet avec le nom de son point de vente (jointure LEFT sales_agents:agent_id).
+ * Utilisé pour générer un PDF à l'unité depuis l'admin. Billet web : sales_agents = null.
+ */
+export const fetchTicketWithAgent = async (
+  ticketId: string
+): Promise<{ data: TicketWithAgentRow | null; error: string | null }> => {
+  const client = getSupabaseClient();
+  if (!client) return { data: null, error: 'Client Supabase non initialisé.' };
+
+  const { data, error } = await client
+    .from('tickets')
+    .select(TICKET_SELECT_WITH_AGENT)
+    .eq('id', ticketId)
+    .single();
+
+  if (error) return { data: null, error: error.message };
+  return { data: data as unknown as TicketWithAgentRow, error: null };
 };

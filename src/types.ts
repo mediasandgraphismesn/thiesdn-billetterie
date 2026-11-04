@@ -196,6 +196,12 @@ export interface TicketAllocation {
 
 export type TicketAssignmentStatus = 'unassigned' | 'pending' | 'accepted' | 'declined';
 
+/** Point de vente joint depuis la table sales_agents via tickets.agent_id */
+export interface TicketSalesAgentJoin {
+  point_de_vente?: string | null;
+  gerant_name?: string | null;
+}
+
 export interface UserTicket {
   id: string;
   eventId: string;
@@ -231,6 +237,8 @@ export interface UserTicket {
   agentName?: string;
   batchNumber?: string;
   serialNumber?: number;
+  // Jointure Supabase `sales_agents:agent_id (point_de_vente, gerant_name)` (null pour les billets web)
+  sales_agents?: TicketSalesAgentJoin | null;
   soldAt?: string;
   usedAt?: string;
   validatedBy?: string;
