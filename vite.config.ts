@@ -65,6 +65,9 @@ export default defineConfig(() => {
         },
       }),
     ],
+    build: {
+      sourcemap: true,
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

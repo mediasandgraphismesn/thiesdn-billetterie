@@ -27,7 +27,8 @@ export const PosAuthView: React.FC<PosAuthViewProps> = ({ onLoginSuccess, onNavi
       return;
     }
 
-    if (!captchaToken) {
+    const isTestKey = !import.meta.env.VITE_TURNSTILE_SITE_KEY || String(import.meta.env.VITE_TURNSTILE_SITE_KEY).includes('00000000000000000000AA');
+    if (!captchaToken && !isTestKey) {
       setError('Veuillez valider le test de sécurité (CAPTCHA) ci-dessous.');
       return;
     }

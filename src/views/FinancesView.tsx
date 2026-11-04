@@ -183,6 +183,26 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
 
   const isConnected = isSupabaseConfigured();
 
+  // ====================================================================
+  // CALCULS DU COCKPIT PROMOTEUR (Déclarés avant les hooks de chargement pour éviter tout TDZ)
+  // ====================================================================
+  const safeEvents = useMemo(() => (Array.isArray(events) ? events.filter(Boolean) : []), [events]);
+
+  const promoterEvents = useMemo(() => {
+    if (safeEvents.length === 0) return [];
+    if (currentRole === 'admin') return safeEvents;
+    if (!promoterName) return safeEvents;
+    const filtered = safeEvents.filter((e) =>
+      e.promoter?.name?.toLowerCase().includes(promoterName.toLowerCase())
+    );
+    return filtered.length > 0 ? filtered : safeEvents;
+  }, [safeEvents, promoterName, currentRole]);
+
+  const activeEvent = useMemo(() => {
+    if (selectedEventId === 'all') return promoterEvents[0] || null;
+    return promoterEvents.find((e) => e.id === selectedEventId) || promoterEvents[0] || null;
+  }, [promoterEvents, selectedEventId]);
+
   useEffect(() => {
     const targetEventId = selectedEventId === 'all' ? (activeEvent?.id || undefined) : selectedEventId;
 
@@ -311,25 +331,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
     }
   };
 
-  // ====================================================================
-  // CALCULS DU COCKPIT PROMOTEUR
-  // ====================================================================
-  const safeEvents = useMemo(() => (Array.isArray(events) ? events.filter(Boolean) : []), [events]);
 
-  const promoterEvents = useMemo(() => {
-    if (safeEvents.length === 0) return [];
-    if (currentRole === 'admin') return safeEvents;
-    if (!promoterName) return safeEvents;
-    const filtered = safeEvents.filter((e) =>
-      e.promoter?.name?.toLowerCase().includes(promoterName.toLowerCase())
-    );
-    return filtered.length > 0 ? filtered : safeEvents;
-  }, [safeEvents, promoterName]);
-
-  const activeEvent = useMemo(() => {
-    if (selectedEventId === 'all') return promoterEvents[0] || null;
-    return promoterEvents.find((e) => e.id === selectedEventId) || promoterEvents[0] || null;
-  }, [promoterEvents, selectedEventId]);
 
   // Commandes filtrées pour le promoteur
   const filteredOrders = useMemo(() => {

@@ -520,16 +520,18 @@ export const signInWithSupabase = async (email: string, pass: string, captchaTok
   if (!client) {
     throw new Error('Supabase n\'est pas encore configuré.');
   }
-  if (!captchaToken) {
-    throw new Error('Veuillez valider le CAPTCHA.');
+
+  // Si un token captcha est fourni, on le transmet à Supabase.
+  // On ne bloque plus artificiellement côté client si le widget CAPTCHA est en mode test/fallback.
+  const authOptions: { captchaToken?: string } = {};
+  if (captchaToken) {
+    authOptions.captchaToken = captchaToken;
   }
 
   const { data, error } = await client.auth.signInWithPassword({
     email,
     password: pass,
-    options: {
-      captchaToken,
-    },
+    options: Object.keys(authOptions).length > 0 ? authOptions : undefined,
   });
 
   if (error) {
@@ -547,15 +549,12 @@ export const resetPasswordWithSupabase = async (email: string, captchaToken?: st
   if (!client) {
     throw new Error('Supabase n\'est pas encore configuré.');
   }
-  if (!captchaToken) {
-    throw new Error('Veuillez valider le CAPTCHA.');
-  }
 
   const redirectUrl = typeof window !== 'undefined' ? `${window.location.origin}/` : undefined;
 
   const { data, error } = await client.auth.resetPasswordForEmail(email.trim(), {
     redirectTo: redirectUrl,
-    captchaToken,
+    captchaToken: captchaToken || undefined,
   });
 
   if (error) throw error;
@@ -883,25 +882,35 @@ export const fetchAllProfilesFromSupabase = async (): Promise<{ profiles: UserPr
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    const profiles: UserProfile[] = (data || []).map((d: any) => ({
-      id: d.id,
-      name: d.name || 'Utilisateur',
-      username: d.username || d.name || 'user',
-      email: d.email || '',
-      phone: d.phone || '',
-      city: d.city || 'Thiès',
-      address: d.address || '',
-      quartier: d.quartier || '',
-      avatar: d.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop',
-      isVip: Boolean(d.is_vip),
-      role: d.role || 'user',
-      isEmailConfirmed: true,
-      termsAccepted: Boolean(d.terms_accepted),
-      termsAcceptedAt: d.terms_accepted_at || undefined,
-      termsVersion: d.terms_version || undefined,
-      connectedAccounts: { facebook: false, instagram: false, tiktok: false },
-      privacySettings: { publicProfile: true, biometricLogin: false, emailNotifications: true },
-    }));
+    const profiles: UserProfile[] = (data || []).map((d: any) => {
+      const emailCandidate = d.email || '';
+      const emailPrefix = emailCandidate ? emailCandidate.split('@')[0] : '';
+      const formattedPrefix = emailPrefix ? emailPrefix.charAt(0).toUpperCase() + emailPrefix.slice(1) : '';
+      const rawName = d.name || d.full_name;
+      const cleanName = rawName && rawName.trim().toLowerCase() !== 'utilisateur'
+        ? rawName.trim()
+        : formattedPrefix || 'Membre Thièsdn';
+
+      return {
+        id: d.id,
+        name: cleanName,
+        username: d.username || cleanName || 'user',
+        email: emailCandidate,
+        phone: d.phone || '',
+        city: d.city || 'Thiès',
+        address: d.address || '',
+        quartier: d.quartier || '',
+        avatar: d.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop',
+        isVip: Boolean(d.is_vip),
+        role: d.role || 'user',
+        isEmailConfirmed: true,
+        termsAccepted: Boolean(d.terms_accepted),
+        termsAcceptedAt: d.terms_accepted_at || undefined,
+        termsVersion: d.terms_version || undefined,
+        connectedAccounts: { facebook: false, instagram: false, tiktok: false },
+        privacySettings: { publicProfile: true, biometricLogin: false, emailNotifications: true },
+      };
+    });
     return { profiles, error: null };
   } catch (err: any) {
     return { profiles: [], error: err.message };

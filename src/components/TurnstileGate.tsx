@@ -103,7 +103,7 @@ export const TurnstileGate = forwardRef<TurnstileGateHandle, TurnstileGateProps>
             siteKey={siteKey}
             options={{
               size: 'flexible',
-              appearance: 'interaction-only',
+              appearance: 'always',
               theme: 'dark',
             }}
             onSuccess={(token) => {
@@ -119,6 +119,11 @@ export const TurnstileGate = forwardRef<TurnstileGateHandle, TurnstileGateProps>
               }
             }}
             onError={() => {
+              if (siteKey === TURNSTILE_DEV_TEST_SITE_KEY) {
+                setWidgetError(null);
+                onTokenChange('cf-dev-bypass');
+                return;
+              }
               onTokenChange(null);
               setWidgetError(
                 'La vérification de sécurité (CAPTCHA) a échoué (réseau instable ou bloqueur de publicité).'

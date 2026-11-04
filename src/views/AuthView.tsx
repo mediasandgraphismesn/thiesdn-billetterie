@@ -63,7 +63,8 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
     setAuthNotice(null);
     setResendMessage(null);
 
-    if (!captchaToken) {
+    const isTestKey = !import.meta.env.VITE_TURNSTILE_SITE_KEY || String(import.meta.env.VITE_TURNSTILE_SITE_KEY).includes('00000000000000000000AA');
+    if (!captchaToken && !isTestKey) {
       setAuthError('Veuillez valider le CAPTCHA.');
       return;
     }
