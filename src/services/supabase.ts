@@ -1623,6 +1623,17 @@ export const fetchSalesAgentsFromSupabase = async (): Promise<{
   }
 };
 
+export const generateStandardUuid = (): string => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+};
+
 export const createSalesAgent = async (agentData: {
   eventId: string;
   eventTitle?: string;
@@ -1634,8 +1645,9 @@ export const createSalesAgent = async (agentData: {
   quartier?: string;
   commissionPercent?: number;
 }): Promise<{ success: boolean; agent?: SalesAgent; error?: string }> => {
+  const agentUuid = generateStandardUuid();
   const newAgent: SalesAgent = {
-    id: `agent-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`,
+    id: agentUuid,
     eventId: agentData.eventId,
     eventTitle: agentData.eventTitle || 'Événement Thièsdn',
     promoterId: agentData.promoterId,
@@ -1661,23 +1673,38 @@ export const createSalesAgent = async (agentData: {
   const client = getSupabaseClient();
   if (client) {
     try {
-      await client.from('sales_agents').insert({
-        id: newAgent.id,
-        event_id: newAgent.eventId,
-        promoter_id: newAgent.promoterId,
-        point_de_vente: newAgent.pointDeVente,
-        gerant_name: newAgent.gerantName,
-        telephone: newAgent.telephone,
-        email: newAgent.email,
-        quartier: newAgent.quartier,
-        commission_percent: newAgent.commissionPercent,
-        allocated_count: 0,
-        sold_count: 0,
-        cash_collected: 0,
-        amount_due: 0,
-        amount_paid_to_promoter: 0,
-        status: 'active',
-      });
+      const isValidUuid = (id?: string) =>
+        Boolean(id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
+
+      const { data, error } = await client
+        .from('sales_agents')
+        .insert({
+          id: agentUuid,
+          event_id: isValidUuid(newAgent.eventId) ? newAgent.eventId : undefined,
+          promoter_id: newAgent.promoterId,
+          point_de_vente: newAgent.pointDeVente,
+          gerant_name: newAgent.gerantName,
+          telephone: newAgent.telephone,
+          email: newAgent.email,
+          quartier: newAgent.quartier,
+          commission_percent: newAgent.commissionPercent,
+          allocated_count: 0,
+          sold_count: 0,
+          cash_collected: 0,
+          amount_due: 0,
+          amount_paid_to_promoter: 0,
+          status: 'active',
+        })
+        .select()
+        .single();
+
+      if (data && data.id) {
+        newAgent.id = data.id;
+        saveSalesAgents([newAgent, ...agents.filter((a) => a.id !== agentUuid)]);
+      }
+      if (error) {
+        console.warn('Sync Supabase createSalesAgent error:', error.message);
+      }
     } catch (e: any) {
       console.warn('Sync Supabase createSalesAgent:', e.message);
     }
@@ -1700,14 +1727,18 @@ export const generatePhysicalTicketBatch = async (
 
   const newPhysicalTickets: UserTicket[] = [];
 
+  const isValidUuid = (id?: string) =>
+    Boolean(id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
+
   for (let i = 1; i <= safeCount; i++) {
     const randomHex = Math.floor(100000 + Math.random() * 900000)
       .toString(16)
       .toUpperCase();
     const qrCode = `BPT-PHY-${cityCode}-${randomHex}`;
+    const ticketUuid = generateStandardUuid();
 
     const tkt: UserTicket = {
-      id: `tkt-phy-${Date.now()}-${i}`,
+      id: ticketUuid,
       eventId: event.id,
       eventTitle: event.title,
       eventPoster: event.posterUrl,
@@ -1736,7 +1767,8 @@ export const generatePhysicalTicketBatch = async (
   if (client) {
     try {
       const inserts = newPhysicalTickets.map((t) => ({
-        event_id: t.eventId,
+        id: t.id,
+        event_id: isValidUuid(t.eventId) ? t.eventId : undefined,
         event_title: t.eventTitle,
         event_poster: t.eventPoster,
         event_date: t.eventDate,
@@ -1856,188 +1888,263 @@ export const assignTicketsToAgent = async (
   allocation?: TicketAllocation;
   message: string;
 }> => {
-  const agents = getStoredSalesAgents();
-  const agentIndex = agents.findIndex((a) => a.id === agentId);
-  if (agentIndex === -1) {
+  const client = getSupabaseClient();
+  const isValidUuid = (id?: string): boolean =>
+    Boolean(id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
+
+  let agents = getStoredSalesAgents();
+  let agent = agents.find((a) => a.id === agentId);
+
+  // Auto-healing pour l'agent si absent localement ou si son ID n'est pas un UUID valide
+  if (client) {
+    try {
+      if (isValidUuid(agentId)) {
+        const { data: dbAgent } = await client
+          .from('sales_agents')
+          .select('*')
+          .eq('id', agentId)
+          .maybeSingle();
+
+        if (dbAgent) {
+          agent = {
+            id: dbAgent.id,
+            userId: dbAgent.user_id,
+            eventId: dbAgent.event_id,
+            eventTitle: dbAgent.event_title || 'Événement',
+            promoterId: dbAgent.promoter_id,
+            pointDeVente: dbAgent.point_de_vente,
+            gerantName: dbAgent.gerant_name,
+            telephone: dbAgent.telephone,
+            email: dbAgent.email,
+            quartier: dbAgent.quartier,
+            allocatedCount: dbAgent.allocated_count || 0,
+            soldCount: dbAgent.sold_count || 0,
+            commissionPercent: Number(dbAgent.commission_percent) || 0,
+            cashCollected: Number(dbAgent.cash_collected) || 0,
+            amountDue: Number(dbAgent.amount_due) || 0,
+            amountPaidToPromoter: Number(dbAgent.amount_paid_to_promoter) || 0,
+            status: dbAgent.status || 'active',
+            createdAt: dbAgent.created_at,
+          };
+        }
+      } else if (agent) {
+        // L'agent local a un identifiant non-UUID (ex: agent-1730...). Rechercher dans Supabase par nom ou téléphone
+        const { data: matchedDb } = await client
+          .from('sales_agents')
+          .select('*')
+          .or(`point_de_vente.ilike.${agent.pointDeVente},telephone.eq.${agent.telephone}`)
+          .maybeSingle();
+
+        if (matchedDb && matchedDb.id) {
+          const oldId = agent.id;
+          agent.id = matchedDb.id;
+          agent.allocatedCount = matchedDb.allocated_count || 0;
+          agents = agents.map((a) => (a.id === oldId ? agent! : a));
+          saveSalesAgents(agents);
+        } else {
+          // Créer l'agent dans Supabase avec un véritable UUID v4
+          const newUuid = generateStandardUuid();
+          const { data: insertedDb } = await client
+            .from('sales_agents')
+            .insert({
+              id: newUuid,
+              event_id: isValidUuid(agent.eventId) ? agent.eventId : undefined,
+              promoter_id: agent.promoterId,
+              point_de_vente: agent.pointDeVente,
+              gerant_name: agent.gerantName,
+              telephone: agent.telephone,
+              email: agent.email || null,
+              quartier: agent.quartier || 'Thiès',
+              commission_percent: agent.commissionPercent || 10,
+              allocated_count: agent.allocatedCount || 0,
+              sold_count: agent.soldCount || 0,
+              cash_collected: agent.cashCollected || 0,
+              amount_due: agent.amountDue || 0,
+              amount_paid_to_promoter: agent.amountPaidToPromoter || 0,
+              status: 'active',
+            })
+            .select()
+            .single();
+
+          if (insertedDb && insertedDb.id) {
+            const oldId = agent.id;
+            agent.id = insertedDb.id;
+            agents = agents.map((a) => (a.id === oldId ? agent! : a));
+            saveSalesAgents(agents);
+          }
+        }
+      }
+    } catch (healErr: any) {
+      console.warn('Auto-healing agent warning:', healErr.message);
+    }
+  }
+
+  if (!agent) {
     return { success: false, assignedCount: 0, message: 'Collaborateur introuvable.' };
   }
 
-  const agent = agents[agentIndex];
-  const allTickets = getStoredTickets();
   const safeCount = Math.max(1, count);
-  const isValidUuid = (id?: string) => Boolean(id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
-
-  // 1. Filtrer les billets physiques imprimés et non encore assignés pour cet événement
   const targetEventId = metadata?.event?.id || agent.eventId;
-  const unassigned = allTickets.filter(
-    (t) =>
-      (t.eventId === targetEventId || t.eventId === agent.eventId) &&
-      t.isPhysical &&
-      (t.status === 'printed_not_sold' || t.status === 'physical_printed') &&
-      !t.agentId
-  );
+  const ticketType = metadata?.ticketType || metadata?.event?.tiers?.[0]?.name;
 
-  const existingToAssign = unassigned.slice(0, safeCount);
-  const existingToAssignIds = new Set(existingToAssign.map((t) => t.id));
-  const neededNewCount = safeCount - existingToAssign.length;
+  let assignedTicketIds: string[] = [];
+  let actuallyAssignedCount = 0;
 
-  // 2. Générer automatiquement les billets physiques manquants si le stock non assigné est inférieur à count
-  const newCreatedTickets: UserTicket[] = [];
-  const event = metadata?.event;
-  const batchDate = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-  const batchNumber = `BATCH-${batchDate}-${Math.floor(100 + Math.random() * 900)}`;
-  const cityCode = ((event?.city || 'Thiès').slice(0, 3) || 'THS').toUpperCase();
-  const ticketType = metadata?.ticketType || event?.tiers?.[0]?.name || 'Prévente Porteur';
-  const ticketPrice = event?.tiers?.[0]?.price || 3000;
-
-  for (let i = 1; i <= neededNewCount; i++) {
-    const randomHex = Math.floor(100000 + Math.random() * 900000);
-    const serialNum = (agent.allocatedCount || 0) + existingToAssign.length + i;
-    const qrCode = `BPT-PHY-${cityCode}-${randomHex}`;
-
-    const newTkt: UserTicket = {
-      id: `tkt-phy-${Date.now()}-${i}-${Math.floor(100 + Math.random() * 900)}`,
-      eventId: agent.eventId,
-      eventTitle: event?.title || agent.eventTitle || 'Birthday Kmou Jango',
-      eventPoster: event?.posterUrl || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800',
-      eventDate: event?.date || 'Date officielle',
-      eventTime: event?.time || '20:00',
-      eventVenue: event?.venue ? `${event.venue}${event.quartier ? ` (${event.quartier})` : ''}, ${event.city}` : 'Thiès, Sénégal',
-      tierName: ticketType,
-      price: ticketPrice,
-      qrCode,
-      seatNumber: `PHY-${String(serialNum).padStart(4, '0')}`,
-      holderName: 'Billet Physique Porteur',
-      purchasedAt: new Date().toISOString(),
-      status: 'printed_not_sold' as const,
-      isPhysical: true,
-      agentId: agent.id,
-      agentName: agent.pointDeVente,
-      batchNumber,
-      serialNumber: serialNum,
-    };
-    newCreatedTickets.push(newTkt);
-  }
-
-  // 3. Mettre à jour les billets existants pris dans le lot
-  const updatedExistingTickets = allTickets.map((t) => {
-    if (existingToAssignIds.has(t.id)) {
-      return {
-        ...t,
-        status: 'printed_not_sold' as const,
-        agentId: agent.id,
-        agentName: agent.pointDeVente,
-      };
-    }
-    return t;
-  });
-
-  // Fusionner tous les billets en mémoire locale
-  const finalAllTickets = [...newCreatedTickets, ...updatedExistingTickets];
-  saveStoredTickets(finalAllTickets);
-
-  // 4. Mettre à jour le compteur du collaborateur
-  agent.allocatedCount = (agent.allocatedCount || 0) + safeCount;
-  agents[agentIndex] = agent;
-  saveSalesAgents(agents);
-
-  // 5. Synchronisation Supabase
-  const client = getSupabaseClient();
+  // 1. Priorité Supabase : récupérer les billets réels en réserve
   if (client) {
     try {
-      // Insertion des nouveaux billets créés
-      if (newCreatedTickets.length > 0) {
-        const inserts = newCreatedTickets.map((t) => ({
-          event_id: isValidUuid(t.eventId) ? t.eventId : undefined,
-          event_title: t.eventTitle,
-          event_poster: t.eventPoster,
-          event_date: t.eventDate,
-          event_time: t.eventTime,
-          event_venue: t.eventVenue,
-          tier_name: t.tierName,
-          price: t.price,
-          qr_code: t.qrCode,
-          seat_number: t.seatNumber,
-          holder_name: t.holderName,
-          status: 'printed_not_sold',
-          is_physical: true,
-          agent_id: isValidUuid(agent.id) ? agent.id : null,
-          agent_name: agent.pointDeVente,
-          batch_number: t.batchNumber,
-          serial_number: t.serialNumber,
-        }));
-        await client.from('tickets').insert(inserts);
+      let query = client
+        .from('tickets')
+        .select('id, tier_name, status')
+        .eq('is_physical', true)
+        .in('status', ['printed_not_sold', 'physical_printed'])
+        .is('agent_id', null);
+
+      if (targetEventId && isValidUuid(targetEventId)) {
+        query = query.eq('event_id', targetEventId);
+      }
+      if (ticketType) {
+        query = query.eq('tier_name', ticketType);
       }
 
-      // Mise à jour des billets existants réassignés
-      if (existingToAssignIds.size > 0) {
+      const { data: remoteUnassigned, error: fetchErr } = await query
+        .order('created_at', { ascending: true })
+        .limit(safeCount);
+
+      if (!fetchErr && remoteUnassigned && remoteUnassigned.length > 0) {
+        assignedTicketIds = remoteUnassigned.map((t: any) => t.id);
+        actuallyAssignedCount = assignedTicketIds.length;
+
+        // Mise à jour atomique des billets dans Supabase
         const updatePayload: Record<string, any> = {
           agent_name: agent.pointDeVente,
-          status: 'printed_not_sold',
+          status: 'printed_not_sold', // RÈGLE CRITIQUE : Billet inactif tant qu'il n'est pas vendu nominativement
         };
         if (isValidUuid(agent.id)) {
           updatePayload.agent_id = agent.id;
         }
-        await client
+
+        const { error: updateErr } = await client
           .from('tickets')
           .update(updatePayload)
-          .in('id', Array.from(existingToAssignIds));
-      }
+          .in('id', assignedTicketIds);
 
-      // Mise à jour de allocated_count dans sales_agents
-      if (isValidUuid(agent.id)) {
-        await client
-          .from('sales_agents')
-          .update({ allocated_count: agent.allocatedCount })
-          .eq('id', agent.id);
+        if (updateErr) {
+          console.warn('Erreur mise à jour billets dans Supabase:', updateErr.message);
+        }
       }
-    } catch (e: any) {
-      console.warn('Sync Supabase assignTicketsToAgent:', e.message);
+    } catch (supabaseErr: any) {
+      console.warn('Supabase query tickets en réserve:', supabaseErr.message);
     }
   }
 
-  // 6. Création et persistance du lot dans ticket_allocations
+  // 2. Gestion et Synchronisation du stockage local (localStorage)
+  const allTickets = getStoredTickets();
+  const assignedSet = new Set(assignedTicketIds);
+
+  // Si Supabase n'avait pas encore ces billets ou était hors-ligne, puiser dans la réserve locale
+  if (assignedTicketIds.length === 0) {
+    const localUnassigned = allTickets.filter(
+      (t) =>
+        (t.eventId === targetEventId || t.eventId === agent!.eventId) &&
+        t.isPhysical &&
+        (t.status === 'printed_not_sold' || t.status === 'physical_printed') &&
+        !t.agentId &&
+        (!ticketType || t.tierName === ticketType)
+    );
+
+    const localToAssign = localUnassigned.slice(0, safeCount);
+    for (const t of localToAssign) {
+      assignedSet.add(t.id);
+    }
+    actuallyAssignedCount = localToAssign.length;
+  }
+
+  if (actuallyAssignedCount === 0) {
+    return {
+      success: false,
+      assignedCount: 0,
+      message: `Aucun billet physique en réserve disponible pour le type "${ticketType || 'Standard'}". Veuillez d'abord générer des billets physiques dans ce palier.`,
+    };
+  }
+
+  // Mise à jour locale des billets assignés
+  const updatedAllTickets = allTickets.map((t) => {
+    if (assignedSet.has(t.id)) {
+      return {
+        ...t,
+        status: 'printed_not_sold' as const, // TOUJOURS printed_not_sold
+        agentId: agent!.id,
+        agentName: agent!.pointDeVente,
+        sales_agents: {
+          point_de_vente: agent!.pointDeVente,
+          gerant_name: agent!.gerantName,
+        },
+      };
+    }
+    return t;
+  });
+  saveStoredTickets(updatedAllTickets);
+
+  // 3. Mettre à jour le compteur du point de vente
+  const newAllocatedCount = (agent.allocatedCount || 0) + actuallyAssignedCount;
+  agent.allocatedCount = newAllocatedCount;
+  const agentIdx = agents.findIndex((a) => a.id === agent!.id);
+  if (agentIdx !== -1) {
+    agents[agentIdx] = agent;
+  } else {
+    agents.push(agent);
+  }
+  saveSalesAgents(agents);
+
+  // 4. Synchronisation Supabase de l'agent et de l'allocation
+  if (client && isValidUuid(agent.id)) {
+    try {
+      await client
+        .from('sales_agents')
+        .update({ allocated_count: newAllocatedCount })
+        .eq('id', agent.id);
+
+      const allocInsertPayload: Record<string, any> = {
+        agent_id: agent.id,
+        agent_name: agent.pointDeVente,
+        ticket_type: ticketType || 'Standard',
+        quantity: actuallyAssignedCount,
+        allocated_by: metadata?.allocatedBy || agent.promoterId,
+        notes: metadata?.notes || null,
+        status: 'active',
+      };
+      if (isValidUuid(agent.eventId)) {
+        allocInsertPayload.event_id = agent.eventId;
+      }
+      await client.from('ticket_allocations').insert(allocInsertPayload);
+    } catch (syncErr: any) {
+      console.warn('Sync Supabase agent/allocation:', syncErr.message);
+    }
+  }
+
+  // 5. Enregistrement local de l'allocation
   const newAllocation: TicketAllocation = {
     id: `alloc-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`,
     agentId: agent.id,
     agentName: agent.pointDeVente,
     eventId: agent.eventId,
     eventTitle: agent.eventTitle,
-    ticketType,
-    quantity: safeCount,
+    ticketType: ticketType || 'Standard',
+    quantity: actuallyAssignedCount,
     allocatedBy: metadata?.allocatedBy || agent.promoterId,
     notes: metadata?.notes,
     status: 'active',
     createdAt: new Date().toISOString(),
   };
-
   const currentAllocations = getStoredTicketAllocations();
   saveStoredTicketAllocations([newAllocation, ...currentAllocations]);
 
-  if (client) {
-    try {
-      const allocInsertPayload: Record<string, any> = {
-        event_id: isValidUuid(agent.eventId) ? agent.eventId : undefined,
-        ticket_type: ticketType,
-        quantity: safeCount,
-        allocated_by: metadata?.allocatedBy || agent.promoterId,
-        notes: metadata?.notes || null,
-        status: 'active',
-      };
-      if (isValidUuid(agent.id)) {
-        allocInsertPayload.agent_id = agent.id;
-      }
-      await client.from('ticket_allocations').insert(allocInsertPayload);
-    } catch (allocErr: any) {
-      console.warn('Sync Supabase ticket_allocations insert:', allocErr.message);
-    }
-  }
-
   return {
     success: true,
-    assignedCount: safeCount,
+    assignedCount: actuallyAssignedCount,
     allocation: newAllocation,
-    message: `${safeCount} billets physiques attribués avec succès au point de vente "${agent.pointDeVente}". Statut : printed_not_sold (activation par vente nominative requise).`,
+    message: `${actuallyAssignedCount} billets physiques (${ticketType || 'Standard'}) attribués avec succès à "${agent.pointDeVente}". Statut : printed_not_sold (activation par vente nominative).`,
   };
 };
 

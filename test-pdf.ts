@@ -59,7 +59,7 @@ async function testPdfGeneration() {
     serialNumber: i + 1,
   });
 
-  // Les 3 cas de test : 2 billets physiques assignés (jointure sales_agents) + 1 billet web sans agent_id
+  // Les 4 cas de test : 3 billets physiques assignés (dont "Chambre Neuf") + 1 billet web sans agent_id
   const mockTickets: UserTicket[] = [
     {
       ...base(0),
@@ -75,12 +75,18 @@ async function testPdfGeneration() {
     },
     {
       ...base(2),
+      isPhysical: true,
+      agentId: '33333333-3333-4333-8333-333333333333',
+      sales_agents: { point_de_vente: 'Chambre Neuf', gerant_name: 'Babacar' },
+    },
+    {
+      ...base(3),
       isPhysical: false,
       sales_agents: null,
     },
   ];
 
-  const expected = ['DJ CRAZY', 'STUDIOS CHAMBRE 9', 'Vente en Ligne'];
+  const expected = ['DJ CRAZY', 'STUDIOS CHAMBRE 9', 'Chambre Neuf', 'Vente en Ligne'];
   let failures = 0;
   mockTickets.forEach((t, i) => {
     const label = resolvePointDeVenteLabel(t);
@@ -89,7 +95,7 @@ async function testPdfGeneration() {
     console.log(`   ${ok ? 'OK ' : 'KO '} billet ${i + 1} -> "${label}" (attendu "${expected[i]}")`);
   });
   // Fallback : billet physique avec agent mais sans nom -> "Point de Vente"
-  const fallback = resolvePointDeVenteLabel({ ...base(3), isPhysical: true, agentId: 'x', sales_agents: { point_de_vente: '' } });
+  const fallback = resolvePointDeVenteLabel({ ...base(4), isPhysical: true, agentId: 'x', sales_agents: { point_de_vente: '' } });
   console.log(`   ${fallback === 'Point de Vente' ? 'OK ' : 'KO '} fallback -> "${fallback}"`);
   if (fallback !== 'Point de Vente') failures++;
   if (failures > 0) throw new Error(`${failures} cas de test en échec`);

@@ -170,7 +170,9 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
   // Modale d'attribution de billets physiques
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [selectedAgentForAssign, setSelectedAgentForAssign] = useState<SalesAgent | null>(null);
-  const [assignCountInput, setAssignCountInput] = useState<number>(20);
+  const [assignCountInput, setAssignCountInput] = useState<number>(50);
+  const [assignTierName, setAssignTierName] = useState<string>('');
+  const [isAssigning, setIsAssigning] = useState<boolean>(false);
   const [assignNotification, setAssignNotification] = useState<{ message: string; waUrl?: string } | null>(null);
 
   // Modale d'enregistrement de versement d'espèces
@@ -674,6 +676,16 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
     }
   };
 
+  // Action : Ouvrir la modale d'attribution pour un agent donné
+  const handleOpenAssignModal = (agent?: SalesAgent | null) => {
+    const targetAgent = agent || networkAgents[0] || agents[0] || null;
+    setSelectedAgentForAssign(targetAgent);
+    const initialTier = activeEvent?.tiers?.[0]?.name || 'Standard';
+    setAssignTierName(initialTier);
+    setAssignCountInput(50);
+    setShowAssignModal(true);
+  };
+
   // Action : Attribution de billets
   const handleAssignTicketsSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -685,49 +697,61 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
       return;
     }
 
-    const res = await assignTicketsToAgent(selectedAgentForAssign.id, count, {
-      ticketType: activeEvent?.tiers?.[0]?.name || 'Standard',
-      allocatedBy: promoterName || 'Promoteur',
-    });
-    if (res.success) {
-      setTickets(getStoredTickets());
-      setAgents(getStoredSalesAgents());
-
-      // Synchronisation asynchrone instantanée depuis Supabase
-      const targetEventId = selectedEventId === 'all' ? (activeEvent?.id || undefined) : selectedEventId;
-      fetchSalesAgentsFromSupabase().then((r) => {
-        if (r.agents && r.agents.length > 0) setAgents(r.agents);
-      });
-      fetchAllSoldTicketsFromSupabase({ eventId: targetEventId, isPhysical: true }).then((r) => {
-        if (r.tickets && r.tickets.length > 0) setTickets(r.tickets);
-      });
-      fetchTicketAllocationsFromSupabase(targetEventId).then((r) => {
-        if (r.allocations) setAllocations(r.allocations);
+    setIsAssigning(true);
+    try {
+      const selectedTier = assignTierName || activeEvent?.tiers?.[0]?.name || 'Standard';
+      const res = await assignTicketsToAgent(selectedAgentForAssign.id, count, {
+        ticketType: selectedTier,
+        allocatedBy: promoterName || 'Promoteur',
+        event: activeEvent || undefined,
       });
 
-      // Construire le lien WhatsApp d'attribution
-      const cleanPhone = selectedAgentForAssign.telephone.replace(/[^0-9]/g, '');
-      const eventTitle = activeEvent ? activeEvent.title : 'Événement Thièsdn';
-      const message =
-        `🎟️ *NOUVEAU STOCK DE BILLETS PHYSIQUES - THIÈSDN* 🇸🇳\n` +
-        `━━━━━━━━━━━━━━━━━━━━\n` +
-        `Bonjour ${selectedAgentForAssign.gerantName} (${selectedAgentForAssign.pointDeVente}) !\n\n` +
-        `Nous venons de vous confier un nouveau lot de *${res.assignedCount} billets physiques* pour :\n` +
-        `🎪 *Événement :* ${eventTitle}\n` +
-        `📍 *Lieu :* ${activeEvent ? activeEvent.venue : 'Thiès'}\n` +
-        `💰 *Votre commission commerçant :* ${selectedAgentForAssign.commissionPercent}%\n\n` +
-        `📱 Retrouvez votre guichet et déclarez vos ventes en temps réel :\n` +
-        `https://thiesdn.mgartswork.site/\n\n` +
-        `Bonnes ventes à ${selectedAgentForAssign.quartier} !`;
+      if (res.success) {
+        // 1. Mise à jour synchrone immédiate du state local
+        setTickets(getStoredTickets());
+        setAgents(getStoredSalesAgents());
 
-      const waUrl = cleanPhone.length >= 9
-        ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`
-        : `https://wa.me/?text=${encodeURIComponent(message)}`;
+        // 2. Synchronisation et rechargement complet depuis Supabase
+        const targetEventId = selectedEventId === 'all' ? (activeEvent?.id || undefined) : selectedEventId;
+        const [agentsRes, ticketsRes, allocRes] = await Promise.all([
+          fetchSalesAgentsFromSupabase(),
+          fetchAllSoldTicketsFromSupabase({ eventId: targetEventId, isPhysical: true }),
+          fetchTicketAllocationsFromSupabase(targetEventId),
+        ]);
 
-      setAssignNotification({ message: res.message, waUrl });
-      setShowAssignModal(false);
-    } else {
-      alert(res.message);
+        if (agentsRes.agents && agentsRes.agents.length > 0) setAgents(agentsRes.agents);
+        if (ticketsRes.tickets && ticketsRes.tickets.length > 0) setTickets(ticketsRes.tickets);
+        if (allocRes.allocations) setAllocations(allocRes.allocations);
+
+        // 3. Lien WhatsApp de notification commerçant
+        const cleanPhone = selectedAgentForAssign.telephone.replace(/[^0-9]/g, '');
+        const eventTitle = activeEvent ? activeEvent.title : 'Événement Thièsdn';
+        const message =
+          `🎟️ *NOUVEAU STOCK DE BILLETS PHYSIQUES - THIÈSDN* 🇸🇳\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `Bonjour ${selectedAgentForAssign.gerantName} (${selectedAgentForAssign.pointDeVente}) !\n\n` +
+          `Nous venons de vous confier un nouveau lot de *${res.assignedCount} billets physiques* (${selectedTier}) pour :\n` +
+          `🎪 *Événement :* ${eventTitle}\n` +
+          `📍 *Lieu :* ${activeEvent ? activeEvent.venue : 'Thiès'}\n` +
+          `💰 *Votre commission commerçant :* ${selectedAgentForAssign.commissionPercent}%\n\n` +
+          `📱 Retrouvez votre guichet et déclarez vos ventes en temps réel :\n` +
+          `https://billetterie.thiesdn.site/\n\n` +
+          `Bonnes ventes à ${selectedAgentForAssign.quartier} !`;
+
+        const waUrl = cleanPhone.length >= 9
+          ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`
+          : `https://wa.me/?text=${encodeURIComponent(message)}`;
+
+        setAssignNotification({ message: res.message, waUrl });
+        setShowAssignModal(false);
+      } else {
+        alert(res.message);
+      }
+    } catch (err: any) {
+      console.error('Erreur attribution billets:', err);
+      alert('Une erreur est survenue lors de l’attribution.');
+    } finally {
+      setIsAssigning(false);
     }
   };
 
@@ -1524,6 +1548,16 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                   {unassignedPhysicalTickets.length} <span className="text-xs text-sky-400 font-bold">billets</span>
                 </h3>
                 <p className="text-[11px] text-gray-400">Imprimés, prêts à être alloués</p>
+                {unassignedPhysicalTickets.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => handleOpenAssignModal()}
+                    className="w-full mt-2 py-1.5 px-2.5 rounded-xl bg-sky-500/20 hover:bg-sky-500/35 text-sky-300 border border-sky-500/40 text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <Truck className="w-3.5 h-3.5" />
+                    <span>Distribuer le stock →</span>
+                  </button>
+                )}
               </div>
 
               {/* 2. Billets Distribués au Réseau */}
@@ -1585,11 +1619,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => {
-                      setSelectedAgentForAssign(networkAgents[0] || agents[0] || null);
-                      setAssignCountInput(100);
-                      setShowAssignModal(true);
-                    }}
+                    onClick={() => handleOpenAssignModal()}
                     className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-sky-500 to-[#8A2BE2] hover:from-sky-400 hover:to-[#9B3BF2] text-white text-xs font-heading font-extrabold flex items-center gap-2 transition-all shadow-md shadow-[#8A2BE2]/30 cursor-pointer"
                   >
                     <Truck className="w-4 h-4" />
@@ -1618,121 +1648,193 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                   </p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className="border-b border-white/10 text-gray-400 uppercase font-heading tracking-wider">
-                        <th className="pb-3 px-3">Point de Vente & Quartier</th>
-                        <th className="pb-3 px-3">Gérant & Contact</th>
-                        <th className="pb-3 px-3">Billets Confiés / Vendus</th>
-                        <th className="pb-3 px-3">Stock Restant</th>
-                        <th className="pb-3 px-3">Espèces Encaissées</th>
-                        <th className="pb-3 px-3">Reste Net Dû</th>
-                        <th className="pb-3 px-3 text-right">Actions Réseau</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                      {networkAgents.map((agent) => {
-                        const remaining = Math.max(0, agent.allocatedCount - agent.soldCount);
-                        const progressPercent = agent.allocatedCount > 0
-                          ? Math.round((agent.soldCount / agent.allocatedCount) * 100)
-                          : 0;
-
-                        return (
-                          <tr key={agent.id} className="hover:bg-white/5 transition-colors">
-                            <td className="py-4 px-3">
-                              <div className="font-heading font-bold text-white text-sm">
-                                {agent.pointDeVente}
+                <>
+                  {/* VUE MOBILE / CARTES DES POINTS DE VENTE (Visible sur petit écran) */}
+                  <div className="block lg:hidden space-y-3">
+                    {networkAgents.map((agent) => {
+                      const remaining = Math.max(0, agent.allocatedCount - agent.soldCount);
+                      return (
+                        <div
+                          key={`card-${agent.id}`}
+                          className="p-4 rounded-2xl bg-[#141414] border border-white/10 space-y-3"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <h4 className="font-heading font-extrabold text-white text-base">
+                                  {agent.pointDeVente}
+                                </h4>
+                                <span className="bg-white/10 text-gray-300 text-[10px] font-semibold px-2 py-0.5 rounded-full border border-white/10">
+                                  📍 {agent.quartier}
+                                </span>
                               </div>
-                              <span className="inline-block mt-1 bg-white/10 text-gray-300 text-[10px] font-semibold px-2 py-0.5 rounded-full border border-white/10">
-                                📍 {agent.quartier}
-                              </span>
-                            </td>
+                              <p className="text-xs text-gray-400 mt-1">
+                                Gérant : <strong className="text-gray-200">{agent.gerantName}</strong>
+                              </p>
+                            </div>
+                            <span className="font-mono text-xs px-2.5 py-1 rounded-lg bg-sky-500/20 text-sky-300 border border-sky-500/30 font-bold">
+                              {agent.allocatedCount} confiés
+                            </span>
+                          </div>
 
-                            <td className="py-4 px-3">
-                              <div className="text-gray-200 font-medium">{agent.gerantName}</div>
-                              <a
-                                href={`https://wa.me/${agent.telephone.replace(/[^0-9]/g, '')}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="font-mono text-emerald-400 hover:underline flex items-center gap-1 text-[11px] mt-0.5"
-                              >
-                                <Phone className="w-3 h-3" />
-                                {agent.telephone}
-                              </a>
-                            </td>
+                          <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-white/5">
+                            <div className="p-2 rounded-xl bg-black/40">
+                              <span className="text-gray-400 text-[10px]">Vendus :</span>
+                              <p className="font-mono font-bold text-emerald-400">{agent.soldCount} billets</p>
+                            </div>
+                            <div className="p-2 rounded-xl bg-black/40">
+                              <span className="text-gray-400 text-[10px]">En stock boutique :</span>
+                              <p className="font-mono font-bold text-amber-300">{remaining} billets</p>
+                            </div>
+                          </div>
 
-                            <td className="py-4 px-3">
-                              <div className="flex items-center justify-between text-[11px] font-bold mb-1">
-                                <span className="text-emerald-400">{agent.soldCount} vendus</span>
-                                <span className="text-gray-400">/ {agent.allocatedCount}</span>
-                              </div>
-                              <div className="w-28 bg-[#1F1F1F] rounded-full h-1.5 overflow-hidden">
-                                <div
-                                  className="bg-emerald-400 h-1.5 rounded-full transition-all duration-300"
-                                  style={{ width: `${Math.min(100, progressPercent)}%` }}
-                                />
-                              </div>
-                            </td>
+                          <div className="pt-1 flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenAssignModal(agent)}
+                              className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-sky-500 to-[#8A2BE2] hover:from-sky-400 hover:to-[#9B3BF2] text-white text-xs font-heading font-extrabold flex items-center justify-center gap-2 shadow-lg shadow-sky-500/20 cursor-pointer"
+                            >
+                              <Truck className="w-4 h-4" />
+                              <span>Attribuer des Billets</span>
+                            </button>
+                            <a
+                              href={`https://wa.me/${agent.telephone.replace(/[^0-9]/g, '')}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-2.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 flex items-center justify-center cursor-pointer"
+                              title="Contacter sur WhatsApp"
+                            >
+                              <Phone className="w-4 h-4" />
+                            </a>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
 
-                            <td className="py-4 px-3">
-                              <span
-                                className={`font-mono font-bold px-2 py-0.5 rounded-lg text-xs ${
-                                  remaining <= 5 && remaining > 0
-                                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                                    : remaining === 0
-                                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                                    : 'bg-white/5 text-gray-300'
-                                }`}
-                              >
-                                {remaining} billets
-                              </span>
-                            </td>
+                  {/* TABLEAU DES POINTS DE VENTE (Desktop / Tablette) */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="border-b border-white/10 text-gray-400 uppercase font-heading tracking-wider">
+                          <th className="pb-3 px-3">Point de Vente & Quartier</th>
+                          <th className="pb-3 px-3">Gérant & Contact</th>
+                          <th className="pb-3 px-3">Billets Confiés / Vendus</th>
+                          <th className="pb-3 px-3">Stock Restant</th>
+                          <th className="pb-3 px-3">Espèces Encaissées</th>
+                          <th className="pb-3 px-3">Reste Net Dû</th>
+                          <th className="pb-3 px-3 text-right">Actions Réseau</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5">
+                        {networkAgents.map((agent) => {
+                          const remaining = Math.max(0, agent.allocatedCount - agent.soldCount);
+                          const progressPercent = agent.allocatedCount > 0
+                            ? Math.round((agent.soldCount / agent.allocatedCount) * 100)
+                            : 0;
 
-                            <td className="py-4 px-3">
-                              <div className="font-mono font-bold text-white">
-                                {agent.cashCollected.toLocaleString('fr-FR')} F
-                              </div>
-                              <div className="text-[10px] text-gray-400">
-                                Com: {agent.commissionPercent}% (
-                                {Math.round(
-                                  agent.cashCollected * (agent.commissionPercent / 100)
-                                ).toLocaleString('fr-FR')}{' '}
-                                F)
-                              </div>
-                            </td>
-
-                            <td className="py-4 px-3">
-                              <div className="font-mono font-extrabold text-[#E9C349] text-sm">
-                                {agent.amountDue.toLocaleString('fr-FR')} FCFA
-                              </div>
-                              {agent.amountPaidToPromoter > 0 && (
-                                <div className="text-[10px] text-emerald-400">
-                                  Versé: {agent.amountPaidToPromoter.toLocaleString('fr-FR')} F
+                          return (
+                            <tr key={agent.id} className="hover:bg-white/5 transition-colors">
+                              <td className="py-4 px-3">
+                                <div className="font-heading font-bold text-white text-sm">
+                                  {agent.pointDeVente}
                                 </div>
-                              )}
-                            </td>
+                                <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenAssignModal(agent)}
+                                    className="px-2.5 py-1 rounded-lg bg-sky-500/25 hover:bg-sky-500/40 text-sky-200 border border-sky-400/50 text-[11px] font-bold flex items-center gap-1.5 transition-all shadow-sm hover:scale-[1.02] active:scale-95 cursor-pointer"
+                                    title={`Attribuer des billets physiques à ${agent.pointDeVente}`}
+                                  >
+                                    <Truck className="w-3.5 h-3.5 text-sky-400" />
+                                    <span>Attribuer des billets</span>
+                                  </button>
+                                  <span className="inline-block bg-white/10 text-gray-300 text-[10px] font-semibold px-2 py-0.5 rounded-full border border-white/10">
+                                    📍 {agent.quartier}
+                                  </span>
+                                </div>
+                              </td>
 
-                            <td className="py-4 px-3 text-right">
-                              <div className="flex items-center justify-end gap-1.5">
-                                {/* Bouton Distribuer des Billets */}
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setSelectedAgentForAssign(agent);
-                                    setAssignCountInput(100);
-                                    setShowAssignModal(true);
-                                  }}
-                                  className="px-2.5 py-1.5 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/30 text-[11px] font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-                                  title="Attribuer un lot de billets physiques"
+                              <td className="py-4 px-3">
+                                <div className="text-gray-200 font-medium">{agent.gerantName}</div>
+                                <a
+                                  href={`https://wa.me/${agent.telephone.replace(/[^0-9]/g, '')}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="font-mono text-emerald-400 hover:underline flex items-center gap-1 text-[11px] mt-0.5"
                                 >
-                                  <Truck className="w-3.5 h-3.5" />
-                                  <span>Attribuer</span>
-                                </button>
+                                  <Phone className="w-3 h-3" />
+                                  {agent.telephone}
+                                </a>
+                              </td>
 
-                                {/* Bouton Encaisser Versement */}
-                                <button
-                                  onClick={() => {
+                              <td className="py-4 px-3">
+                                <div className="flex items-center justify-between text-[11px] font-bold mb-1">
+                                  <span className="text-emerald-400">{agent.soldCount} vendus</span>
+                                  <span className="text-gray-400">/ {agent.allocatedCount}</span>
+                                </div>
+                                <div className="w-28 bg-[#1F1F1F] rounded-full h-1.5 overflow-hidden">
+                                  <div
+                                    className="bg-emerald-400 h-1.5 rounded-full transition-all duration-300"
+                                    style={{ width: `${Math.min(100, progressPercent)}%` }}
+                                  />
+                                </div>
+                              </td>
+
+                              <td className="py-4 px-3">
+                                <span
+                                  className={`font-mono font-bold px-2 py-0.5 rounded-lg text-xs ${
+                                    remaining <= 5 && remaining > 0
+                                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                      : remaining === 0
+                                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                      : 'bg-white/5 text-gray-300'
+                                  }`}
+                                >
+                                  {remaining} billets
+                                </span>
+                              </td>
+
+                              <td className="py-4 px-3">
+                                <div className="font-mono font-bold text-white">
+                                  {agent.cashCollected.toLocaleString('fr-FR')} F
+                                </div>
+                                <div className="text-[10px] text-gray-400">
+                                  Com: {agent.commissionPercent}% (
+                                  {Math.round(
+                                    agent.cashCollected * (agent.commissionPercent / 100)
+                                  ).toLocaleString('fr-FR')}{' '}
+                                  F)
+                                </div>
+                              </td>
+
+                              <td className="py-4 px-3">
+                                <div className="font-mono font-extrabold text-[#E9C349] text-sm">
+                                  {agent.amountDue.toLocaleString('fr-FR')} FCFA
+                                </div>
+                                {agent.amountPaidToPromoter > 0 && (
+                                  <div className="text-[10px] text-emerald-400">
+                                    Versé: {agent.amountPaidToPromoter.toLocaleString('fr-FR')} F
+                                  </div>
+                                )}
+                              </td>
+
+                              <td className="py-4 px-3 text-right">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  {/* Bouton Distribuer des Billets */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenAssignModal(agent)}
+                                    className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-sky-500 to-[#8A2BE2] hover:from-sky-400 hover:to-[#9B3BF2] text-white text-[11px] font-extrabold flex items-center gap-1.5 transition-all shadow-md shadow-sky-500/20 cursor-pointer"
+                                    title={`Attribuer un lot de billets physiques à ${agent.pointDeVente}`}
+                                  >
+                                    <Truck className="w-3.5 h-3.5" />
+                                    <span>Attribuer</span>
+                                  </button>
+
+                                  {/* Bouton Encaisser Versement */}
+                                  <button
+                                    onClick={() => {
                                     setSelectedAgentForSettlement(agent);
                                     setSettlementAmountInput(agent.amountDue);
                                     setShowSettlementModal(true);
@@ -1770,7 +1872,8 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                     </tbody>
                   </table>
                 </div>
-              )}
+              </>
+            )}
             </div>
 
             {/* MODALE : AJOUTER UN POINT DE VENTE / COLLABORATEUR */}
@@ -1892,135 +1995,209 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
             )}
 
             {/* MODALE : ATTRIBUER DES BILLETS PHYSIQUES */}
-            {showAssignModal && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
-                <div className="glass-panel w-full max-w-md p-6 sm:p-8 rounded-3xl border border-white/20 shadow-2xl space-y-6">
-                  <div className="flex items-center justify-between border-b border-white/10 pb-4">
-                    <div className="flex items-center gap-2">
-                      <Truck className="w-5 h-5 text-sky-400" />
-                      <h3 className="font-heading font-extrabold text-lg text-white">
-                        Attribuer des Billets Physiques
-                      </h3>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setShowAssignModal(false)}
-                      className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white cursor-pointer"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
+            {showAssignModal && (() => {
+              const availableReserveForTier = unassignedPhysicalTickets.filter(
+                (t) => !assignTierName || t.tierName === assignTierName
+              ).length;
 
-                  <div className="space-y-4">
-                    {/* Choix de l'Agent / Point de Vente */}
-                    {agents.length === 0 ? (
-                      <div className="p-4 rounded-2xl bg-amber-950/30 border border-amber-500/30 text-amber-200 text-xs">
-                        Aucun point de vente n'est encore enregistré. Veuillez d'abord cliquer sur "Ajouter un Point de Vente".
+              return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
+                  <div className="glass-panel w-full max-w-md p-6 sm:p-8 rounded-3xl border border-white/20 shadow-2xl space-y-5">
+                    <div className="flex items-center justify-between border-b border-white/10 pb-4">
+                      <div className="flex items-center gap-2">
+                        <Truck className="w-5 h-5 text-sky-400" />
+                        <h3 className="font-heading font-extrabold text-lg text-white">
+                          Attribuer des Billets Physiques
+                        </h3>
                       </div>
-                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setShowAssignModal(false)}
+                        className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white cursor-pointer"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    <div className="space-y-4">
+                      {/* Choix de l'Agent / Point de Vente */}
+                      {agents.length === 0 ? (
+                        <div className="p-4 rounded-2xl bg-amber-950/30 border border-amber-500/30 text-amber-200 text-xs">
+                          Aucun point de vente n'est encore enregistré. Veuillez d'abord cliquer sur "Ajouter un Point de Vente".
+                        </div>
+                      ) : (
+                        <div>
+                          <label className="text-xs font-bold uppercase tracking-wider text-gray-300 block mb-1">
+                            Point de Vente Destinataire
+                          </label>
+                          <select
+                            value={selectedAgentForAssign?.id || ''}
+                            onChange={(e) => {
+                              const ag = agents.find((a) => a.id === e.target.value) || null;
+                              setSelectedAgentForAssign(ag);
+                            }}
+                            className="w-full bg-[#1A1A1A] border border-white/15 rounded-2xl px-4 py-3 text-sm font-bold text-white outline-none focus:border-[#E9C349] cursor-pointer"
+                          >
+                            <option value="" disabled>-- Choisir le point de vente --</option>
+                            {agents.map((ag) => (
+                              <option key={ag.id} value={ag.id} className="bg-[#1C1B1B] text-white">
+                                🏪 {ag.pointDeVente} ({ag.gerantName} - {ag.quartier})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
+                      {/* Choix du Type de Billet (Palier) */}
                       <div>
-                        <label className="text-xs font-bold uppercase tracking-wider text-gray-300 block mb-1">
-                          Point de Vente (Agent Destinataire)
+                        <label className="text-xs font-bold uppercase tracking-wider text-gray-300 flex justify-between mb-1">
+                          <span>Type de Billet à Distribuer</span>
+                          <span className="text-sky-400 font-mono text-[11px] font-bold">
+                            {availableReserveForTier} en réserve
+                          </span>
                         </label>
                         <select
-                          value={selectedAgentForAssign?.id || ''}
-                          onChange={(e) => {
-                            const ag = agents.find((a) => a.id === e.target.value) || null;
-                            setSelectedAgentForAssign(ag);
-                          }}
-                          className="w-full bg-[#1A1A1A] border border-white/15 rounded-2xl px-4 py-3 text-sm font-bold text-white outline-none focus:border-[#E9C349] cursor-pointer"
+                          value={assignTierName}
+                          onChange={(e) => setAssignTierName(e.target.value)}
+                          className="w-full bg-[#1A1A1A] border border-white/15 rounded-2xl px-4 py-2.5 text-xs font-bold text-white outline-none focus:border-[#E9C349] cursor-pointer"
                         >
-                          <option value="" disabled>-- Choisir le point de vente --</option>
-                          {agents.map((ag) => (
-                            <option key={ag.id} value={ag.id} className="bg-[#1C1B1B] text-white">
-                              🏪 {ag.pointDeVente} ({ag.gerantName} - {ag.quartier})
+                          {activeEvent?.tiers && activeEvent.tiers.length > 0 ? (
+                            activeEvent.tiers.map((t) => {
+                              const inStock = unassignedPhysicalTickets.filter((tk) => tk.tierName === t.name).length;
+                              return (
+                                <option key={t.id || t.name} value={t.name} className="bg-[#1C1B1B] text-white">
+                                  🎫 {t.name} — {t.price.toLocaleString('fr-FR')} FCFA ({inStock} en réserve)
+                                </option>
+                              );
+                            })
+                          ) : (
+                            <option value="Pass Prévente Thiès">🎫 Pass Prévente Thiès (Standard)</option>
+                          )}
+                        </select>
+                      </div>
+
+                      {/* Choix de l'Événement */}
+                      <div>
+                        <label className="text-xs font-bold uppercase tracking-wider text-gray-300 block mb-1">
+                          Événement Concerné
+                        </label>
+                        <select
+                          value={selectedEventId}
+                          onChange={(e) => setSelectedEventId(e.target.value)}
+                          className="w-full bg-[#1A1A1A] border border-white/15 rounded-2xl px-4 py-2 text-xs font-medium text-white outline-none focus:border-[#E9C349] cursor-pointer"
+                        >
+                          {safeEvents.map((evt) => (
+                            <option key={evt.id} value={evt.id} className="bg-[#1C1B1B] text-white">
+                              🎟️ {evt.title} ({evt.city})
                             </option>
                           ))}
                         </select>
                       </div>
-                    )}
 
-                    {/* Choix de l'Événement */}
-                    <div>
-                      <label className="text-xs font-bold uppercase tracking-wider text-gray-300 block mb-1">
-                        Événement Concerné
-                      </label>
-                      <select
-                        value={selectedEventId}
-                        onChange={(e) => setSelectedEventId(e.target.value)}
-                        className="w-full bg-[#1A1A1A] border border-white/15 rounded-2xl px-4 py-2.5 text-xs font-medium text-white outline-none focus:border-[#E9C349] cursor-pointer"
-                      >
-                        {safeEvents.map((evt) => (
-                          <option key={evt.id} value={evt.id} className="bg-[#1C1B1B] text-white">
-                            🎟️ {evt.title} ({evt.city})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                      <form onSubmit={handleAssignTicketsSubmit} className="space-y-4">
+                        <div>
+                          <label className="text-xs font-bold uppercase tracking-wider text-gray-300 flex justify-between">
+                            <span>Quantité à attribuer</span>
+                            <span className="text-[#E9C349] font-mono font-bold text-sm">{assignCountInput} billets</span>
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            max={Math.max(1, availableReserveForTier)}
+                            value={assignCountInput}
+                            onChange={(e) => setAssignCountInput(Math.max(1, Number(e.target.value) || 1))}
+                            className="input-glass w-full rounded-2xl px-4 py-3 text-lg font-mono font-bold text-white mt-1 outline-none focus:border-[#E9C349]"
+                          />
 
-                    <div className="p-3.5 rounded-2xl bg-sky-950/30 border border-sky-500/30 text-xs text-sky-200">
-                      Stock physique déjà imprimé pour cet événement :{' '}
-                      <strong className="text-white font-mono text-sm">
-                        {unassignedPhysicalTickets.length} billets
-                      </strong>
-                      <p className="text-[11px] text-gray-300 mt-0.5">
-                        Si votre quantité dépasse le stock disponible, le système génère et active automatiquement le complément dans Supabase.
-                      </p>
-                    </div>
-
-                    <form onSubmit={handleAssignTicketsSubmit} className="space-y-4">
-                      <div>
-                        <label className="text-xs font-bold uppercase tracking-wider text-gray-300 flex justify-between">
-                          <span>Quantité à attribuer</span>
-                          <span className="text-[#E9C349] font-mono font-bold text-sm">{assignCountInput} billets</span>
-                        </label>
-                        <input
-                          type="number"
-                          min="1"
-                          value={assignCountInput}
-                          onChange={(e) => setAssignCountInput(Math.max(1, Number(e.target.value) || 1))}
-                          className="input-glass w-full rounded-2xl px-4 py-3 text-lg font-mono font-bold text-white mt-1 outline-none focus:border-[#E9C349]"
-                        />
-
-                        <div className="flex gap-2 mt-2">
-                          {[20, 50, 100, 200].map((n) => (
-                            <button
-                              key={n}
-                              type="button"
-                              onClick={() => setAssignCountInput(n)}
-                              className={`flex-1 py-1.5 rounded-xl border text-xs font-mono transition-colors cursor-pointer ${
-                                assignCountInput === n
-                                  ? 'bg-[#E9C349]/20 border-[#E9C349] text-[#E9C349] font-bold'
-                                  : 'bg-white/5 border-white/5 text-gray-300 hover:bg-white/10'
-                              }`}
-                            >
-                              {n}
-                            </button>
-                          ))}
+                          <div className="flex gap-2 mt-2">
+                            {[25, 50, 100].map((n) => (
+                              <button
+                                key={n}
+                                type="button"
+                                onClick={() => setAssignCountInput(n)}
+                                className={`flex-1 py-1.5 rounded-xl border text-xs font-mono transition-colors cursor-pointer ${
+                                  assignCountInput === n
+                                    ? 'bg-[#E9C349]/20 border-[#E9C349] text-[#E9C349] font-bold'
+                                    : 'bg-white/5 border-white/5 text-gray-300 hover:bg-white/10'
+                                }`}
+                              >
+                                {n}
+                              </button>
+                            ))}
+                            {availableReserveForTier > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => setAssignCountInput(availableReserveForTier)}
+                                className={`flex-1 py-1.5 rounded-xl border text-xs font-mono transition-colors cursor-pointer ${
+                                  assignCountInput === availableReserveForTier
+                                    ? 'bg-sky-500/25 border-sky-400 text-sky-200 font-bold'
+                                    : 'bg-white/5 border-white/5 text-sky-300 hover:bg-white/10'
+                                }`}
+                              >
+                                Tout ({availableReserveForTier})
+                              </button>
+                            )}
+                          </div>
                         </div>
-                      </div>
 
-                      <div className="pt-2 flex gap-3">
-                        <button
-                          type="button"
-                          onClick={() => setShowAssignModal(false)}
-                          className="flex-1 py-3 rounded-2xl bg-white/5 hover:bg-white/10 text-white font-bold text-xs uppercase cursor-pointer"
-                        >
-                          Annuler
-                        </button>
-                        <button
-                          type="submit"
-                          disabled={!selectedAgentForAssign || assignCountInput <= 0}
-                          className="flex-1 py-3 rounded-2xl bg-gradient-to-r from-sky-600 to-[#8A2BE2] hover:from-sky-500 hover:to-[#9B3BF2] text-white font-heading font-extrabold text-xs uppercase tracking-wider shadow-lg disabled:opacity-40 cursor-pointer"
-                        >
-                          Confirmer l’Attribution
-                        </button>
-                      </div>
-                    </form>
+                        {/* ENCART RÉCAPITULATIF AVANT VALIDATION */}
+                        <div className="p-3.5 rounded-2xl bg-[#121212] border border-white/10 space-y-2 text-xs">
+                          <div className="flex items-center justify-between text-gray-400">
+                            <span>Vendeur partenaire :</span>
+                            <span className="font-bold text-white">🏪 {selectedAgentForAssign?.pointDeVente || 'Non sélectionné'}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-gray-400">
+                            <span>Type de billet :</span>
+                            <span className="font-bold text-[#E9C349]">🎫 {assignTierName || 'Standard'}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-gray-400 border-t border-white/5 pt-1.5">
+                            <span>Stock actuel en réserve :</span>
+                            <span className="font-mono text-white">{availableReserveForTier} billets</span>
+                          </div>
+                          <div className="flex items-center justify-between text-sky-400 font-bold">
+                            <span>Quantité à transférer :</span>
+                            <span className="font-mono">-{assignCountInput} billets</span>
+                          </div>
+                          <div className="flex items-center justify-between text-gray-300 border-t border-white/5 pt-1.5">
+                            <span>Nouveau solde en réserve :</span>
+                            <span className="font-mono font-bold text-emerald-400">
+                              {Math.max(0, availableReserveForTier - assignCountInput)} billets
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-gray-300">
+                            <span>Nouveau total boutique {selectedAgentForAssign?.pointDeVente} :</span>
+                            <span className="font-mono font-bold text-amber-300">
+                              {(selectedAgentForAssign?.allocatedCount || 0) + assignCountInput} billets
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="pt-1 flex gap-3">
+                          <button
+                            type="button"
+                            onClick={() => setShowAssignModal(false)}
+                            className="flex-1 py-3 rounded-2xl bg-white/5 hover:bg-white/10 text-white font-bold text-xs uppercase cursor-pointer"
+                          >
+                            Annuler
+                          </button>
+                          <button
+                            type="submit"
+                            disabled={!selectedAgentForAssign || assignCountInput <= 0 || isAssigning}
+                            className="flex-1 py-3 rounded-2xl bg-gradient-to-r from-sky-600 to-[#8A2BE2] hover:from-sky-500 hover:to-[#9B3BF2] text-white font-heading font-extrabold text-xs uppercase tracking-wider shadow-lg disabled:opacity-40 cursor-pointer flex items-center justify-center gap-2"
+                          >
+                            {isAssigning ? (
+                              <span>Attribution en cours...</span>
+                            ) : (
+                              <span>Confirmer ({assignCountInput})</span>
+                            )}
+                          </button>
+                        </div>
+                      </form>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* MODALE : ENCAISSER UN VERSEMENT D'ESPÈCES */}
             {showSettlementModal && selectedAgentForSettlement && (
