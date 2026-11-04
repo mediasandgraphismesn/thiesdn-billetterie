@@ -96,45 +96,71 @@ export function resolvePointDeVenteLabel(ticket: UserTicket): string {
   return 'Point de Vente';
 }
 
-// DataURL d'un PNG 500x1 pixels pré-généré avec un dégradé linéaire horizontal ultra-lisse (296 octets décodés)
-// 0% -> rgba(10, 10, 14, 0.92) | 45% -> rgba(10, 10, 14, 0.85) | 70% -> rgba(10, 10, 14, 0.40) | 100% -> rgba(10, 10, 14, 0.0)
-const DEFAULT_GRADIENT_PNG_DATA_URL =
-  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAfQAAAABCAYAAAAo/lyUAAAA70lEQVR4AVXBoXUDARBEMZkapP8yXUByP2DAPkuv9/vng5ycfMvJycnJycnJt5ycnJycnJycnJycnJycnJycnJycnJycnJxMTk5OTk5OTiYnJycnJ5OTk5PJycnJ5OTkZHJyMjk5mZycTE5OJieTk5PJyeRkcjI5mZxMTiYnk5PJyWRyMpmcTE4mk5PJZHIymZxMJpOTyWQymZxMJpPJZHIymUwmk8lkMplMJpPJZEImk8lkMpmQyWQyIZPJhEwmZDIhkwmZkAmZTMiEkAmZkAkhE0ImhJAJIWRCCCGEEEIIIYQQwoMQHoQHD8Iffv8BIjXnJKz++JQAAAAASUVORK5CYII=';
-
 /**
- * Génère ou récupère le dégradé PNG horizontal 500x1 pixels garantissant zéro banding.
+ * Recadre une image en mode "object-fit: cover" au ratio exact du billet (190mm x 52mm, ratio 3.6538:1).
+ * Produit un DataURL JPEG haute résolution (1900 x 520 px) garantissant zéro bande blanche et zéro anamorphose.
  */
-function getLinearGradientOverlayDataUrl(): string {
-  if (typeof document !== 'undefined') {
-    try {
-      const canvas = document.createElement('canvas');
-      canvas.width = 500;
-      canvas.height = 1;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        const grad = ctx.createLinearGradient(0, 0, 500, 0);
-        grad.addColorStop(0, 'rgba(10, 10, 14, 0.92)');
-        grad.addColorStop(0.35, 'rgba(10, 10, 14, 0.86)');
-        grad.addColorStop(0.65, 'rgba(10, 10, 14, 0.45)');
-        grad.addColorStop(0.85, 'rgba(10, 10, 14, 0.15)');
-        grad.addColorStop(1, 'rgba(10, 10, 14, 0.0)');
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, 500, 1);
-        return canvas.toDataURL('image/png');
-      }
-    } catch (e) {
-      console.warn('Fallback dégradé canvas:', e);
-    }
+async function cropImageToCoverDataUrl(
+  imageSource: string,
+  targetWidth = 1900,
+  targetHeight = 520
+): Promise<string> {
+  if (typeof document === 'undefined') {
+    return imageSource;
   }
-  return DEFAULT_GRADIENT_PNG_DATA_URL;
+
+  return new Promise<string>((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(imageSource);
+          return;
+        }
+
+        const targetRatio = targetWidth / targetHeight; // 1900 / 520 = 3.6538
+        const imgRatio = img.width / img.height;
+
+        let sx = 0;
+        let sy = 0;
+        let sWidth = img.width;
+        let sHeight = img.height;
+
+        if (imgRatio > targetRatio) {
+          // L'image est plus panoramique que le billet -> on coupe les côtés
+          sWidth = img.height * targetRatio;
+          sx = (img.width - sWidth) / 2;
+        } else {
+          // L'image est plus verticale (affiche standard) -> on coupe le haut/bas
+          // Cadrage à 25% depuis le haut pour préserver le visuel central
+          sHeight = img.width / targetRatio;
+          sy = Math.max(0, (img.height - sHeight) * 0.25);
+        }
+
+        ctx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, targetWidth, targetHeight);
+        resolve(canvas.toDataURL('image/jpeg', 0.9));
+      } catch (e) {
+        console.warn('Fallback crop canvas:', e);
+        resolve(imageSource);
+      }
+    };
+    img.onerror = () => resolve(imageSource);
+    img.src = imageSource;
+  });
 }
 
 // Cache global d'affiches en mémoire (Map) pour éviter tout re-téléchargement au sein d'un même lot
 const posterCache = new Map<string, string>();
 
 /**
- * Charge l'affiche officielle de l'événement et la convertit en DataURL optimisée.
- * Dispose d'une mise en cache mémoire (Map) et d'un triple fallback anti-CORS (weserv.nl -> allorigins.win -> direct).
+ * Charge l'affiche officielle de l'événement, la recadre en mode COVER plein format (190x52mm)
+ * et la convertit en DataURL optimisée.
+ * Dispose d'une mise en cache mémoire (Map), d'un triple fallback anti-CORS et support Node.js.
  */
 async function loadEventPosterDataUrl(event: EventItem): Promise<string | null> {
   const rawUrl = (event as any).affiche_url || (event as any).poster_url || event.posterUrl;
@@ -147,11 +173,12 @@ async function loadEventPosterDataUrl(event: EventItem): Promise<string | null> 
 
   // 2. Si c'est déjà un DataURL
   if (rawUrl.startsWith('data:image/')) {
-    posterCache.set(rawUrl, rawUrl);
-    return rawUrl;
+    const cropped = await cropImageToCoverDataUrl(rawUrl);
+    posterCache.set(rawUrl, cropped);
+    return cropped;
   }
 
-  // 3. Environnement Navigateur Web (Triple Fallback Anti-CORS)
+  // 3. Environnement Navigateur Web (Triple Fallback Anti-CORS + Crop Cover)
   if (typeof window !== 'undefined') {
     const candidateUrls: string[] = [];
     if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
@@ -166,7 +193,7 @@ async function loadEventPosterDataUrl(event: EventItem): Promise<string | null> 
       } else {
         // Priorité 1 : Proxy CDN weserv.nl avec compression et redimensionnement
         candidateUrls.push(
-          `https://images.weserv.nl/?url=${encodeURIComponent(rawUrl)}&w=900&q=82&output=jpg`
+          `https://images.weserv.nl/?url=${encodeURIComponent(rawUrl)}&w=1200&q=85&output=jpg`
         );
         // Priorité 2 : Proxy universel secondaire allorigins.win
         candidateUrls.push(`https://api.allorigins.win/raw?url=${encodeURIComponent(rawUrl)}`);
@@ -183,16 +210,17 @@ async function loadEventPosterDataUrl(event: EventItem): Promise<string | null> 
         if (!res.ok) continue;
         const blob = await res.blob();
 
-        const dataUrl = await new Promise<string>((resolve, reject) => {
+        const rawDataUrl = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
           reader.onloadend = () => resolve(reader.result as string);
           reader.onerror = reject;
           reader.readAsDataURL(blob);
         });
 
-        if (dataUrl && dataUrl.startsWith('data:image/')) {
-          posterCache.set(rawUrl, dataUrl);
-          return dataUrl;
+        if (rawDataUrl && rawDataUrl.startsWith('data:image/')) {
+          const croppedDataUrl = await cropImageToCoverDataUrl(rawDataUrl);
+          posterCache.set(rawUrl, croppedDataUrl);
+          return croppedDataUrl;
         }
       } catch (err) {
         // Poursuivre vers le candidat suivant
@@ -200,12 +228,11 @@ async function loadEventPosterDataUrl(event: EventItem): Promise<string | null> 
     }
   }
 
-  // 4. Environnement Node.js (Tests automatisés Playwright / ts-node)
-  try {
-    const req = typeof window === 'undefined' ? (Function('return require')() as any) : null;
-    if (req) {
-      const fs = req('fs');
-      const path = req('path');
+  // 4. Environnement Node.js (Tests automatisés Playwright / ts-node / tsx)
+  if (typeof window === 'undefined') {
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
 
       let localPath = rawUrl;
       if (rawUrl.startsWith('/')) {
@@ -223,7 +250,7 @@ async function loadEventPosterDataUrl(event: EventItem): Promise<string | null> 
 
       if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
         const candidateUrls = [
-          `https://images.weserv.nl/?url=${encodeURIComponent(rawUrl)}&w=900&q=82&output=jpg`,
+          `https://images.weserv.nl/?url=${encodeURIComponent(rawUrl)}&w=1200&q=85&output=jpg`,
           `https://api.allorigins.win/raw?url=${encodeURIComponent(rawUrl)}`,
           rawUrl,
         ];
@@ -240,9 +267,9 @@ async function loadEventPosterDataUrl(event: EventItem): Promise<string | null> 
           } catch (e) {}
         }
       }
+    } catch (err) {
+      console.warn('Fallback affiche Node.js non chargée:', err);
     }
-  } catch (err) {
-    console.warn('Fallback affiche non chargée:', err);
   }
 
   return null;
@@ -388,13 +415,10 @@ export const generatePhysicalTicketsPdf = async (
 
   const total = tickets.length;
 
-  // 1. Chargement de l'affiche via le cache mémoire et triple fallback CORS (une seule fois pour tout le lot)
+  // 1. Chargement de l'affiche officielle (recadrée cover plein format 190x52mm)
   const posterDataUrl = await loadEventPosterDataUrl(event);
 
-  // 2. Récupération du dégradé PNG horizontal continu (zéro banding)
-  const gradientPngDataUrl = getLinearGradientOverlayDataUrl();
-
-  // 3. Préparation des textes dynamiques nettoyés pour jsPDF
+  // 2. Préparation des textes dynamiques nettoyés pour jsPDF
   const cleanTitle = sanitizeForPdf(event.title).toUpperCase() || 'EVENEMENT OFFICIEL';
   const cleanDate = sanitizeForPdf(event.date) || 'Date a confirmer';
   const cleanTime = sanitizeForPdf(event.time) || '20:00';
@@ -433,13 +457,14 @@ export const generatePhysicalTicketsPdf = async (
     drawCropMark(doc, marginX + ticketWidth, startY + ticketHeight);
 
     // =================================================================
-    // FOND DU BILLET : AFFICHE OFFICIELLE + DÉGRADÉ PNG LISSE SANS BANDING
+    // CALQUE 1 : FOND NOIR UNIFIÉ (100% du rectangle : 190 x 52 mm)
     // =================================================================
-    // Fond de base noir anthracite
-    doc.setFillColor(14, 14, 18);
+    doc.setFillColor(10, 10, 14);
     doc.rect(marginX, startY, ticketWidth, ticketHeight, 'F');
 
-    // Insertion de l'affiche officielle en plein fond si disponible
+    // =================================================================
+    // CALQUE 2 : IMAGE DE L'AFFICHE OFFICIELLE (COVER PLEIN FORMAT 190 x 52 mm)
+    // =================================================================
     if (posterDataUrl) {
       try {
         const imageFormat = posterDataUrl.includes('image/png') ? 'PNG' : 'JPEG';
@@ -449,27 +474,31 @@ export const generatePhysicalTicketsPdf = async (
       }
     }
 
-    // Application du dégradé PNG horizontal étiré par-dessus l'affiche (noir 92% à gauche -> transparent à droite)
+    // =================================================================
+    // CALQUE 3 : VOILE SOMBRE SEMI-TRANSPARENT (OPACITÉ 0.75 UNIFORME)
+    // =================================================================
     try {
-      doc.addImage(gradientPngDataUrl, 'PNG', marginX, startY, ticketWidth, ticketHeight);
-    } catch (gradErr) {
-      // Fallback overlay uni si problème d'insertion du PNG dégradé
-      try {
-        type GStateArg = Parameters<jsPDF['setGState']>[0];
-        const GStateCtor = (doc as unknown as { GState: new (opts: { opacity: number }) => GStateArg }).GState;
-        doc.setFillColor(10, 10, 12);
-        doc.setGState(new GStateCtor({ opacity: 0.68 }));
-        doc.rect(marginX, startY, ticketWidth, ticketHeight, 'F');
-        doc.setGState(new GStateCtor({ opacity: 1.0 }));
-      } catch (e) {
-        doc.rect(marginX, startY, ticketWidth, ticketHeight, 'F');
-      }
+      type GStateArg = Parameters<jsPDF['setGState']>[0];
+      const GStateCtor = (doc as unknown as { GState: new (opts: { opacity: number }) => GStateArg }).GState;
+      doc.setFillColor(10, 10, 10);
+      doc.setGState(new GStateCtor({ opacity: 0.75 }));
+      doc.rect(marginX, startY, ticketWidth, ticketHeight, 'F');
+      doc.setGState(new GStateCtor({ opacity: 1.0 }));
+    } catch {
+      doc.setFillColor(10, 10, 10);
+      doc.rect(marginX, startY, ticketWidth, ticketHeight, 'F');
     }
 
-    // Liseré extérieur doré prestige (#E9C349)
-    doc.setDrawColor(233, 195, 73);
-    doc.setLineWidth(0.5);
-    doc.rect(marginX, startY, ticketWidth, ticketHeight, 'D');
+    // =================================================================
+    // CALQUE 4 : BANDEAU D'EN-TÊTE SÉCURISÉ SUR FOND NOIR UNI (100% OPAQUE)
+    // =================================================================
+    // Fond noir uni 100% opaque sous le logo Thièsdn et "OFFICIEL" pour garantir zéro brouillage
+    doc.setFillColor(10, 10, 14);
+    doc.rect(marginX, startY, ticketWidth, 7.2, 'F');
+
+    // =================================================================
+    // CALQUE 5 : TEXTES, LOGOS, QR CODE ET SOUCHES (COUCHE SUPÉRIEURE)
+    // =================================================================
 
     // =================================================================
     // EN-TÊTE : LOGO THIÈSDN, BILLETTERIE & BADGE FORMULE OR DYNAMIQUE
@@ -735,6 +764,11 @@ export const generatePhysicalTicketsPdf = async (
       startY + 50.2,
       { align: 'right' }
     );
+
+    // Liseré extérieur doré prestige (#E9C349) encadrant le billet au-dessus de tous les calques
+    doc.setDrawColor(233, 195, 73);
+    doc.setLineWidth(0.5);
+    doc.rect(marginX, startY, ticketWidth, ticketHeight, 'D');
   }
 
   return doc.output('blob');
