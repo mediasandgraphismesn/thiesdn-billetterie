@@ -12,14 +12,9 @@ import { ShieldAlert, Eye, ArrowRight, X } from 'lucide-react';
 import { HomeView } from './views/HomeView';
 import { ExploreView } from './views/ExploreView';
 import { CreateEventView } from './views/CreateEventView';
-import { EventsManagementView } from './views/EventsManagementView';
-import { ModerationView } from './views/ModerationView';
 import { ProfileView } from './views/ProfileView';
 import { AuthView } from './views/AuthView';
-import { CheckInScannerView } from './views/CheckInScannerView';
 import { TicketsWalletView } from './views/TicketsWalletView';
-import { FinancesView } from './views/FinancesView';
-import { AdminDashboard } from './views/AdminDashboard';
 import { AdminSidebar } from './components/admin/AdminSidebar';
 import { AdminNotificationCenter } from './components/admin/AdminNotificationCenter';
 import {
@@ -28,13 +23,9 @@ import {
   markAllNotificationsAsRead,
   playNotificationChime,
 } from './services/userNotificationService';
-import { UsersManagementView } from './views/UsersManagementView';
-import { PlatformSettingsView } from './views/PlatformSettingsView';
 import { SalesAgentDashboardView } from './views/SalesAgentDashboardView';
 import { PosAuthView } from './views/PosAuthView';
 import { ArtistDashboardView } from './views/ArtistDashboardView';
-import { AccreditationsView } from './views/AccreditationsView';
-import { ScanStationsView } from './views/ScanStationsView';
 import { PublicScannerStationView } from './views/PublicScannerStationView';
 import { ClaimTicketView } from './views/ClaimTicketView';
 import { CGVView } from './views/CGVView';
@@ -42,6 +33,28 @@ import { LoginHistoryView } from './views/LoginHistoryView';
 import { VigileSessionsView } from './views/VigileSessionsView';
 import LoadingIntro from './components/LoadingIntro';
 
+// Optimisation React 19 : Code Splitting pour affichage instantane mobile
+const FinancesView = React.lazy(() => import('./views/FinancesView').then((m) => ({ default: m.FinancesView })));
+const EventsManagementView = React.lazy(() => import('./views/EventsManagementView').then((m) => ({ default: m.EventsManagementView })));
+const ModerationView = React.lazy(() => import('./views/ModerationView').then((m) => ({ default: m.ModerationView })));
+const AdminDashboard = React.lazy(() => import('./views/AdminDashboard').then((m) => ({ default: m.AdminDashboard })));
+const AccreditationsView = React.lazy(() => import('./views/AccreditationsView').then((m) => ({ default: m.AccreditationsView })));
+const ScanStationsView = React.lazy(() => import('./views/ScanStationsView').then((m) => ({ default: m.ScanStationsView })));
+const CheckInScannerView = React.lazy(() => import('./views/CheckInScannerView').then((m) => ({ default: m.CheckInScannerView })));
+const UsersManagementView = React.lazy(() => import('./views/UsersManagementView').then((m) => ({ default: m.UsersManagementView })));
+const PlatformSettingsView = React.lazy(() => import('./views/PlatformSettingsView').then((m) => ({ default: m.PlatformSettingsView })));
+
+const ViewSkeletonLoader: React.FC = () => (
+  <div className="w-full max-w-6xl mx-auto py-8 px-4 space-y-6 animate-pulse">
+    <div className="h-8 w-48 bg-white/5 rounded-2xl border border-white/5" />
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {[1, 2, 3, 4].map((i) => (
+        <div key={i} className="h-28 bg-white/5 rounded-2xl border border-white/5" />
+      ))}
+    </div>
+    <div className="h-64 bg-white/5 rounded-3xl border border-white/5" />
+  </div>
+);
 const LandingShowcaseView = React.lazy(() => import('./views/LandingShowcaseView'));
 
 import {
@@ -1096,8 +1109,8 @@ export default function App() {
           activeTab === 'showcase' || activeTab === 'presentation'
             ? 'p-0 m-0 max-w-none pt-0 pb-0'
             : isAuthenticated 
-            ? 'pt-4 sm:pt-6 pb-[calc(var(--nav-h,72px)+env(safe-area-inset-bottom)+16px)] lg:pb-12 px-3 sm:px-6 lg:pl-80 lg:pr-10 max-w-7xl' 
-            : 'pt-4 sm:pt-6 pb-[calc(var(--nav-h,72px)+env(safe-area-inset-bottom)+16px)] lg:pb-12 px-3 sm:px-8 lg:px-12 max-w-6xl'
+            ? 'pt-4 sm:pt-6 pb-[100px] md:pb-12 px-3 sm:px-6 md:pl-72 md:pr-8 w-full max-w-7xl' 
+            : 'pt-4 sm:pt-6 pb-[100px] md:pb-12 px-3 sm:px-8 w-full max-w-6xl'
         }`}>
           {eventsError && (
             <div className="mb-6 p-4 rounded-2xl bg-rose-950/80 border border-rose-500/40 text-rose-200 flex items-center justify-between">
@@ -1199,7 +1212,7 @@ export default function App() {
             </div>
           ) : (
             /* Condition 3 : Vue autorisée pour le rôle actuel */
-            <>
+            <React.Suspense fallback={<ViewSkeletonLoader />}>
               {/* TABLEAU DE BORD SUPER ADMIN DÉDIÉ (Par défaut à la connexion admin) */}
               {(activeTab === 'dashboard' || (activeTab === 'home' && effectiveRole === 'admin')) && effectiveRole === 'admin' && (
                 <AdminDashboard
@@ -1342,19 +1355,20 @@ export default function App() {
                 />
               )}
 
-              {activeTab === 'finances' && (effectiveRole === 'promoter' || effectiveRole === 'admin') && (
+              {(activeTab === 'finances' || activeTab === 'cockpit') && (effectiveRole === 'promoter' || effectiveRole === 'admin') && (
                 <FinancesView
                   currentRole={effectiveRole}
                   events={safeEvents}
                   promoterName={user.name}
+                  initialTab="stats"
                 />
               )}
 
-              {/* POINTS DE VENTE DU RÉSEAU PHYSIQUE */}
-              {activeTab === 'points_de_vente' && (effectiveRole === 'promoter' || effectiveRole === 'admin') && (
+              {/* BILLETS PHYSIQUES & RÉSEAU PROMOTEUR (ACCÈS DIRECT DEPUIS BOTTOMNAV) */}
+              {(activeTab === 'points_de_vente' || activeTab === 'physical_tickets' || activeTab === 'network') && (effectiveRole === 'promoter' || effectiveRole === 'admin') && (
                 <FinancesView
                   currentRole={effectiveRole}
-                  events={events}
+                  events={safeEvents}
                   promoterName={user.name}
                   initialTab="network"
                 />
@@ -1445,7 +1459,7 @@ export default function App() {
                   <LandingShowcaseView onNavigate={handleTabChange} />
                 </React.Suspense>
               )}
-            </>
+            </React.Suspense>
           )}
 
           {/* Pied de page Officiel (Footer) complet et responsive */}

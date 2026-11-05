@@ -122,7 +122,7 @@ export const OrdersTable: React.FC<OrdersTableProps> = ({
 
         <div className="flex items-center gap-2">
           {/* Filtres par statut */}
-          <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0">
+          <div className="flex items-center gap-1 overflow-x-auto flex-nowrap scrollbar-none pb-1 sm:pb-0">
             <button
               onClick={() => setStatusFilter('all')}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
@@ -168,7 +168,158 @@ export const OrdersTable: React.FC<OrdersTableProps> = ({
 
       {/* Tableau Responsive des Commandes Supabase */}
       <div className="glass-panel rounded-2xl border border-white/10 overflow-hidden shadow-2xl">
-        <div className="overflow-x-auto">
+        {/* VUE CARTES MOBILES (< 768px - Normes WCAG & Liquid Glass) */}
+        <div className="flex flex-col gap-3.5 p-3 md:hidden">
+          {filteredOrders.length === 0 ? (
+            <div className="py-10 text-center text-gray-500">
+              <Clock className="w-8 h-8 mx-auto mb-2 opacity-40" />
+              <p className="font-semibold text-sm text-gray-400">Aucune commande trouvée</p>
+              <p className="text-xs text-gray-500 mt-1">Les commandes apparaîtront ici en direct.</p>
+            </div>
+          ) : (
+            filteredOrders.map((order) => {
+              const isProcessing = processingOrderId === order.id;
+              const isPending = order.status === 'pending' || order.status === 'payment_signaled';
+              const cleanPhone = order.customerPhone ? order.customerPhone.replace(/[^0-9]/g, '') : '';
+              const waPhone = cleanPhone.startsWith('221') ? cleanPhone : `221${cleanPhone}`;
+              const origin = typeof window !== 'undefined' ? window.location.origin : 'https://billetterie.thiesdn.site';
+              const ticketUrl = `${origin}/?ref=${order.reference}#tickets`;
+              const waText = encodeURIComponent(
+                `Bonjour ${order.customerName} ! Votre commande pour "${order.eventTitle}" (${order.tierName}) a été validée avec succès par Thièsdn Billetterie.\n\n` +
+                `🎫 Référence : ${order.reference}\n` +
+                `🎟️ Vos billets officiels sont accessibles ici : ${ticketUrl}\n\n` +
+                `Présentez votre QR Code à l'entrée de l'événement. Bon spectacle !`
+              );
+
+              return (
+                <div
+                  key={`mobile-${order.id}`}
+                  className="p-4 rounded-2xl bg-white/5 backdrop-blur-md border border-white/10 space-y-3 shadow-md"
+                >
+                  {/* En-tête : Référence + Statut */}
+                  <div className="flex items-start justify-between gap-2 border-b border-white/5 pb-2.5">
+                    <div>
+                      <div className="flex items-center gap-1.5 font-mono font-bold text-white text-xs">
+                        <span className="text-[#E9C349]">{order.reference}</span>
+                        <button
+                          onClick={() => handleCopy(order.reference, order.id)}
+                          className="text-gray-400 hover:text-white p-1"
+                          title="Copier référence"
+                        >
+                          {copiedId === order.id ? (
+                            <Check className="w-3.5 h-3.5 text-emerald-400" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      </div>
+                      <span className="text-[10px] text-gray-400 block mt-0.5">
+                        {new Date(order.createdAt).toLocaleDateString('fr-FR', {
+                          day: 'numeric',
+                          month: 'short',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </span>
+                    </div>
+                    <div>{getStatusBadge(order.status)}</div>
+                  </div>
+
+                  {/* Client & Contact */}
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="min-w-0">
+                      <span className="text-[10px] text-gray-400 uppercase font-bold block">Client :</span>
+                      <p className="font-bold text-white truncate">{order.customerName}</p>
+                      <a
+                        href={`tel:${order.customerPhone}`}
+                        className="text-[11px] font-mono text-[#DCB8FF] flex items-center gap-1 mt-0.5 truncate"
+                      >
+                        <Smartphone className="w-3 h-3 text-[#E9C349] shrink-0" />
+                        <span className="truncate">{order.customerPhone}</span>
+                      </a>
+                    </div>
+                    <div className="min-w-0">
+                      <span className="text-[10px] text-gray-400 uppercase font-bold block">Paiement :</span>
+                      <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-[#141414] border border-white/10 uppercase mt-0.5">
+                        {order.paymentMethod === 'wave' ? 'Wave' : 'Orange Money'}
+                      </span>
+                      {order.paymentReference && (
+                        <p className="text-[10px] font-mono text-gray-400 truncate mt-0.5">
+                          Réf: {order.paymentReference}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Événement & Formule */}
+                  <div className="p-2.5 rounded-xl bg-black/40 border border-white/5 space-y-1">
+                    <p className="font-semibold text-white text-xs line-clamp-1">{order.eventTitle}</p>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-[11px] text-[#DCB8FF] font-medium truncate max-w-[140px]">
+                        {order.tierName} • {order.quantity} pl.
+                      </span>
+                      <span className="font-heading font-black text-sm text-[#E9C349]">
+                        {order.totalAmount.toLocaleString('fr-FR')} FCFA
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Actions Tactiles WCAG (min-h-[44px]) */}
+                  <div className="pt-1">
+                    {isPending ? (
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          disabled={isProcessing}
+                          onClick={() => onRejectOrder(order.id, 'Paiement Wave non reçu')}
+                          className="w-full min-h-[44px] rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 text-xs font-bold transition-all disabled:opacity-50 flex items-center justify-center cursor-pointer"
+                        >
+                          Refuser
+                        </button>
+                        <button
+                          disabled={isProcessing}
+                          onClick={() => onConfirmOrder(order)}
+                          className="w-full min-h-[44px] rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-heading font-extrabold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/20 disabled:opacity-50 cursor-pointer"
+                        >
+                          {isProcessing ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <CheckCircle2 className="w-4 h-4" />
+                          )}
+                          <span>Valider</span>
+                        </button>
+                      </div>
+                    ) : order.status === 'confirmed' ? (
+                      <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-1">
+                        <span className="text-xs text-emerald-400 font-semibold flex items-center gap-1.5">
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>Billets émis & envoyés</span>
+                        </span>
+                        {cleanPhone && (
+                          <a
+                            href={`https://wa.me/${waPhone}?text=${waText}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="w-full sm:w-auto min-h-[44px] px-4 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer"
+                          >
+                            <MessageSquare className="w-4 h-4 fill-current" />
+                            <span>Relancer WhatsApp</span>
+                          </a>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-xs text-gray-500 italic block text-center py-1">
+                        Commande clôturée
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* VUE TABLEAU DESKTOP (>= 768px) */}
+        <div className="overflow-x-auto hidden md:block">
           <table className="w-full text-left text-xs">
             <thead className="bg-[#141414] text-gray-400 uppercase font-heading font-extrabold text-[10px] tracking-wider border-b border-white/10">
               <tr>

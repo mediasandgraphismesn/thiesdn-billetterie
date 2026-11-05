@@ -981,7 +981,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
 
                   {/* Infos Événement */}
                   <div className="space-y-2">
-                    <h3 className="font-heading text-lg font-extrabold text-white line-clamp-1 group-hover:text-[#E9C349] transition-colors">
+                    <h3 className="font-heading text-lg font-extrabold text-white line-clamp-2 group-hover:text-[#E9C349] transition-colors">
                       {event.title}
                     </h3>
 
@@ -1023,7 +1023,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                   {userRole === 'admin' && (
                     <button
                       onClick={() => handleOpenTransferModal(event)}
-                      className="w-full px-3 py-2 rounded-xl bg-gradient-to-r from-[#8A2BE2]/20 via-[#A855F7]/15 to-[#E9C349]/20 hover:from-[#8A2BE2]/35 hover:to-[#E9C349]/35 border border-[#8A2BE2]/40 hover:border-[#E9C349]/60 text-white font-heading font-extrabold text-xs flex items-center justify-between transition-all shadow-md group/assign cursor-pointer"
+                      className="w-full min-h-[44px] px-3 py-2 rounded-xl bg-gradient-to-r from-[#8A2BE2]/20 via-[#A855F7]/15 to-[#E9C349]/20 hover:from-[#8A2BE2]/35 hover:to-[#E9C349]/35 border border-[#8A2BE2]/40 hover:border-[#E9C349]/60 text-white font-heading font-extrabold text-xs flex items-center justify-between transition-all shadow-md group/assign cursor-pointer"
                       title="Transférer la propriété de cet événement à un promoteur"
                     >
                       <span className="flex items-center gap-1.5 truncate">
@@ -1042,7 +1042,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                   {/* Bouton Accès Direct Leads Marketing */}
                   <button
                     onClick={() => handleOpenLeads(event)}
-                    className="w-full px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 font-semibold text-xs flex items-center justify-between hover:bg-amber-500/20 transition-all shadow-sm"
+                    className="w-full min-h-[44px] px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 font-semibold text-xs flex items-center justify-between hover:bg-amber-500/20 transition-all shadow-sm"
                     title="Voir directement les pré-inscriptions et leads pour cet événement"
                   >
                     <span className="flex items-center gap-1.5">
@@ -1062,7 +1062,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                     {/* 1. Modifier */}
                     <button
                       onClick={() => handleOpenEdit(event)}
-                      className="py-2.5 px-2 rounded-xl bg-white/5 hover:bg-[#8A2BE2]/20 border border-white/10 text-[11px] font-bold text-white hover:text-[#DCB8FF] flex items-center justify-center gap-1.5 transition-all"
+                      className="min-h-[44px] py-2.5 px-2 rounded-xl bg-white/5 hover:bg-[#8A2BE2]/20 border border-white/10 text-[11px] font-bold text-white hover:text-[#DCB8FF] flex items-center justify-center gap-1.5 transition-all"
                       title="Modifier les informations"
                     >
                       <Edit3 className="w-3.5 h-3.5 text-[#DCB8FF]" />
@@ -1072,7 +1072,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                     {/* 2. Archiver / Désarchiver */}
                     <button
                       onClick={() => handleToggleArchive(event)}
-                      className={`py-2.5 px-2 rounded-xl border text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all ${
+                      className={`min-h-[44px] py-2.5 px-2 rounded-xl border text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all ${
                         isArchived
                           ? 'bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/30 text-emerald-300'
                           : 'bg-white/5 hover:bg-amber-500/20 border-white/10 text-gray-300 hover:text-amber-300'
@@ -1095,7 +1095,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                     {/* 3. Supprimer */}
                     <button
                       onClick={() => handleStartDelete(event)}
-                      className="py-2.5 px-2 rounded-xl bg-white/5 hover:bg-rose-500/20 border border-white/10 text-[11px] font-bold text-gray-300 hover:text-rose-400 flex items-center justify-center gap-1.5 transition-all"
+                      className="min-h-[44px] py-2.5 px-2 rounded-xl bg-white/5 hover:bg-rose-500/20 border border-white/10 text-[11px] font-bold text-gray-300 hover:text-rose-400 flex items-center justify-center gap-1.5 transition-all"
                       title="Supprimer définitivement"
                     >
                       <Trash2 className="w-3.5 h-3.5 text-rose-400" />
@@ -2157,7 +2157,68 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                         </p>
                       </div>
                     ) : (
-                      <div className="overflow-x-auto rounded-2xl border border-white/10 bg-[#111111]">
+                      <>
+                        {/* Vue Cartes Mobile (< 768px) */}
+                        <div className="block md:hidden space-y-3">
+                          {modalPreRegistrations.map((lead) => {
+                            const rawDigits = (lead.phone || '').replace(/\D/g, '');
+                            const normalizedPhone = rawDigits.startsWith('221')
+                              ? rawDigits
+                              : rawDigits.length === 9
+                              ? `221${rawDigits}`
+                              : rawDigits;
+
+                            const eventUrl = `https://billetterie.thiesdn.site/event/${editingEvent.id}`;
+                            const personalizedMessage =
+                              `Bonjour ${lead.fullName}, les ventes de billets pour l'événement *${editingEvent.title}* sont officiellement ouvertes sur ThièsDN ! ` +
+                              `Réservez votre place dès maintenant en 1 clic : ${eventUrl}`;
+                            const whatsappLink = `https://wa.me/${normalizedPhone}?text=${encodeURIComponent(personalizedMessage)}`;
+
+                            const formattedDate = lead.createdAt
+                              ? new Date(lead.createdAt).toLocaleDateString('fr-FR', {
+                                  day: '2-digit',
+                                  month: '2-digit',
+                                  year: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })
+                              : '—';
+
+                            return (
+                              <div key={lead.id} className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-3">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div>
+                                    <p className="font-heading font-bold text-white text-sm">{lead.fullName}</p>
+                                    <p className="font-mono text-xs text-[#DCB8FF]">{lead.phone}</p>
+                                  </div>
+                                  <span className="text-[10px] text-gray-500 font-mono shrink-0">
+                                    {formattedDate}
+                                  </span>
+                                </div>
+
+                                {lead.email && (
+                                  <p className="text-xs text-gray-400 truncate">
+                                    ✉️ {lead.email}
+                                  </p>
+                                )}
+
+                                <a
+                                  href={whatsappLink}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="w-full min-h-[44px] rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer"
+                                  title={`Envoyer une relance WhatsApp à ${lead.fullName}`}
+                                >
+                                  <MessageCircle className="w-4 h-4 fill-current" />
+                                  <span>Relancer sur WhatsApp (1-Clic)</span>
+                                </a>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Vue Tableau Desktop (>= 768px) */}
+                        <div className="overflow-x-auto rounded-2xl border border-white/10 bg-[#111111] hidden md:block">
                         <table className="w-full text-left border-collapse text-xs">
                           <thead>
                             <tr className="border-b border-white/10 bg-black/40 text-[10px] uppercase font-bold text-gray-400 tracking-wider">
@@ -2226,6 +2287,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                           </tbody>
                         </table>
                       </div>
+                      </>
                     )}
                   </div>
                 </div>

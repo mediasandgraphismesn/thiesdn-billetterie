@@ -8,6 +8,14 @@
 html, body, #root {
   max-width: 100%;
   overflow-x: clip;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+::-webkit-scrollbar {
+  display: none;
+  width: 0px;
+  background: transparent;
 }
 
 * {
@@ -40,10 +48,10 @@ html, body, #root {
 }
 
 .glass-panel {
-  background: rgba(31, 31, 31, 0.7);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .glass-panel-gold {
@@ -159,4 +167,14 @@ html, body, #root {
 
 .leaflet-control-attribution a {
   color: #a87ffb !important;
+}
+
+/* RÈGLES RESPONSIVE MOBILE-FIRST & MÉDIAS FLUIDES */
+img, video, svg, canvas {
+  max-width: 100%;
+  height: auto;
+}
+
+button, a, input, select {
+  touch-action: manipulation;
 }

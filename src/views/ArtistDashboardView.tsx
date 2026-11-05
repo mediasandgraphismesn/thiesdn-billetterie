@@ -239,7 +239,7 @@ export const ArtistDashboardView: React.FC<ArtistDashboardViewProps> = ({
   };
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8 pb-20 animate-in fade-in duration-300">
+    <div className="w-full max-w-6xl mx-auto space-y-8 pb-24 animate-in fade-in duration-300">
       {/* Header Bar Espace Artiste */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
@@ -586,7 +586,50 @@ export const ArtistDashboardView: React.FC<ArtistDashboardViewProps> = ({
               Aucun invité enregistré pour le moment.
             </p>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+              {/* Vue Cartes Mobile (< 768px) */}
+              <div className="block md:hidden space-y-3">
+                {myGuestTickets.map((gst) => (
+                  <div key={gst.id} className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="font-heading font-bold text-white text-sm">{gst.guestName}</p>
+                        <p className="font-mono text-xs text-gray-400">{gst.guestPhone}</p>
+                      </div>
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase shrink-0 ${
+                          gst.status === 'used'
+                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                            : 'bg-white/10 text-gray-300'
+                        }`}
+                      >
+                        {gst.status === 'used' ? 'Entrée Validée' : 'Non Scanné'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs bg-black/30 p-2.5 rounded-xl border border-white/5">
+                      <span className="text-gray-400">Pass QR :</span>
+                      <span className="font-mono font-bold text-xs text-[#DCB8FF]">{gst.qrCode}</span>
+                    </div>
+
+                    <a
+                      href={`https://wa.me/${gst.guestPhone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
+                        `Bonjour ${gst.guestName} ! Voici votre Pass Invité officiel pour la soirée ${activeEvent?.title || 'Thièsdn'} : Code QR ${gst.qrCode}. Présentez-le à l'entrée VIP.`
+                      )}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full min-h-[44px] rounded-xl bg-emerald-600/20 text-emerald-300 hover:bg-emerald-600/30 border border-emerald-500/30 transition-all font-bold text-xs flex items-center justify-center gap-2 cursor-pointer"
+                      title="Renvoyer le pass invité par WhatsApp"
+                    >
+                      <Send className="w-4 h-4" />
+                      <span>Renvoyer le Pass WhatsApp</span>
+                    </a>
+                  </div>
+                ))}
+              </div>
+
+              {/* Vue Tableau Desktop (>= 768px) */}
+              <div className="overflow-x-auto hidden md:block">
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="border-b border-white/10 text-gray-400 uppercase font-heading tracking-wider">
@@ -639,6 +682,7 @@ export const ArtistDashboardView: React.FC<ArtistDashboardViewProps> = ({
                 </tbody>
               </table>
             </div>
+            </>
           )}
         </div>
       </div>

@@ -26,6 +26,7 @@ import {
   Check,
   CheckCheck,
   Search,
+  ShoppingCart,
 } from 'lucide-react';
 import { SalesAgent, UserTicket, EventItem, UserProfile } from '../types';
 import {
@@ -222,7 +223,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
     setPendingTicketForConfirm(check.ticket);
   };
 
-  // Confirmation explicite de la vente unitaire
+  // Confirmation explicite de la vente unitaire (avec Instantanéité POS / Optimistic UI)
   const handleConfirmSingleSale = async () => {
     if (!activeAgent || !pendingTicketForConfirm) return;
     if (!buyerName.trim() || !buyerPhone.trim()) {
@@ -233,6 +234,38 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
     setSaleErrorMessage(null);
     setSaleSuccessMessage(null);
 
+    // Instantanéité POS : Mise à jour optimiste du stock visuel immédiatement
+    const prevAgents = [...agents];
+    const prevTickets = [...tickets];
+    const soldPrice = pendingTicketForConfirm.price || 3500;
+
+    setAgents((prev) =>
+      prev.map((a) =>
+        a.id === activeAgent.id
+          ? {
+              ...a,
+              soldCount: a.soldCount + 1,
+              cashCollected: a.cashCollected + soldPrice,
+              amountDue: a.amountDue + Math.round(soldPrice * (1 - a.commissionPercent / 100)),
+            }
+          : a
+      )
+    );
+
+    setTickets((prev) =>
+      prev.map((t) =>
+        t.qrCode === pendingTicketForConfirm.qrCode || t.id === pendingTicketForConfirm.id
+          ? {
+              ...t,
+              isSold: true,
+              status: 'valid',
+              customerName: buyerName.trim(),
+              customerPhone: buyerPhone.trim(),
+            }
+          : t
+      )
+    );
+
     const res = await confirmSinglePhysicalTicketSale(activeAgent.id, pendingTicketForConfirm.qrCode, {
       name: buyerName,
       phone: buyerPhone,
@@ -240,6 +273,9 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
     setIsSubmittingSale(false);
 
     if (!res.success) {
+      // Rollback en cas d'échec
+      setAgents(prevAgents);
+      setTickets(prevTickets);
       setSaleErrorMessage(res.message);
       return;
     }
@@ -257,17 +293,37 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
     }, 2200);
   };
 
-  // Méthode B : Déclaration manuelle par nombre de billets
+  // Méthode B : Déclaration manuelle par nombre de billets (avec Instantanéité POS / Optimistic UI)
   const handleQuickAddSale = async (qty: number) => {
     if (!activeAgent) return;
     setIsSubmittingSale(true);
     setSaleErrorMessage(null);
     setSaleSuccessMessage(null);
 
+    // Instantanéité POS : Décrémentation visuelle immédiate du stock
+    const prevAgents = [...agents];
+    const unitPrice = activeEvent?.tiers?.[0]?.price || 3500;
+    const addedCash = qty * unitPrice;
+
+    setAgents((prev) =>
+      prev.map((a) =>
+        a.id === activeAgent.id
+          ? {
+              ...a,
+              soldCount: a.soldCount + qty,
+              cashCollected: a.cashCollected + addedCash,
+              amountDue: a.amountDue + Math.round(addedCash * (1 - a.commissionPercent / 100)),
+            }
+          : a
+      )
+    );
+
     const res = await recordAgentSale(activeAgent.id, qty);
 
     setIsSubmittingSale(false);
     if (!res.success) {
+      // Rollback en cas d'échec
+      setAgents(prevAgents);
       setSaleErrorMessage(res.message);
       return;
     }
@@ -340,7 +396,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 pb-24 animate-in fade-in duration-300">
+    <div className="w-full max-w-4xl mx-auto space-y-6 pb-24 animate-in fade-in duration-300">
       {/* Header Collaborateur Mobile-First */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 glass-panel p-5 sm:p-6 rounded-3xl border border-[#E9C349]/30 relative overflow-hidden bg-gradient-to-br from-[#1C1A14] to-[#121212]">
         <div className="absolute top-0 right-0 w-48 h-48 bg-[#E9C349]/10 rounded-full blur-3xl pointer-events-none" />
@@ -889,7 +945,86 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
             Aucun billet n'a encore été attribué à ce guichet pour le moment.
           </p>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+            {/* Vue Cartes Mobile (< 768px) */}
+            <div className="block md:hidden space-y-3">
+              {agentTickets.map((t) => {
+                const isUnsold =
+                  t.status === 'printed_not_sold' ||
+                  t.status === 'physical_allocated' ||
+                  t.status === 'physical_printed';
+                const isSoldValid = t.status === 'sold_valid' || t.status === 'physical_sold';
+                const isScanned = t.status === 'scanned' || t.status === 'used';
+                const isCancelled = t.status === 'cancelled';
+
+                return (
+                  <div key={t.id} className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 font-mono font-bold text-white text-xs truncate">
+                        <QrCode className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                        <span className="truncate">{t.qrCode}</span>
+                      </div>
+                      <div>
+                        {isUnsold && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 text-[10px] font-bold">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                            Inactif
+                          </span>
+                        )}
+                        {isSoldValid && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                            Vendu
+                          </span>
+                        )}
+                        {isScanned && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 text-[10px] font-bold">
+                            <Check className="w-3 h-3 text-indigo-400" />
+                            Scanné
+                          </span>
+                        )}
+                        {isCancelled && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-300 border border-rose-500/30 text-[10px] font-bold">
+                            <AlertCircle className="w-3 h-3 text-rose-400" />
+                            Désactivé
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs bg-black/30 p-2.5 rounded-xl border border-white/5">
+                      <span className="text-gray-300 font-medium truncate">{t.tierName}</span>
+                      <span className="font-heading font-extrabold text-[#E9C349] text-sm">
+                        {t.price.toLocaleString('fr-FR')} FCFA
+                      </span>
+                    </div>
+
+                    {isUnsold ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setManualTicketCode(t.qrCode);
+                          handleCheckTicketForSale(t.qrCode);
+                          setSaleMode('scan');
+                          setShowSaleModal(true);
+                        }}
+                        className="w-full min-h-[44px] rounded-xl bg-gradient-to-r from-[#E9C349]/20 to-[#E9C349]/30 hover:from-[#E9C349]/30 hover:to-[#E9C349]/40 text-[#E9C349] font-heading font-bold text-xs border border-[#E9C349]/40 flex items-center justify-center gap-2 transition-all cursor-pointer"
+                      >
+                        <ShoppingCart className="w-4 h-4" />
+                        <span>Activer la Vente Nominative</span>
+                      </button>
+                    ) : (
+                      <div className="w-full py-2 rounded-xl bg-white/5 text-center text-xs text-gray-500 italic">
+                        Billet déjà validé et sécurisé
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Vue Tableau Desktop (>= 768px) */}
+            <div className="overflow-x-auto hidden md:block">
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="border-b border-white/5 text-gray-400 uppercase font-heading text-[10px]">
@@ -970,6 +1105,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
 

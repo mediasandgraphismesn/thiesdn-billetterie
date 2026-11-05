@@ -45,6 +45,7 @@ import {
   ChevronDown,
   SlidersHorizontal,
   Trash2,
+  MoreVertical,
 } from 'lucide-react';
 import {
   getStoredTransactions,
@@ -191,6 +192,9 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
   // Menu Options Avancées
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
 
+  // Menu MoreVertical actif pour les points de vente (Règle 2 boutons max)
+  const [activeAgentMenuId, setActiveAgentMenuId] = useState<string | null>(null);
+
   const isConnected = isSupabaseConfigured();
 
   // ====================================================================
@@ -219,28 +223,32 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
     setAgents(getStoredSalesAgents());
     setCoproducers(getStoredCoproducers());
 
-    fetchSalesAgentsFromSupabase().then((res) => {
-      if (res.agents && res.agents.length > 0) {
-        setAgents(res.agents);
+    // Chargement parallélisé React 19 via Promise.all() pour un affichage instantané
+    let isMounted = true;
+    Promise.all([
+      fetchSalesAgentsFromSupabase(),
+      fetchTicketAllocationsFromSupabase(targetEventId),
+      fetchOrdersFromSupabase(),
+      fetchAllSoldTicketsFromSupabase({ eventId: targetEventId, isPhysical: true }),
+    ]).then(([agentsRes, allocRes, ordersRes, ticketsRes]) => {
+      if (!isMounted) return;
+      if (agentsRes.agents && agentsRes.agents.length > 0) {
+        setAgents(agentsRes.agents);
+      }
+      if (allocRes.allocations) {
+        setAllocations(allocRes.allocations);
+      }
+      if (ordersRes.orders && ordersRes.orders.length > 0) {
+        setOrders(ordersRes.orders);
+      }
+      if (ticketsRes.tickets) {
+        setTickets(ticketsRes.tickets);
       }
     });
 
-    fetchTicketAllocationsFromSupabase(targetEventId).then((res) => {
-      if (res.allocations) setAllocations(res.allocations);
-    });
-
-    fetchOrdersFromSupabase().then((res) => {
-      if (res.orders && res.orders.length > 0) {
-        setOrders(res.orders);
-      }
-    });
-
-    // Chargement filtré strictement par event_id et is_physical = true
-    fetchAllSoldTicketsFromSupabase({ eventId: targetEventId, isPhysical: true }).then((res) => {
-      if (res.tickets) {
-        setTickets(res.tickets);
-      }
-    });
+    return () => {
+      isMounted = false;
+    };
   }, [selectedEventId, activeEvent?.id]);
 
   const handleRefresh = async () => {
@@ -1151,7 +1159,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
   // ====================================================================
   if (currentRole === 'promoter' || promoterTab !== 'compta') {
     return (
-      <div className="max-w-6xl mx-auto space-y-8 pb-20 animate-in fade-in duration-300">
+      <div className="w-full max-w-6xl mx-auto space-y-8 pb-24 animate-in fade-in duration-300">
         {/* Header Bar Promoteur */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>
@@ -1185,7 +1193,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
 
         {/* Barre d'onglets simplifiée : 3 ONGLETS DIRECTS + MENU OPTIONS */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
-          <div className="flex flex-wrap items-center bg-[#1C1B1B] p-1 rounded-2xl border border-white/10 gap-1 self-start sm:self-auto">
+          <div className="flex items-center overflow-x-auto flex-nowrap scrollbar-none max-w-full bg-[#1C1B1B] p-1 rounded-2xl border border-white/10 gap-1 self-start sm:self-auto">
             {/* 1. VUE D'ENSEMBLE */}
             <button
               type="button"
@@ -1439,58 +1447,58 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
               </a>
             </div>
 
-            {/* 4 Cartes KPI Temps Réel du Cockpit (Données Consolidées Réelles) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* 4 Cartes KPI Temps Réel du Cockpit (Design Liquid Glass Épuré) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
               {/* 1. Billets Vendus Totaux */}
-              <div className="glass-panel p-5 rounded-2xl border border-sky-500/30 space-y-2 relative overflow-hidden bg-sky-950/20">
-                <div className="w-10 h-10 rounded-xl bg-sky-500/20 text-sky-400 flex items-center justify-center">
-                  <Ticket className="w-5 h-5" />
+              <div className="p-6 rounded-2xl bg-white/5 backdrop-blur-lg border border-white/10 space-y-3 relative overflow-hidden hover:border-[#8A2BE2]/40 transition-all shadow-xl group">
+                <div className="w-12 h-12 rounded-xl bg-[#8A2BE2]/20 text-[#DCB8FF] flex items-center justify-center group-hover:scale-105 transition-transform">
+                  <Ticket className="w-6 h-6" />
                 </div>
                 <p className="text-xs uppercase tracking-wider text-gray-400 font-bold">Billets Vendus</p>
-                <h3 className="font-heading text-2xl font-black text-white">
-                  {totalTicketsSold} <span className="text-xs text-sky-400 font-bold">places</span>
+                <h3 className="font-heading text-3xl font-black text-white">
+                  {totalTicketsSold} <span className="text-xs text-[#DCB8FF] font-bold">places</span>
                 </h3>
-                <p className="text-[11px] text-gray-400">
+                <p className="text-xs text-gray-400">
                   {webTicketsSold} en ligne • {physicalTicketsSold} en boutique
                 </p>
               </div>
 
               {/* 2. Chiffre d'Affaires Brut */}
-              <div className="glass-panel p-5 rounded-2xl border border-emerald-500/30 space-y-2 relative overflow-hidden bg-emerald-950/20">
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
-                  <DollarSign className="w-5 h-5" />
+              <div className="p-6 rounded-2xl bg-white/5 backdrop-blur-lg border border-white/10 space-y-3 relative overflow-hidden hover:border-[#E9C349]/40 transition-all shadow-xl group">
+                <div className="w-12 h-12 rounded-xl bg-[#E9C349]/20 text-[#E9C349] flex items-center justify-center group-hover:scale-105 transition-transform">
+                  <DollarSign className="w-6 h-6" />
                 </div>
                 <p className="text-xs uppercase tracking-wider text-gray-400 font-bold">CA Brut Consolidé</p>
-                <h3 className="font-heading text-2xl font-black text-emerald-300">
+                <h3 className="font-heading text-3xl font-black text-[#E9C349]">
                   {totalGrossCA.toLocaleString('fr-FR')} <span className="text-xs text-white font-bold">FCFA</span>
                 </h3>
-                <p className="text-[11px] text-gray-400">
+                <p className="text-xs text-gray-400">
                   {webGrossCA > 0 ? `${webGrossCA.toLocaleString('fr-FR')} F Web` : '0 F Web'} • {physicalGrossCA > 0 ? `${physicalGrossCA.toLocaleString('fr-FR')} F Réseau` : '0 F Réseau'}
                 </p>
               </div>
 
               {/* 3. Reversement Net Promoteur (90%) */}
-              <div className="glass-panel p-5 rounded-2xl border border-[#E9C349]/30 space-y-2 relative overflow-hidden bg-[#241A00]/40">
-                <div className="w-10 h-10 rounded-xl bg-[#E9C349]/20 text-[#E9C349] flex items-center justify-center">
-                  <TrendingUp className="w-5 h-5" />
+              <div className="p-6 rounded-2xl bg-white/5 backdrop-blur-lg border border-white/10 space-y-3 relative overflow-hidden hover:border-[#E9C349]/40 transition-all shadow-xl group">
+                <div className="w-12 h-12 rounded-xl bg-[#E9C349]/20 text-[#E9C349] flex items-center justify-center group-hover:scale-105 transition-transform">
+                  <TrendingUp className="w-6 h-6" />
                 </div>
                 <p className="text-xs uppercase tracking-wider text-gray-400 font-bold">Net Promoteur (90%)</p>
-                <h3 className="font-heading text-2xl font-black text-[#E9C349]">
+                <h3 className="font-heading text-3xl font-black text-[#E9C349]">
                   {promoterNetShare.toLocaleString('fr-FR')} <span className="text-xs text-white font-bold">FCFA</span>
                 </h3>
-                <p className="text-[11px] text-gray-400">Reversement garanti sous 24h</p>
+                <p className="text-xs text-gray-400">Reversement garanti sous 24h</p>
               </div>
 
               {/* 4. Billets Scannés à l'Entrée */}
-              <div className="glass-panel p-5 rounded-2xl border border-[#8A2BE2]/30 space-y-2 relative overflow-hidden bg-[#1F1728]/40">
-                <div className="w-10 h-10 rounded-xl bg-[#8A2BE2]/20 text-[#DCB8FF] flex items-center justify-center">
-                  <QrCode className="w-5 h-5" />
+              <div className="p-6 rounded-2xl bg-white/5 backdrop-blur-lg border border-white/10 space-y-3 relative overflow-hidden hover:border-[#8A2BE2]/40 transition-all shadow-xl group">
+                <div className="w-12 h-12 rounded-xl bg-[#8A2BE2]/20 text-[#DCB8FF] flex items-center justify-center group-hover:scale-105 transition-transform">
+                  <QrCode className="w-6 h-6" />
                 </div>
                 <p className="text-xs uppercase tracking-wider text-gray-400 font-bold">Billets Scannés</p>
-                <h3 className="font-heading text-2xl font-black text-[#DCB8FF]">
+                <h3 className="font-heading text-3xl font-black text-white">
                   {scannedTicketsCount} <span className="text-xs text-gray-400 font-bold">/ {totalTicketsSold}</span>
                 </h3>
-                <p className="text-[11px] text-gray-400">
+                <p className="text-xs text-gray-400">
                   {totalTicketsSold > 0
                     ? `${Math.round((scannedTicketsCount / totalTicketsSold) * 100)}% de taux de présence`
                     : 'Contrôle laser le jour J'}
@@ -1498,23 +1506,23 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
               </div>
             </div>
 
-            {/* Ventilation par Catégorie de Billets (Prévente, Jour J, VIP) */}
-            <div className="glass-panel p-6 rounded-3xl space-y-5 border border-white/10">
-              <div className="flex items-center justify-between border-b border-white/10 pb-3">
-                <div className="flex items-center gap-2">
+            {/* Ventilation par Catégorie de Billets (Liquid Glass & Jauges Épurées) */}
+            <div className="p-6 sm:p-8 rounded-3xl bg-white/5 backdrop-blur-lg border border-white/10 space-y-6 shadow-xl">
+              <div className="flex items-center justify-between border-b border-white/10 pb-4">
+                <div className="flex items-center gap-2.5">
                   <Layers className="w-5 h-5 text-[#E9C349]" />
-                  <h3 className="font-heading font-extrabold text-base text-white">
+                  <h3 className="font-heading font-extrabold text-base sm:text-lg text-white">
                     Ventes par Catégorie de Billet (Jauges en Direct)
                   </h3>
                 </div>
-                <span className="text-xs text-gray-400">Temps Réel</span>
+                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-white/5 text-gray-300 border border-white/10">Temps Réel</span>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {/* 1. Pass Prévente */}
-                <div className="p-4 rounded-2xl bg-black/40 border border-sky-500/30 space-y-3">
+                <div className="p-6 rounded-2xl bg-white/5 border border-white/10 space-y-4 hover:border-[#8A2BE2]/40 transition-all">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-sky-400 uppercase tracking-wider">
+                    <span className="text-xs font-bold text-[#DCB8FF] uppercase tracking-wider">
                       Pass Prévente
                     </span>
                     <span className="text-xs font-bold text-white font-heading">
@@ -1525,7 +1533,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                   {/* Barre de progression */}
                   <div className="w-full bg-[#1F1F1F] rounded-full h-2.5 overflow-hidden">
                     <div
-                      className="bg-sky-400 h-2.5 rounded-full transition-all duration-500"
+                      className="bg-[#8A2BE2] h-2.5 rounded-full transition-all duration-500"
                       style={{
                         width: `${Math.min(
                           100,
@@ -1544,7 +1552,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                 </div>
 
                 {/* 2. Pass Jour J */}
-                <div className="p-4 rounded-2xl bg-black/40 border border-[#8A2BE2]/30 space-y-3">
+                <div className="p-6 rounded-2xl bg-white/5 border border-white/10 space-y-4 hover:border-[#8A2BE2]/40 transition-all">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-[#DCB8FF] uppercase tracking-wider">
                       Pass Jour J
@@ -1575,10 +1583,10 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                 </div>
 
                 {/* 3. Pass VIP Prestige */}
-                <div className="p-4 rounded-2xl bg-black/40 border border-[#E9C349]/30 space-y-3">
+                <div className="p-6 rounded-2xl bg-white/5 border border-white/10 space-y-4 hover:border-[#E9C349]/40 transition-all">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-[#E9C349] uppercase tracking-wider flex items-center gap-1">
-                      <Crown className="w-3.5 h-3.5" />
+                    <span className="text-xs font-bold text-[#E9C349] uppercase tracking-wider flex items-center gap-1.5">
+                      <Crown className="w-4 h-4" />
                       Pass VIP Prestige
                     </span>
                     <span className="text-xs font-bold text-white font-heading">
@@ -1630,7 +1638,68 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                   </p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+                <>
+                  {/* VUE CARTES MOBILES (< 768px - Festivaliers & Commandes) */}
+                  <div className="flex flex-col gap-3 md:hidden">
+                    {filteredOrders.map((order) => (
+                      <div
+                        key={`mob-order-${order.id}`}
+                        className="p-4 rounded-2xl bg-white/5 backdrop-blur-md border border-white/10 space-y-3 shadow-md"
+                      >
+                        <div className="flex items-start justify-between gap-2 border-b border-white/5 pb-2">
+                          <div>
+                            <h4 className="font-heading font-extrabold text-white text-sm">
+                              {order.customerName}
+                            </h4>
+                            <p className="font-mono text-xs text-gray-300 mt-0.5">
+                              📱 {order.customerPhone}
+                            </p>
+                          </div>
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                              order.status === 'confirmed'
+                                ? 'bg-emerald-500/20 text-emerald-300'
+                                : order.status === 'payment_signaled'
+                                ? 'bg-amber-500/20 text-amber-300'
+                                : 'bg-white/10 text-gray-400'
+                            }`}
+                          >
+                            {order.status === 'confirmed'
+                              ? 'Confirmé'
+                              : order.status === 'payment_signaled'
+                              ? 'À valider'
+                              : 'En attente'}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between text-xs p-2.5 rounded-xl bg-black/40 border border-white/5">
+                          <div>
+                            <span className="text-[10px] text-gray-400 uppercase font-bold block">Formule</span>
+                            <span className="font-semibold text-white">{order.tierName} • {order.quantity} pl.</span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[10px] text-gray-400 uppercase font-bold block">Montant</span>
+                            <span className="font-heading font-black text-sm text-[#E9C349]">
+                              {order.totalAmount.toLocaleString('fr-FR')} FCFA
+                            </span>
+                          </div>
+                        </div>
+
+                        <a
+                          href={generateClientWhatsAppUrl(order)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-full min-h-[44px] rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer"
+                        >
+                          <MessageSquare className="w-4 h-4 fill-current" />
+                          <span>Envoyer Rappel WhatsApp</span>
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* VUE TABLEAU DESKTOP (>= 768px) */}
+                  <div className="overflow-x-auto hidden md:block">
                   <table className="w-full text-left text-xs">
                     <thead>
                       <tr className="border-b border-white/10 text-gray-400 uppercase font-heading tracking-wider">
@@ -1695,7 +1764,8 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                     </tbody>
                   </table>
                 </div>
-              )}
+              </>
+            )}
             </div>
           </div>
         )}
@@ -1995,66 +2065,66 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
               </div>
             </div>
 
-            {/* SECTION 2 : 4 CARTES KPI DU RÉSEAU DE VENTE PHYSIQUE */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* SECTION 2 : 4 CARTES KPI DU RÉSEAU DE VENTE PHYSIQUE (Liquid Glass) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
               {/* 1. Billets Imprimés en Réserve */}
-              <div className="glass-panel p-5 rounded-2xl border border-sky-500/30 bg-sky-950/20 space-y-2">
-                <div className="w-10 h-10 rounded-xl bg-sky-500/20 text-sky-400 flex items-center justify-center">
-                  <FileText className="w-5 h-5" />
+              <div className="p-6 rounded-2xl bg-white/5 backdrop-blur-lg border border-white/10 space-y-3 hover:border-[#8A2BE2]/40 transition-all shadow-xl group">
+                <div className="w-12 h-12 rounded-xl bg-[#8A2BE2]/20 text-[#DCB8FF] flex items-center justify-center group-hover:scale-105 transition-transform">
+                  <FileText className="w-6 h-6" />
                 </div>
                 <p className="text-xs uppercase tracking-wider text-gray-400 font-bold">En Réserve Promoteur</p>
-                <h3 className="font-heading text-2xl font-black text-white">
-                  {unassignedPhysicalTickets.length} <span className="text-xs text-sky-400 font-bold">billets</span>
+                <h3 className="font-heading text-3xl font-black text-white">
+                  {unassignedPhysicalTickets.length} <span className="text-xs text-[#DCB8FF] font-bold">billets</span>
                 </h3>
-                <p className="text-[11px] text-gray-400">Imprimés, prêts à être alloués</p>
+                <p className="text-xs text-gray-400">Imprimés, prêts à être alloués</p>
                 {unassignedPhysicalTickets.length > 0 && (
                   <button
                     type="button"
                     onClick={() => handleOpenAssignModal()}
-                    className="w-full mt-2 py-1.5 px-2.5 rounded-xl bg-sky-500/20 hover:bg-sky-500/35 text-sky-300 border border-sky-500/40 text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                    className="w-full mt-2 py-2 px-3 rounded-xl bg-[#8A2BE2]/20 hover:bg-[#8A2BE2]/30 text-[#DCB8FF] border border-[#8A2BE2]/40 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                   >
-                    <Truck className="w-3.5 h-3.5" />
+                    <Truck className="w-4 h-4" />
                     <span>Distribuer le stock →</span>
                   </button>
                 )}
               </div>
 
               {/* 2. Billets Distribués au Réseau */}
-              <div className="glass-panel p-5 rounded-2xl border border-amber-500/30 bg-amber-950/20 space-y-2">
-                <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center">
-                  <Store className="w-5 h-5" />
+              <div className="p-6 rounded-2xl bg-white/5 backdrop-blur-lg border border-white/10 space-y-3 hover:border-[#E9C349]/40 transition-all shadow-xl group">
+                <div className="w-12 h-12 rounded-xl bg-[#E9C349]/20 text-[#E9C349] flex items-center justify-center group-hover:scale-105 transition-transform">
+                  <Store className="w-6 h-6" />
                 </div>
                 <p className="text-xs uppercase tracking-wider text-gray-400 font-bold">Distribués en Boutique</p>
-                <h3 className="font-heading text-2xl font-black text-amber-300">
+                <h3 className="font-heading text-3xl font-black text-[#E9C349]">
                   {totalPhysicalDistributed} <span className="text-xs text-white font-bold">billets</span>
                 </h3>
-                <p className="text-[11px] text-gray-400">Confier à {networkAgents.length} partenaires</p>
+                <p className="text-xs text-gray-400">Confier à {networkAgents.length} partenaires</p>
               </div>
 
               {/* 3. Billets Physiques Vendus */}
-              <div className="glass-panel p-5 rounded-2xl border border-emerald-500/30 bg-emerald-950/20 space-y-2">
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
-                  <CheckCheck className="w-5 h-5" />
+              <div className="p-6 rounded-2xl bg-white/5 backdrop-blur-lg border border-white/10 space-y-3 hover:border-[#8A2BE2]/40 transition-all shadow-xl group">
+                <div className="w-12 h-12 rounded-xl bg-[#8A2BE2]/20 text-[#DCB8FF] flex items-center justify-center group-hover:scale-105 transition-transform">
+                  <CheckCheck className="w-6 h-6" />
                 </div>
                 <p className="text-xs uppercase tracking-wider text-gray-400 font-bold">Vendus & Déclarés</p>
-                <h3 className="font-heading text-2xl font-black text-emerald-300">
-                  {totalPhysicalSold} <span className="text-xs text-white font-bold">billets</span>
+                <h3 className="font-heading text-3xl font-black text-white">
+                  {totalPhysicalSold} <span className="text-xs text-[#DCB8FF] font-bold">billets</span>
                 </h3>
-                <p className="text-[11px] text-gray-400">
+                <p className="text-xs text-gray-400">
                   CA Réseau : {networkTotalGrossCollected.toLocaleString('fr-FR')} FCFA
                 </p>
               </div>
 
               {/* 4. Cash Restant à Récupérer */}
-              <div className="glass-panel p-5 rounded-2xl border border-[#E9C349]/30 bg-[#241A00]/40 space-y-2">
-                <div className="w-10 h-10 rounded-xl bg-[#E9C349]/20 text-[#E9C349] flex items-center justify-center">
-                  <DollarSign className="w-5 h-5" />
+              <div className="p-6 rounded-2xl bg-white/5 backdrop-blur-lg border border-white/10 space-y-3 hover:border-[#E9C349]/40 transition-all shadow-xl group">
+                <div className="w-12 h-12 rounded-xl bg-[#E9C349]/20 text-[#E9C349] flex items-center justify-center group-hover:scale-105 transition-transform">
+                  <DollarSign className="w-6 h-6" />
                 </div>
                 <p className="text-xs uppercase tracking-wider text-gray-400 font-bold">Cash Net à Récupérer</p>
-                <h3 className="font-heading text-2xl font-black text-[#E9C349]">
+                <h3 className="font-heading text-3xl font-black text-[#E9C349]">
                   {networkTotalAmountDue.toLocaleString('fr-FR')} <span className="text-xs text-white font-bold">FCFA</span>
                 </h3>
-                <p className="text-[11px] text-gray-400">
+                <p className="text-xs text-gray-400">
                   Déjà versé : {networkTotalPaid.toLocaleString('fr-FR')} FCFA
                 </p>
               </div>
@@ -2108,14 +2178,15 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                 </div>
               ) : (
                 <>
-                  {/* VUE MOBILE / CARTES DES POINTS DE VENTE (Visible sur petit écran) */}
-                  <div className="block lg:hidden space-y-3">
+                  {/* VUE MOBILE / CARTES DES POINTS DE VENTE (Liquid Glass & Règle des 2 Boutons Max) */}
+                  <div className="block md:hidden space-y-4">
                     {networkAgents.map((agent) => {
                       const remaining = Math.max(0, agent.allocatedCount - agent.soldCount);
+                      const isMenuOpen = activeAgentMenuId === agent.id;
                       return (
                         <div
                           key={`card-${agent.id}`}
-                          className="p-4 rounded-2xl bg-[#141414] border border-white/10 space-y-3"
+                          className="p-5 rounded-2xl bg-white/5 backdrop-blur-lg border border-white/10 space-y-4 relative shadow-lg"
                         >
                           <div className="flex items-start justify-between gap-2">
                             <div>
@@ -2131,28 +2202,40 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                                 Gérant : <strong className="text-gray-200">{agent.gerantName}</strong>
                               </p>
                             </div>
-                            <span className="font-mono text-xs px-2.5 py-1 rounded-lg bg-sky-500/20 text-sky-300 border border-sky-500/30 font-bold">
+                            <span className="font-mono text-xs px-2.5 py-1 rounded-lg bg-[#8A2BE2]/20 text-[#DCB8FF] border border-[#8A2BE2]/30 font-bold">
                               {agent.allocatedCount} confiés
                             </span>
                           </div>
 
-                          <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-white/5">
-                            <div className="p-2 rounded-xl bg-black/40">
-                              <span className="text-gray-400 text-[10px]">Vendus :</span>
-                              <p className="font-mono font-bold text-emerald-400">{agent.soldCount} billets</p>
+                          <div className="grid grid-cols-2 gap-3 text-xs pt-1 border-t border-white/5">
+                            <div className="p-3 rounded-xl bg-black/40 border border-white/5">
+                              <span className="text-gray-400 text-[10px] uppercase font-bold">Vendus :</span>
+                              <p className="font-mono font-bold text-emerald-400 text-sm mt-0.5">{agent.soldCount} billets</p>
                             </div>
-                            <div className="p-2 rounded-xl bg-black/40">
-                              <span className="text-gray-400 text-[10px]">En stock boutique :</span>
-                              <p className="font-mono font-bold text-amber-300">{remaining} billets</p>
+                            <div className="p-3 rounded-xl bg-black/40 border border-white/5">
+                              <span className="text-gray-400 text-[10px] uppercase font-bold">En stock boutique :</span>
+                              <p className="font-mono font-bold text-[#E9C349] text-sm mt-0.5">{remaining} billets</p>
                             </div>
                           </div>
 
-                          <div className="pt-1 flex flex-col gap-2">
+                          {/* Actions : Maximum 2 boutons visibles + 1 bouton MoreVertical pour le reste */}
+                          <div className="pt-2 flex items-center gap-2 relative">
+                            {/* Bouton 1 : Attribuer (Violet) */}
+                            <button
+                              type="button"
+                              onClick={() => handleOpenAssignModal(agent)}
+                              className="flex-1 py-2.5 px-3 rounded-xl bg-[#8A2BE2] hover:bg-[#9B3BF2] text-white text-xs font-heading font-extrabold flex items-center justify-center gap-1.5 shadow-md shadow-[#8A2BE2]/30 transition-all cursor-pointer"
+                            >
+                              <Truck className="w-4 h-4" />
+                              <span>Attribuer</span>
+                            </button>
+
+                            {/* Bouton 2 : Imprimer ses billets (Doré / Liquid) */}
                             <button
                               type="button"
                               onClick={() => handlePrintAgentTickets(agent)}
                               disabled={isGeneratingPdf || agent.allocatedCount === 0}
-                              className="w-full py-2.5 rounded-xl bg-gradient-to-r from-[#8A2BE2] to-[#A855F7] hover:from-[#9B3BF2] hover:to-[#B46BF8] disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-heading font-extrabold flex items-center justify-center gap-2 shadow-lg shadow-[#8A2BE2]/20 cursor-pointer"
+                              className="flex-1 py-2.5 px-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white disabled:opacity-40 disabled:cursor-not-allowed text-xs font-heading font-extrabold flex items-center justify-center gap-1.5 transition-all cursor-pointer hover:border-[#E9C349]/50"
                               title={
                                 agent.allocatedCount === 0
                                   ? 'Aucun billet attribué à ce vendeur'
@@ -2160,27 +2243,68 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                               }
                             >
                               <Printer className="w-4 h-4 text-[#E9C349]" />
-                              <span>🖨️ Imprimer les billets de {agent.pointDeVente} ({agent.allocatedCount})</span>
+                              <span>🖨️ Imprimer ({agent.allocatedCount})</span>
                             </button>
 
-                            <div className="flex gap-2">
+                            {/* Menu MoreVertical : Actions secondaires cachées */}
+                            <div className="relative">
                               <button
                                 type="button"
-                                onClick={() => handleOpenAssignModal(agent)}
-                                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-sky-500 to-[#8A2BE2] hover:from-sky-400 hover:to-[#9B3BF2] text-white text-xs font-heading font-extrabold flex items-center justify-center gap-2 shadow-lg shadow-sky-500/20 cursor-pointer"
+                                onClick={() => setActiveAgentMenuId(isMenuOpen ? null : agent.id)}
+                                className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 hover:text-white transition-all cursor-pointer"
+                                title="Plus d'actions"
                               >
-                                <Truck className="w-4 h-4" />
-                                <span>Attribuer des Billets</span>
+                                <MoreVertical className="w-4 h-4" />
                               </button>
-                              <a
-                                href={`https://wa.me/${agent.telephone.replace(/[^0-9]/g, '')}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="p-2.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 flex items-center justify-center cursor-pointer"
-                                title="Contacter sur WhatsApp"
-                              >
-                                <Phone className="w-4 h-4" />
-                              </a>
+
+                              {isMenuOpen && (
+                                <div className="absolute right-0 bottom-full mb-2 w-56 rounded-2xl bg-[#121118] border border-white/15 p-2 shadow-2xl z-30 space-y-1 animate-in fade-in zoom-in-95">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setActiveAgentMenuId(null);
+                                      setSelectedAgentForSettlement(agent);
+                                      setSettlementAmountInput(agent.amountDue);
+                                      setShowSettlementModal(true);
+                                    }}
+                                    className="w-full text-left px-3 py-2 rounded-xl hover:bg-white/10 text-xs text-gray-200 flex items-center gap-2 transition-colors cursor-pointer"
+                                  >
+                                    <DollarSign className="w-4 h-4 text-emerald-400" />
+                                    <span>Encaisser versement</span>
+                                  </button>
+                                  <a
+                                    href={`https://wa.me/${agent.telephone.replace(/[^0-9]/g, '')}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={() => setActiveAgentMenuId(null)}
+                                    className="w-full text-left px-3 py-2 rounded-xl hover:bg-white/10 text-xs text-gray-200 flex items-center gap-2 transition-colors cursor-pointer"
+                                  >
+                                    <Phone className="w-4 h-4 text-[#E9C349]" />
+                                    <span>Contacter sur WhatsApp</span>
+                                  </a>
+                                  <a
+                                    href={generateAgentWhatsAppReportUrl(agent)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={() => setActiveAgentMenuId(null)}
+                                    className="w-full text-left px-3 py-2 rounded-xl hover:bg-white/10 text-xs text-gray-200 flex items-center gap-2 transition-colors cursor-pointer"
+                                  >
+                                    <Send className="w-4 h-4 text-sky-400" />
+                                    <span>Envoyer bilan WhatsApp</span>
+                                  </a>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setActiveAgentMenuId(null);
+                                      setPreviewAgent(agent);
+                                    }}
+                                    className="w-full text-left px-3 py-2 rounded-xl hover:bg-white/10 text-xs text-gray-200 flex items-center gap-2 transition-colors cursor-pointer"
+                                  >
+                                    <Store className="w-4 h-4 text-[#DCB8FF]" />
+                                    <span>Tester Guichet Mobile</span>
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -2189,7 +2313,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                   </div>
 
                   {/* TABLEAU DES POINTS DE VENTE (Desktop / Tablette) */}
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto hidden md:block">
                     <table className="w-full text-left text-xs">
                       <thead>
                         <tr className="border-b border-white/10 text-gray-400 uppercase font-heading tracking-wider">
@@ -2312,13 +2436,24 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                               </td>
 
                               <td className="py-4 px-3 text-right">
-                                <div className="flex items-center justify-end gap-1.5">
-                                  {/* Bouton Impression Nominative des Billets du Vendeur */}
+                                <div className="flex items-center justify-end gap-2 relative">
+                                  {/* Bouton 1 : Attribuer (Violet) */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenAssignModal(agent)}
+                                    className="px-3 py-2 rounded-xl bg-[#8A2BE2] hover:bg-[#9B3BF2] text-white text-xs font-heading font-extrabold flex items-center gap-1.5 shadow-md shadow-[#8A2BE2]/20 transition-all cursor-pointer"
+                                    title={`Attribuer un lot de billets à ${agent.pointDeVente}`}
+                                  >
+                                    <Truck className="w-3.5 h-3.5" />
+                                    <span>Attribuer</span>
+                                  </button>
+
+                                  {/* Bouton 2 : Imprimer nominatif */}
                                   <button
                                     type="button"
                                     onClick={() => handlePrintAgentTickets(agent)}
                                     disabled={isGeneratingPdf || agent.allocatedCount === 0}
-                                    className="p-2 rounded-xl bg-[#8A2BE2]/20 hover:bg-[#8A2BE2]/30 text-[#DCB8FF] border border-[#8A2BE2]/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                                    className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white disabled:opacity-40 disabled:cursor-not-allowed text-xs font-heading font-extrabold flex items-center gap-1.5 transition-all cursor-pointer hover:border-[#E9C349]/50"
                                     title={
                                       agent.allocatedCount === 0
                                         ? 'Aucun billet attribué à imprimer'
@@ -2326,53 +2461,71 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                                     }
                                   >
                                     <Printer className="w-3.5 h-3.5 text-[#E9C349]" />
+                                    <span>🖨️ Imprimer ({agent.allocatedCount})</span>
                                   </button>
 
-                                  {/* Bouton Distribuer des Billets */}
-                                  <button
-                                    type="button"
-                                    onClick={() => handleOpenAssignModal(agent)}
-                                    className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-sky-500 to-[#8A2BE2] hover:from-sky-400 hover:to-[#9B3BF2] text-white text-[11px] font-extrabold flex items-center gap-1.5 transition-all shadow-md shadow-sky-500/20 cursor-pointer"
-                                    title={`Attribuer un lot de billets physiques à ${agent.pointDeVente}`}
-                                  >
-                                    <Truck className="w-3.5 h-3.5" />
-                                    <span>Attribuer</span>
-                                  </button>
+                                  {/* Menu MoreVertical : Actions secondaires cachées */}
+                                  <div className="relative">
+                                    <button
+                                      type="button"
+                                      onClick={() => setActiveAgentMenuId(activeAgentMenuId === agent.id ? null : agent.id)}
+                                      className="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 hover:text-white transition-all cursor-pointer"
+                                      title="Plus d'actions"
+                                    >
+                                      <MoreVertical className="w-4 h-4" />
+                                    </button>
 
-                                  {/* Bouton Encaisser Versement */}
-                                  <button
-                                    onClick={() => {
-                                    setSelectedAgentForSettlement(agent);
-                                    setSettlementAmountInput(agent.amountDue);
-                                    setShowSettlementModal(true);
-                                  }}
-                                  className="p-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 transition-colors"
-                                  title="Enregistrer un versement d'espèces"
-                                >
-                                  <DollarSign className="w-3.5 h-3.5" />
-                                </button>
-
-                                {/* Bouton Relance WhatsApp */}
-                                <a
-                                  href={generateAgentWhatsAppReportUrl(agent)}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="p-2 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 transition-colors"
-                                  title="Envoyer le récapitulatif par WhatsApp"
-                                >
-                                  <Send className="w-3.5 h-3.5" />
-                                </a>
-
-                                {/* Bouton Tester son Guichet Mobile */}
-                                <button
-                                  onClick={() => setPreviewAgent(agent)}
-                                  className="px-2.5 py-1.5 rounded-xl bg-[#8A2BE2]/20 hover:bg-[#8A2BE2]/30 text-[#DCB8FF] border border-[#8A2BE2]/30 text-[11px] font-bold transition-colors"
-                                  title="Ouvrir le guichet de vente mobile du collaborateur"
-                                >
-                                  Guichet
-                                </button>
-                              </div>
-                            </td>
+                                    {activeAgentMenuId === agent.id && (
+                                      <div className="absolute right-0 top-full mt-1 w-56 rounded-2xl bg-[#121118] border border-white/15 p-2 shadow-2xl z-30 space-y-1 text-left animate-in fade-in zoom-in-95">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setActiveAgentMenuId(null);
+                                            setSelectedAgentForSettlement(agent);
+                                            setSettlementAmountInput(agent.amountDue);
+                                            setShowSettlementModal(true);
+                                          }}
+                                          className="w-full text-left px-3 py-2 rounded-xl hover:bg-white/10 text-xs text-gray-200 flex items-center gap-2 transition-colors cursor-pointer"
+                                        >
+                                          <DollarSign className="w-4 h-4 text-emerald-400" />
+                                          <span>Encaisser versement</span>
+                                        </button>
+                                        <a
+                                          href={`https://wa.me/${agent.telephone.replace(/[^0-9]/g, '')}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          onClick={() => setActiveAgentMenuId(null)}
+                                          className="w-full text-left px-3 py-2 rounded-xl hover:bg-white/10 text-xs text-gray-200 flex items-center gap-2 transition-colors cursor-pointer"
+                                        >
+                                          <Phone className="w-4 h-4 text-[#E9C349]" />
+                                          <span>WhatsApp Direct</span>
+                                        </a>
+                                        <a
+                                          href={generateAgentWhatsAppReportUrl(agent)}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          onClick={() => setActiveAgentMenuId(null)}
+                                          className="w-full text-left px-3 py-2 rounded-xl hover:bg-white/10 text-xs text-gray-200 flex items-center gap-2 transition-colors cursor-pointer"
+                                        >
+                                          <Send className="w-4 h-4 text-sky-400" />
+                                          <span>Bilan WhatsApp</span>
+                                        </a>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setActiveAgentMenuId(null);
+                                            setPreviewAgent(agent);
+                                          }}
+                                          className="w-full text-left px-3 py-2 rounded-xl hover:bg-white/10 text-xs text-gray-200 flex items-center gap-2 transition-colors cursor-pointer"
+                                        >
+                                          <Store className="w-4 h-4 text-[#DCB8FF]" />
+                                          <span>Tester Guichet Mobile</span>
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </td>
                           </tr>
                         );
                       })}
@@ -2934,7 +3087,71 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                   Aucun collaborateur n'a encore été rattaché à cet événement.
                 </p>
               ) : (
-                <div className="overflow-x-auto">
+                <>
+                  {/* VUE CARTES MOBILES (< 768px - Rapatriement Invendus) */}
+                  <div className="flex flex-col gap-3 md:hidden">
+                    {physicalTicketsByAgent.map((item) => (
+                      <div
+                        key={`mob-unsold-${item.agent.id}`}
+                        className="p-4 rounded-2xl bg-white/5 backdrop-blur-md border border-white/10 space-y-3 shadow-md"
+                      >
+                        <div className="flex items-start justify-between gap-2 border-b border-white/5 pb-2">
+                          <div>
+                            <h4 className="font-heading font-extrabold text-white text-sm">
+                              {item.agent.pointDeVente}
+                            </h4>
+                            <p className="text-xs text-gray-400 mt-0.5">
+                              Responsable : <strong className="text-gray-200">{item.agent.gerantName}</strong>
+                            </p>
+                            <p className="font-mono text-[11px] text-[#DCB8FF] mt-0.5">
+                              📱 {item.agent.telephone}
+                            </p>
+                          </div>
+                          <div>
+                            {item.unsoldCount > 0 ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 text-[10px] font-bold">
+                                Inactifs
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold">
+                                Lot épuisé
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Synthèse Chiffres X/Y/Z */}
+                        <div className="grid grid-cols-3 gap-2 text-center text-xs p-2.5 rounded-xl bg-black/40 border border-white/5">
+                          <div>
+                            <span className="text-[10px] text-gray-400 uppercase font-bold block">Imprimés</span>
+                            <span className="font-heading font-bold text-white text-sm">{item.printedCount}</span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-gray-400 uppercase font-bold block">Vendus</span>
+                            <span className="font-heading font-bold text-emerald-400 text-sm">{item.soldCount}</span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-gray-400 uppercase font-bold block">Invendus</span>
+                            <span className="font-heading font-bold text-amber-300 text-sm">{item.unsoldCount}</span>
+                          </div>
+                        </div>
+
+                        {item.unsoldCount > 0 && (
+                          <button
+                            type="button"
+                            disabled={isDeactivating}
+                            onClick={() => handleDeactivateUnsoldTickets(item.agent.id)}
+                            className="w-full min-h-[44px] rounded-xl bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/40 text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer"
+                          >
+                            <span>Désactiver les {item.unsoldCount} invendus</span>
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* VUE TABLEAU DESKTOP (>= 768px) */}
+                  <div className="overflow-x-auto hidden md:block">
                   <table className="w-full text-left text-xs">
                     <thead>
                       <tr className="border-b border-white/5 text-gray-400 uppercase font-heading text-[10px]">
@@ -3010,7 +3227,8 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                     </tbody>
                   </table>
                 </div>
-              )}
+              </>
+            )}
             </div>
           </div>
         )}
@@ -3115,7 +3333,86 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                 </div>
               </div>
 
-              <div className="overflow-x-auto">
+              {/* VUE CARTES MOBILES (< 768px - Ayants-Droit & Co-Production) */}
+              <div className="flex flex-col gap-3 md:hidden">
+                {coproducers
+                  .filter((c) => !activeEvent || c.eventId === activeEvent.id)
+                  .map((coprod) => {
+                    const netAmount = Math.round((totalGrossCA * coprod.revenueShare) / 100);
+                    return (
+                      <div
+                        key={`mob-coprod-${coprod.id}`}
+                        className="p-4 rounded-2xl bg-white/5 backdrop-blur-md border border-white/10 space-y-3 shadow-md"
+                      >
+                        <div className="flex items-start justify-between gap-2 border-b border-white/5 pb-2">
+                          <div>
+                            <h4 className="font-heading font-extrabold text-white text-sm">
+                              {coprod.name}
+                            </h4>
+                            <span className="inline-block mt-0.5 text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase border bg-[#8A2BE2]/20 text-[#DCB8FF] border-[#8A2BE2]/40">
+                              {coprod.roleType === 'artiste'
+                                ? 'Artiste Vedette'
+                                : coprod.roleType === 'staff_artiste'
+                                ? 'Staff Artiste'
+                                : coprod.roleType === 'gerant_lieu'
+                                ? 'Gérant du Lieu'
+                                : 'Co-Producteur'}
+                            </span>
+                            <p className="font-mono text-xs text-gray-300 mt-1">
+                              📱 {coprod.phone}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <span className="font-heading font-black text-lg text-[#E9C349] block">
+                              {coprod.revenueShare}%
+                            </span>
+                            <span className="text-[10px] text-gray-400">part brute</span>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 text-xs p-2.5 rounded-xl bg-black/40 border border-white/5">
+                          <div>
+                            <span className="text-[10px] text-gray-400 uppercase font-bold block">Montant Net</span>
+                            <span className="font-heading font-bold text-white text-sm">
+                              {netAmount.toLocaleString('fr-FR')} FCFA
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-gray-400 uppercase font-bold block">Guest List</span>
+                            <span className="font-heading font-bold text-[#DCB8FF] text-xs">
+                              {coprod.guestTicketsUsed} / {coprod.guestTicketsAllocated} places
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => setPreviewCoproducer(coprod)}
+                            className="min-h-[44px] rounded-xl bg-[#E9C349]/20 hover:bg-[#E9C349]/30 text-[#E9C349] text-xs font-bold border border-[#E9C349]/30 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                          >
+                            <Crown className="w-3.5 h-3.5" />
+                            <span>Aperçu Cockpit</span>
+                          </button>
+                          <a
+                            href={`https://wa.me/${coprod.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
+                              `Bonjour ${coprod.name} ! Voici le point en temps réel pour *${activeEvent?.title || 'votre événement'}* sur Thièsdn Billetterie :\n• Chiffre d'affaires brut : ${totalGrossCA.toLocaleString('fr-FR')} FCFA\n• Votre part (${coprod.revenueShare}%) : ${netAmount.toLocaleString('fr-FR')} FCFA\n• Accédez à votre Cockpit Artiste officiel : https://thiesdn.mgartswork.site/`
+                            )}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="min-h-[44px] rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                          >
+                            <Send className="w-3.5 h-3.5" />
+                            <span>WhatsApp</span>
+                          </a>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+
+              {/* VUE TABLEAU DESKTOP (>= 768px) */}
+              <div className="overflow-x-auto hidden md:block">
                 <table className="w-full text-left text-xs">
                   <thead>
                     <tr className="border-b border-white/10 text-gray-400 uppercase font-heading tracking-wider">
@@ -3846,7 +4143,82 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        {/* Mobile View: Transaction Cards */}
+        <div className="block md:hidden space-y-3">
+          {adminTransactions.length === 0 ? (
+            <p className="text-center py-6 text-gray-400 text-xs">Aucune transaction enregistrée.</p>
+          ) : (
+            adminTransactions.map((tx) => {
+              const cur = safeEvents.find((e) => e && e.id === tx.eventId);
+              const statusStr = String(cur?.status || '').toLowerCase();
+              const isArchived = statusStr === 'archived' || Boolean(cur?.isDeleted) || Boolean(cur?.deletedAt);
+              return (
+                <div key={tx.id} className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-3">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <span className="font-mono text-white font-bold text-xs truncate max-w-[140px]">{tx.id}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                          tx.paymentMethod === 'wave'
+                            ? 'bg-sky-500/20 text-sky-400 border border-sky-500/30'
+                            : tx.paymentMethod === 'om'
+                            ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
+                            : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                        }`}
+                      >
+                        {tx.paymentMethod.toUpperCase()}
+                      </span>
+                      <span className="inline-flex items-center gap-1 bg-emerald-500/20 text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                        <Check className="w-3 h-3" /> Validé
+                      </span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <p className="font-semibold text-white text-sm line-clamp-2">{tx.eventTitle}</p>
+                      {isArchived && (
+                        <span className="text-[9px] bg-slate-700/60 text-slate-300 font-bold px-1.5 py-0.2 rounded-full border border-slate-600">
+                          📦 Archivé
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-[#DCB8FF] truncate">{tx.promoterName}</p>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs text-gray-300 bg-black/30 p-2.5 rounded-xl border border-white/5">
+                    <div>
+                      <p className="font-medium text-white truncate max-w-[150px]">{tx.customerName}</p>
+                      <p className="text-[10px] text-gray-400 font-mono">{tx.customerPhone}</p>
+                    </div>
+                    <span className="text-[10px] text-gray-500 text-right">
+                      {new Date(tx.createdAt).toLocaleDateString('fr-FR', {
+                        day: 'numeric',
+                        month: 'short',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </span>
+                  </div>
+
+                  <div className="pt-2 border-t border-white/5 flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] text-gray-400 uppercase tracking-wider">Total Encaissé</p>
+                      <p className="text-base font-heading font-extrabold text-white">{tx.totalAmount.toLocaleString('fr-FR')} F</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] text-[#E9C349]">Promoteur: <span className="font-bold font-mono">{tx.promoterShare.toLocaleString('fr-FR')} F</span></p>
+                      <p className="text-[10px] text-[#DCB8FF]">Thiesdn (10%): <span className="font-bold font-mono">{tx.platformFee.toLocaleString('fr-FR')} F</span></p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Desktop View: Table */}
+        <div className="overflow-x-auto hidden md:block">
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="border-b border-white/10 text-gray-400 uppercase font-heading tracking-wider">

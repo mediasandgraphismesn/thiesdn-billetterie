@@ -148,88 +148,77 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const navItems = getNavItems();
 
   return (
-    <aside className="hidden lg:flex flex-col fixed inset-y-0 left-0 z-40 w-72 bg-[#1C1B1B]/95 backdrop-blur-2xl border-r border-white/10 p-5 pt-20 shadow-2xl">
-      {/* User Status Badge */}
-      <div className="p-4 rounded-2xl bg-gradient-to-br from-[#201F1F] to-[#141414] border border-white/10 mb-6 relative overflow-hidden">
+    <aside className="hidden md:flex flex-col fixed inset-y-0 left-0 z-40 w-64 bg-[#0A0A0A]/90 backdrop-blur-xl border-r border-white/10 p-4 pt-20 shadow-2xl space-y-3">
+      {/* User Status Badge - Version Liquid Glass Aérée */}
+      <div className="p-3.5 rounded-2xl bg-white/5 backdrop-blur-md border border-white/10 mb-2 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-24 h-24 bg-[#8A2BE2]/10 rounded-full blur-2xl pointer-events-none" />
         
         <div className="flex items-center gap-3 relative z-10">
           <div className="relative">
-            <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-[#E9C349] shadow-md">
+            <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-[#E9C349] shadow-md">
               <img
                 src={user.avatar}
                 alt={user.name}
                 className="w-full h-full object-cover"
               />
             </div>
-            <div className="absolute -bottom-1 -right-1 bg-[#8A2BE2] p-1 rounded-full text-white">
+            <div className="absolute -bottom-1 -right-1 bg-[#8A2BE2] p-0.5 rounded-full text-white">
               <CheckCircle2 className="w-3 h-3 text-emerald-400" />
             </div>
           </div>
 
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5">
-              <h2 className="font-heading text-sm font-bold text-white truncate">
-                {user.name && user.name.trim().toLowerCase() !== 'utilisateur'
-                  ? user.name
-                  : user.email ? user.email.split('@')[0] : 'Membre Thièsdn'}
-              </h2>
-            </div>
-            <p className="text-xs text-[#E9C349] font-medium flex items-center gap-1">
+            <h2 className="font-heading text-xs font-bold text-white truncate">
+              {user.name && user.name.trim().toLowerCase() !== 'utilisateur'
+                ? user.name
+                : user.email ? user.email.split('@')[0] : 'Membre Thièsdn'}
+            </h2>
+            <p className="text-[11px] text-[#E9C349] font-medium flex items-center gap-1 mt-0.5 truncate">
               {user.role === 'admin' ? (
                 <>
-                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <ShieldCheck className="w-3 h-3 shrink-0" />
                   <span>{isAdminPreview ? 'Aperçu Visiteur' : 'Superviseur Admin'}</span>
                 </>
               ) : user.role === 'promoter' ? (
                 <>
-                  <Crown className="w-3.5 h-3.5" />
+                  <Crown className="w-3 h-3 shrink-0" />
                   <span>Promoteur Certifié</span>
                 </>
               ) : user.role === 'artist' ? (
                 <>
-                  <Crown className="w-3.5 h-3.5 text-[#E9C349]" />
-                  <span className="text-[#E9C349] font-bold">Artiste Co-Producteur</span>
+                  <Crown className="w-3 h-3 shrink-0 text-[#E9C349]" />
+                  <span className="text-[#E9C349]">Artiste Co-Prod</span>
                 </>
               ) : user.role === 'sales_agent' ? (
                 <>
-                  <Store className="w-3.5 h-3.5 text-emerald-400" />
-                  <span className="text-emerald-400 font-bold">Point de Vente Agréé</span>
+                  <Store className="w-3 h-3 shrink-0 text-emerald-400" />
+                  <span className="text-emerald-400">Point de Vente</span>
                 </>
               ) : (
                 <>
-                  <User className="w-3.5 h-3.5" />
+                  <User className="w-3 h-3 shrink-0" />
                   <span>Espace Client</span>
                 </>
               )}
             </p>
           </div>
         </div>
-
-        <div className="mt-3 pt-2.5 border-t border-white/10 flex items-center justify-between text-[11px] text-gray-400">
-          <span className="flex items-center gap-1 text-[#DCB8FF]">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Compte Vérifié
-          </span>
-          <span className="bg-[#8A2BE2]/20 text-[#DCB8FF] px-2 py-0.5 rounded-full font-bold uppercase text-[9px]">
-            {isAdminPreview ? 'mode client' : user.role}
-          </span>
-        </div>
       </div>
 
-      {/* Primary Action Button - For Promoters & Artists (Strictement interdit pour l'admin) */}
+      {/* Primary Action Button - For Promoters & Artists */}
       {(user.role === 'promoter' || user.role === 'artist') && (
         <button
           onClick={onOpenCreateModal}
-          className="w-full mb-6 btn-primary-glow py-3 px-4 rounded-xl flex items-center justify-center gap-2 font-heading font-bold text-xs tracking-wider uppercase transition-all"
+          className="w-full mb-2 btn-primary-glow py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 font-heading font-extrabold text-xs tracking-wider uppercase transition-all shadow-md"
         >
-          <PlusCircle className="w-4 h-4" />
+          <PlusCircle className="w-4 h-4 text-[#E9C349]" />
           <span>Créer un Événement</span>
         </button>
       )}
 
-      {/* Navigation Links */}
-      <nav className="flex-1 space-y-1.5 overflow-y-auto">
-        <p className="text-[11px] uppercase tracking-wider text-gray-400 font-bold px-3 mb-2">
+      {/* Navigation Links Aérés */}
+      <nav className="flex-1 space-y-1 overflow-y-auto pr-1">
+        <p className="text-[10px] uppercase tracking-wider text-gray-400 font-bold px-3 mb-1.5">
           {user.role === 'admin' && !isAdminPreview
             ? 'Administration'
             : user.role === 'promoter'
@@ -245,19 +234,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button
               key={item.id}
               onClick={() => onTabChange(item.id)}
-              className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-medium transition-all text-left ${
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left ${
                 isActive
-                  ? 'bg-gradient-to-r from-[#8A2BE2]/30 to-[#8A2BE2]/10 text-white border border-[#8A2BE2]/40 font-semibold shadow-inner'
-                  : 'text-[#CFC2D7] hover:bg-white/5 hover:text-white'
+                  ? 'bg-gradient-to-r from-[#8A2BE2]/25 to-[#E9C349]/10 text-white border border-[#8A2BE2]/40 font-bold shadow-sm'
+                  : 'text-gray-400 hover:bg-white/5 hover:text-white'
               }`}
             >
-              <div className="flex items-center gap-3">
-                <Icon className={`w-4 h-4 ${isActive ? 'text-[#DCB8FF]' : 'text-gray-400'}`} />
-                <span>{item.label}</span>
+              <div className="flex items-center gap-2.5 truncate">
+                <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-[#E9C349]' : 'text-gray-400'}`} />
+                <span className="truncate">{item.label}</span>
               </div>
               {item.badge && (
                 <span
-                  className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                  className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full shrink-0 ml-1.5 ${
                     item.badgeStyle || 'bg-white/10 text-gray-300'
                   }`}
                 >
