@@ -73,73 +73,126 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateAdmin, onNavigateCGV }
 
   return (
     <>
-      <footer className="mt-auto border-t border-white/5 bg-[#0A0A0A]/95 text-gray-400 transition-all">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8 pb-[calc(var(--nav-h,72px)+env(safe-area-inset-bottom)+16px)] lg:pb-8">
-          {/* Grille principale responsive : flex vertical sur mobile, colonnes sur desktop */}
-          <div className="flex flex-col gap-6 sm:grid sm:grid-cols-3 sm:gap-8 mb-4 items-start">
+      <footer className="mt-auto border-t border-white/10 bg-[#0A0A0A] text-gray-400 transition-all">
+        <div className="max-w-7xl mx-auto px-6 py-12 pb-[calc(var(--nav-h,72px)+env(safe-area-inset-bottom)+24px)] md:pb-12">
+          {/* Grille principale : 1 colonne centrée sur mobile, 3 colonnes aérées sur desktop */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-10 items-start text-center md:text-left">
             
-            {/* COLONNE 1 : IDENTITÉ */}
-            <div className="space-y-2">
-              <div className="flex items-center gap-2.5">
-                <div className="h-8 px-2 py-1 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shadow-sm">
-                  <img
-                    src="/logo-tight.png"
-                    alt="Thièsdn Logo"
-                    className="h-4 w-auto object-contain"
-                  />
-                </div>
-                <div>
-                  <span className="font-heading font-extrabold text-sm text-white block leading-tight tracking-tight">
-                    Thièsdn <span className="text-[#E9C349]">Billetterie</span>
-                  </span>
-                </div>
+            {/* COLONNE 1 : À PROPOS */}
+            <div className="flex flex-col items-center md:items-start gap-4">
+              {/* Logo horizontal "Thièsdn Billetterie" épuré sans carré redondant */}
+              <div className="inline-flex items-center gap-2">
+                <span className="font-heading font-black text-xl tracking-tight text-white">
+                  Thièsdn <span className="text-[#E9C349]">Billetterie</span>
+                </span>
               </div>
 
-              <p className="text-xs text-gray-400 leading-snug max-w-xs">
+              <p className="text-xs text-gray-400 leading-relaxed max-w-sm">
                 Thièsdn Billetterie, la billetterie officielle des événements de prestige à Thiès, Saly, Mbour et Dakar.
               </p>
 
-              <div className="flex items-center gap-1.5 text-[11px] text-[#DCB8FF]/90">
-                <ShieldCheck className="w-3.5 h-3.5 text-[#E9C349] shrink-0" />
-                <span>Pass QR certifié • Paiements sécurisés via Wave & Orange Money</span>
+              <div className="flex items-center gap-1.5 text-xs text-[#DCB8FF]">
+                <ShieldCheck className="w-4 h-4 text-[#E9C349] shrink-0" />
+                <span>Pass QR certifié • Paiements sécurisés Wave & OM</span>
               </div>
             </div>
 
-            {/* COLONNE 2 : CONTACT RAPIDE & RÉSEAUX SOCIAUX */}
-            <div className="space-y-3 w-full">
-              <div className="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-1.5 sm:gap-x-4 sm:gap-y-1.5 text-xs">
+            {/* COLONNE 2 : CONTACT & LIENS */}
+            <div className="flex flex-col items-center md:items-start gap-4 w-full">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-white">
+                Contact & Informations
+              </h4>
+
+              {/* Coordonnées */}
+              <div className="flex flex-col items-center md:items-start gap-2.5 text-xs">
                 <a
                   href="mailto:contact@mgartswork.site"
-                  className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors min-h-[44px] py-1"
+                  className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors py-0.5"
                 >
                   <Mail className="w-4 h-4 text-[#DCB8FF] shrink-0" />
-                  <span className="break-all">contact@mgartswork.site</span>
+                  <span>contact@mgartswork.site</span>
                 </a>
 
                 <a
                   href="https://wa.me/221774587474?text=Bonjour%20Thi%C3%A8sdn%20Billetterie"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-gray-400 hover:text-emerald-400 transition-colors min-h-[44px] py-1"
+                  className="flex items-center gap-2 text-gray-400 hover:text-emerald-400 transition-colors py-0.5"
                 >
                   <Phone className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span>+221 77 458 74 74</span>
+                  <span className="font-mono">+221 77 458 74 74</span>
                 </a>
 
                 <a
                   href="https://thiesdn.mgartswork.site/"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 text-gray-400 hover:text-[#E9C349] transition-colors min-h-[44px] py-1"
+                  className="flex items-center gap-1.5 text-gray-400 hover:text-[#E9C349] transition-colors py-0.5"
                 >
                   <Globe className="w-4 h-4 text-[#E9C349] shrink-0" />
-                  <span className="break-all">thiesdn.mgartswork.site</span>
+                  <span>thiesdn.mgartswork.site</span>
                   <ExternalLink className="w-3 h-3 text-gray-600 shrink-0" />
                 </a>
               </div>
 
-              {/* Icônes Réseaux Sociaux alignées avec zones tactiles 44x44px */}
-              <div className="flex items-center gap-2 pt-1 flex-wrap">
+              {/* Liens légaux & Admin */}
+              <div className="pt-2 border-t border-white/5 w-full flex flex-col items-center md:items-start gap-2 text-xs">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onNavigateCGV) onNavigateCGV();
+                    else setIsCGVModalOpen(true);
+                  }}
+                  className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  <FileText className="w-3.5 h-3.5 text-[#DCB8FF]" />
+                  <span>Conditions Générales de Vente (CGV)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setLegalModal('confidentialite')}
+                  className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Politique de Confidentialité</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setLegalModal('faq')}
+                  className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  <HelpCircle className="w-3.5 h-3.5 text-[#E9C349]" />
+                  <span>Foire Aux Questions (FAQ)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onNavigateAdmin) onNavigateAdmin();
+                    else window.location.href = '/admin';
+                  }}
+                  className="flex items-center gap-2 text-gray-400 hover:text-[#E9C349] transition-colors cursor-pointer font-medium"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-[#8A2BE2]" />
+                  <span>Accès Administration (Super Admin)</span>
+                </button>
+              </div>
+            </div>
+
+            {/* COLONNE 3 : RÉSEAUX SOCIAUX */}
+            <div className="flex flex-col items-center md:items-start gap-4 w-full">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-white">
+                Réseaux Sociaux
+              </h4>
+
+              <p className="text-xs text-gray-400 max-w-xs">
+                Suivez toute l'actualité des spectacles et sorties culturelles en direct.
+              </p>
+
+              {/* Boutons Réseaux Sociaux */}
+              <div className="flex items-center gap-2.5 flex-wrap justify-center md:justify-start">
                 {socialLinks.map((social) => {
                   const Icon = social.icon;
                   return (
@@ -150,120 +203,27 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateAdmin, onNavigateCGV }
                       rel="noopener noreferrer"
                       aria-label={social.name}
                       title={social.name}
-                      className="w-11 h-11 min-w-[44px] min-h-[44px] rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 flex items-center justify-center text-gray-400 hover:text-white transition-all cursor-pointer"
+                      className="w-10 h-10 min-w-[40px] min-h-[40px] rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-gray-300 hover:text-white transition-all cursor-pointer"
                     >
                       <Icon className="w-4 h-4" />
                     </a>
                   );
                 })}
-                <span className="text-[11px] text-gray-500 ml-1">@thiesdn</span>
               </div>
-            </div>
 
-            {/* COLONNE 3 : LIENS UTILES (ACCORDÉON SUR MOBILE / COLONNE SUR DESKTOP) */}
-            <div className="w-full md:justify-self-end">
-              {/* Version Mobile : Accordéon <details> compact */}
-              <details className="sm:hidden w-full bg-white/5 rounded-xl p-3 border border-white/5 group">
-                <summary className="text-xs font-bold text-gray-300 cursor-pointer flex items-center justify-between list-none">
-                  <span>Informations Légales & Espace Admin</span>
-                  <span className="text-gray-500 group-open:rotate-180 transition-transform">▾</span>
-                </summary>
-                <div className="pt-3 space-y-2 text-xs border-t border-white/5 mt-2">
-                  <button
-                    onClick={() => {
-                      if (onNavigateCGV) onNavigateCGV();
-                      else setIsCGVModalOpen(true);
-                    }}
-                    className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors py-0.5 text-left w-full"
-                  >
-                    <FileText className="w-3.5 h-3.5 text-[#DCB8FF]" />
-                    <span>Conditions Générales de Vente (CGV)</span>
-                  </button>
-
-                  <button
-                    onClick={() => setLegalModal('confidentialite')}
-                    className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors py-0.5 text-left w-full"
-                  >
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Politique de Confidentialité</span>
-                  </button>
-
-                  <button
-                    onClick={() => setLegalModal('faq')}
-                    className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors py-0.5 text-left w-full"
-                  >
-                    <HelpCircle className="w-3.5 h-3.5 text-[#E9C349]" />
-                    <span>Foire Aux Questions (FAQ)</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      if (onNavigateAdmin) onNavigateAdmin();
-                      else window.location.href = '/admin';
-                    }}
-                    className="flex items-center gap-2 text-gray-400 hover:text-[#E9C349] transition-colors py-0.5 text-left font-medium w-full"
-                  >
-                    <ShieldCheck className="w-3.5 h-3.5 text-[#8A2BE2]" />
-                    <span>Accès Administration</span>
-                  </button>
-                </div>
-              </details>
-
-              {/* Version Desktop : Liste normale */}
-              <div className="hidden sm:flex sm:flex-col space-y-1 text-xs">
-                <button
-                  onClick={() => {
-                    if (onNavigateCGV) {
-                      onNavigateCGV();
-                    } else {
-                      setIsCGVModalOpen(true);
-                    }
-                  }}
-                  className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors py-0.5 text-left"
-                >
-                  <FileText className="w-3.5 h-3.5 text-[#DCB8FF]" />
-                  <span>Conditions Générales de Vente (CGV)</span>
-                </button>
-
-                <button
-                  onClick={() => setLegalModal('confidentialite')}
-                  className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors py-0.5 text-left"
-                >
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Politique de Confidentialité</span>
-                </button>
-
-                <button
-                  onClick={() => setLegalModal('faq')}
-                  className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors py-0.5 text-left"
-                >
-                  <HelpCircle className="w-3.5 h-3.5 text-[#E9C349]" />
-                  <span>Foire Aux Questions (FAQ)</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    if (onNavigateAdmin) {
-                      onNavigateAdmin();
-                    } else {
-                      window.location.href = '/admin';
-                    }
-                  }}
-                  className="flex items-center gap-2 text-gray-400 hover:text-[#E9C349] transition-colors py-0.5 text-left font-medium group"
-                >
-                  <ShieldCheck className="w-3.5 h-3.5 text-[#8A2BE2] group-hover:text-[#E9C349] transition-colors" />
-                  <span>Accès Administration (Super Admin)</span>
-                </button>
-              </div>
+              {/* Handle @thiesdn en-dessous */}
+              <span className="text-xs font-mono font-bold text-[#E9C349] tracking-wider">
+                @thiesdn
+              </span>
             </div>
 
           </div>
 
-          {/* BARRE INFÉRIEURE SUR UNE SEULE LIGNE (flex justify-between) */}
-          <div className="pt-3 border-t border-white/5 flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-500">
+          {/* LIGNE DE SÉPARATION SUBTILE & COPYRIGHT */}
+          <div className="pt-6 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-500 text-center sm:text-left">
             <p>© 2026 Thièsdn Billetterie. Tous droits réservés.</p>
 
-            <div className="flex items-center gap-1 text-[#E9C349]">
+            <div className="flex items-center gap-1.5 text-[#E9C349]">
               <span className="text-gray-500">Conçu & Développé par</span>
               <a
                 href="https://mgartswork.site"
@@ -272,7 +232,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateAdmin, onNavigateCGV }
                 className="font-heading font-bold text-[#E9C349] hover:text-[#DCB8FF] transition-colors inline-flex items-center gap-1"
               >
                 <span>DAW Digital Arts Work by MG</span>
-                <Globe className="w-3 h-3 text-[#E9C349]" />
+                <Globe className="w-3.5 h-3.5 text-[#E9C349]" />
               </a>
             </div>
           </div>

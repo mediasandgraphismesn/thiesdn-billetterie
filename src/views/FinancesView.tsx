@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Wallet,
   Filter,
@@ -191,6 +191,22 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
 
   // Menu Options Avancées
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
+  const optionsMenuRef = useRef<HTMLDivElement>(null);
+
+  // Fermeture du menu Options au clic extérieur
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (optionsMenuRef.current && !optionsMenuRef.current.contains(event.target as Node)) {
+        setShowOptionsMenu(false);
+      }
+    };
+    if (showOptionsMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showOptionsMenu]);
 
   // Menu MoreVertical actif pour les points de vente (Règle 2 boutons max)
   const [activeAgentMenuId, setActiveAgentMenuId] = useState<string | null>(null);
@@ -1191,9 +1207,10 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
           </div>
         </div>
 
-        {/* Barre d'onglets simplifiée : 3 ONGLETS DIRECTS + MENU OPTIONS */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
-          <div className="flex items-center overflow-x-auto flex-nowrap scrollbar-none max-w-full bg-[#1C1B1B] p-1 rounded-2xl border border-white/10 gap-1 self-start sm:self-auto">
+        {/* Barre d'onglets simplifiée : 3 ONGLETS DIRECTS À GAUCHE + OPTIONS & SÉLECTEUR À DROITE */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
+          {/* Onglets principaux collés sans espace superflu */}
+          <div className="flex items-center overflow-x-auto flex-nowrap scrollbar-none max-w-full bg-[#1C1B1B] p-1 rounded-2xl border border-white/10 gap-1 shrink-0 self-start sm:self-auto">
             {/* 1. VUE D'ENSEMBLE */}
             <button
               type="button"
@@ -1201,7 +1218,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                 setPromoterTab('stats');
                 setShowOptionsMenu(false);
               }}
-              className={`px-4 py-2.5 rounded-xl text-xs font-heading font-extrabold tracking-wider uppercase transition-all flex items-center gap-2 ${
+              className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs font-heading font-extrabold tracking-wider uppercase transition-all flex items-center gap-2 shrink-0 ${
                 promoterTab === 'stats'
                   ? 'bg-[#E9C349] text-[#241A00] shadow-md shadow-[#E9C349]/20'
                   : 'text-gray-400 hover:text-white'
@@ -1211,21 +1228,21 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
               <span>Vue d'ensemble</span>
             </button>
 
-            {/* 2. BILLETS PHYSIQUES */}
+            {/* 2. BILLETS */}
             <button
               type="button"
               onClick={() => {
                 setPromoterTab('network');
                 setShowOptionsMenu(false);
               }}
-              className={`px-4 py-2.5 rounded-xl text-xs font-heading font-extrabold tracking-wider uppercase transition-all flex items-center gap-2 ${
+              className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs font-heading font-extrabold tracking-wider uppercase transition-all flex items-center gap-2 shrink-0 ${
                 promoterTab === 'network'
                   ? 'bg-gradient-to-r from-[#8A2BE2] to-[#E9C349] text-white shadow-md shadow-[#8A2BE2]/40'
                   : 'text-gray-400 hover:text-white'
               }`}
             >
               <Ticket className="w-4 h-4" />
-              <span>Billets Physiques</span>
+              <span>Billets</span>
               <span className="bg-white/20 text-white text-[10px] font-extrabold px-1.5 py-0.5 rounded-full">
                 {totalPhysicalDistributed > 0 ? totalPhysicalDistributed : networkAgents.length}
               </span>
@@ -1238,7 +1255,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                 setPromoterTab('finances');
                 setShowOptionsMenu(false);
               }}
-              className={`px-4 py-2.5 rounded-xl text-xs font-heading font-extrabold tracking-wider uppercase transition-all flex items-center gap-2 ${
+              className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs font-heading font-extrabold tracking-wider uppercase transition-all flex items-center gap-2 shrink-0 ${
                 promoterTab === 'finances'
                   ? 'bg-[#8A2BE2] text-white shadow-md shadow-[#8A2BE2]/30'
                   : 'text-gray-400 hover:text-white'
@@ -1247,160 +1264,163 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
               <Wallet className="w-4 h-4" />
               <span>Finances</span>
             </button>
+          </div>
 
-            {/* MENU OPTIONS AVANCÉES */}
-            <div className="relative">
+          {/* Groupe Droit : Menu Options + Sélecteur d'Événement (Alignés à droite) */}
+          <div className="flex items-center gap-2.5 sm:ml-auto w-full sm:w-auto justify-between sm:justify-end">
+            {/* BOUTON OPTIONS DÉROULANT : ICÔNE RÉGLAGES ULTRA-COMPACTE */}
+            <div ref={optionsMenuRef} className="relative shrink-0 z-50">
               <button
                 type="button"
-                onClick={() => setShowOptionsMenu(!showOptionsMenu)}
-                className={`px-3.5 py-2.5 rounded-xl text-xs font-heading font-extrabold tracking-wider uppercase transition-all flex items-center gap-1.5 ${
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowOptionsMenu((prev) => !prev);
+                }}
+                className={`p-2 sm:p-2.5 rounded-xl transition-all flex items-center justify-center border cursor-pointer select-none ${
                   ['unsold', 'coprod', 'accreditations', 'stations', 'compta'].includes(promoterTab)
-                    ? 'bg-white/15 text-white border border-white/20'
-                    : 'text-gray-400 hover:text-white'
+                    ? 'bg-[#E9C349]/20 text-[#E9C349] border-[#E9C349]/40 shadow-sm'
+                    : 'bg-[#1C1B1B] text-gray-300 hover:text-white border-white/10 hover:border-white/20'
                 }`}
+                title="Modules spécialisés & réglages"
+                aria-label="Options et réglages"
               >
-                <SlidersHorizontal className="w-3.5 h-3.5 text-[#E9C349]" />
-                <span>Options</span>
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showOptionsMenu ? 'rotate-180' : ''}`} />
+                <Settings className={`w-4 h-4 text-[#E9C349] transition-transform duration-300 ${showOptionsMenu ? 'rotate-90 text-white' : ''}`} />
               </button>
 
               {showOptionsMenu && (
-                <>
-                  <div
-                    className="fixed inset-0 z-30"
-                    onClick={() => setShowOptionsMenu(false)}
-                  />
-                  <div className="absolute left-0 mt-2 w-72 bg-[#171717] border border-white/15 rounded-2xl shadow-2xl z-40 p-2 space-y-1 animate-in fade-in zoom-in-95 duration-150">
-                    <div className="px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-gray-500 border-b border-white/5">
-                      Modules Spécialisés
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPromoterTab('unsold');
-                        setShowOptionsMenu(false);
-                      }}
-                      className={`w-full px-3 py-2 rounded-xl text-xs font-medium flex items-center justify-between text-left transition-colors ${
-                        promoterTab === 'unsold'
-                          ? 'bg-[#E9C349]/20 text-[#E9C349] font-bold'
-                          : 'text-gray-300 hover:bg-white/5 hover:text-white'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <AlertCircle className="w-4 h-4 text-amber-400" />
-                        <span>Billets Non Vendus & Rapatriement</span>
-                      </div>
-                      <span className="text-[10px] font-mono bg-white/10 px-1.5 py-0.5 rounded-full text-gray-300">
-                        {totalUnsoldTickets}
-                      </span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPromoterTab('coprod');
-                        setShowOptionsMenu(false);
-                      }}
-                      className={`w-full px-3 py-2 rounded-xl text-xs font-medium flex items-center justify-between text-left transition-colors ${
-                        promoterTab === 'coprod'
-                          ? 'bg-[#E9C349]/20 text-[#E9C349] font-bold'
-                          : 'text-gray-300 hover:bg-white/5 hover:text-white'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <Crown className="w-4 h-4 text-[#E9C349]" />
-                        <span>Co-Production & Artiste</span>
-                      </div>
-                      <span className="text-[10px] font-mono bg-white/10 px-1.5 py-0.5 rounded-full text-gray-300">
-                        {coproducers.filter((c) => !activeEvent || c.eventId === activeEvent.id).length}
-                      </span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPromoterTab('accreditations');
-                        setShowOptionsMenu(false);
-                      }}
-                      className={`w-full px-3 py-2 rounded-xl text-xs font-medium flex items-center gap-2 text-left transition-colors ${
-                        promoterTab === 'accreditations'
-                          ? 'bg-[#8A2BE2]/20 text-[#DCB8FF] font-bold'
-                          : 'text-gray-300 hover:bg-white/5 hover:text-white'
-                      }`}
-                    >
-                      <ShieldCheck className="w-4 h-4 text-[#8A2BE2]" />
-                      <span>Accréditations Staff & Presse</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPromoterTab('stations');
-                        setShowOptionsMenu(false);
-                      }}
-                      className={`w-full px-3 py-2 rounded-xl text-xs font-medium flex items-center gap-2 text-left transition-colors ${
-                        promoterTab === 'stations'
-                          ? 'bg-emerald-500/20 text-emerald-300 font-bold'
-                          : 'text-gray-300 hover:bg-white/5 hover:text-white'
-                      }`}
-                    >
-                      <Smartphone className="w-4 h-4 text-emerald-400" />
-                      <span>Postes de Contrôle QR</span>
-                    </button>
-
-                    {currentRole === 'admin' && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setPromoterTab('compta');
-                          setShowOptionsMenu(false);
-                        }}
-                        className={`w-full px-3 py-2 rounded-xl text-xs font-medium flex items-center gap-2 text-left transition-colors ${
-                          promoterTab === 'compta'
-                            ? 'bg-[#8A2BE2] text-white font-bold'
-                            : 'text-gray-300 hover:bg-white/5 hover:text-white'
-                        }`}
-                      >
-                        <Wallet className="w-4 h-4 text-[#8A2BE2]" />
-                        <span>Comptabilité Plateforme (Admin)</span>
-                      </button>
-                    )}
-
-                    <div className="border-t border-white/10 my-1 pt-1">
-                      <button
-                        type="button"
-                        onClick={handleClearLocalTestTickets}
-                        className="w-full px-3 py-2 rounded-xl text-xs font-semibold text-rose-300 hover:bg-rose-950/40 hover:text-rose-200 flex items-center gap-2 transition-colors cursor-pointer"
-                      >
-                        <Trash2 className="w-4 h-4 text-rose-400 shrink-0" />
-                        <span>Purger les billets de test locaux</span>
-                      </button>
-                    </div>
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  className="absolute right-0 top-full mt-2 w-72 sm:w-80 bg-[#171717] border border-white/15 rounded-2xl shadow-2xl z-[100] p-2 space-y-1 animate-in fade-in zoom-in-95 duration-150"
+                >
+                  <div className="px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-gray-500 border-b border-white/5">
+                    Modules Spécialisés
                   </div>
-                </>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPromoterTab('unsold');
+                      setShowOptionsMenu(false);
+                    }}
+                    className={`w-full px-3 py-2 rounded-xl text-xs font-medium flex items-center justify-between text-left transition-colors ${
+                      promoterTab === 'unsold'
+                        ? 'bg-[#E9C349]/20 text-[#E9C349] font-bold'
+                        : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 text-amber-400" />
+                      <span>Billets Non Vendus & Rapatriement</span>
+                    </div>
+                    <span className="text-[10px] font-mono bg-white/10 px-1.5 py-0.5 rounded-full text-gray-300">
+                      {totalUnsoldTickets}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPromoterTab('coprod');
+                      setShowOptionsMenu(false);
+                    }}
+                    className={`w-full px-3 py-2 rounded-xl text-xs font-medium flex items-center justify-between text-left transition-colors ${
+                      promoterTab === 'coprod'
+                        ? 'bg-[#E9C349]/20 text-[#E9C349] font-bold'
+                        : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Crown className="w-4 h-4 text-[#E9C349]" />
+                      <span>Co-Production & Artiste</span>
+                    </div>
+                    <span className="text-[10px] font-mono bg-white/10 px-1.5 py-0.5 rounded-full text-gray-300">
+                      {coproducers.filter((c) => !activeEvent || c.eventId === activeEvent.id).length}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPromoterTab('accreditations');
+                      setShowOptionsMenu(false);
+                    }}
+                    className={`w-full px-3 py-2 rounded-xl text-xs font-medium flex items-center gap-2 text-left transition-colors ${
+                      promoterTab === 'accreditations'
+                        ? 'bg-[#8A2BE2]/20 text-[#DCB8FF] font-bold'
+                        : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                    }`}
+                  >
+                    <ShieldCheck className="w-4 h-4 text-[#8A2BE2]" />
+                    <span>Accréditations Staff & Presse</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPromoterTab('stations');
+                      setShowOptionsMenu(false);
+                    }}
+                    className={`w-full px-3 py-2 rounded-xl text-xs font-medium flex items-center gap-2 text-left transition-colors ${
+                      promoterTab === 'stations'
+                        ? 'bg-emerald-500/20 text-emerald-300 font-bold'
+                        : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                    }`}
+                  >
+                    <Smartphone className="w-4 h-4 text-emerald-400" />
+                    <span>Postes de Contrôle QR</span>
+                  </button>
+
+                  {currentRole === 'admin' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPromoterTab('compta');
+                        setShowOptionsMenu(false);
+                      }}
+                      className={`w-full px-3 py-2 rounded-xl text-xs font-medium flex items-center gap-2 text-left transition-colors ${
+                        promoterTab === 'compta'
+                          ? 'bg-[#8A2BE2] text-white font-bold'
+                          : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                      }`}
+                    >
+                      <Wallet className="w-4 h-4 text-[#8A2BE2]" />
+                      <span>Comptabilité Plateforme (Admin)</span>
+                    </button>
+                  )}
+
+                  <div className="border-t border-white/10 my-1 pt-1">
+                    <button
+                      type="button"
+                      onClick={handleClearLocalTestTickets}
+                      className="w-full px-3 py-2 rounded-xl text-xs font-semibold text-rose-300 hover:bg-rose-950/40 hover:text-rose-200 flex items-center gap-2 transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="w-4 h-4 text-rose-400 shrink-0" />
+                      <span>Purger les billets de test locaux</span>
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
-          </div>
 
-          {/* Sélecteur d'Événement pour filtrer les statistiques */}
-          {promoterEvents.length > 0 && (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-400 font-bold hidden sm:inline">Événement :</span>
-              <select
-                value={selectedEventId}
-                onChange={(e) => setSelectedEventId(e.target.value)}
-                className="bg-[#1C1B1B] border border-white/10 text-white text-xs rounded-xl px-3 py-2 outline-none focus:border-[#E9C349] font-medium"
-              >
-                <option value="all">Tous mes événements cumulés</option>
-                {promoterEvents.map((evt) => (
-                  <option key={evt.id} value={evt.id}>
-                    {evt.title} ({evt.city})
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+            {/* Sélecteur d'Événement pour filtrer les statistiques (Poussé à droite) */}
+            {promoterEvents.length > 0 && (
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-xs text-gray-400 font-bold hidden md:inline shrink-0">Événement :</span>
+                <select
+                  value={selectedEventId}
+                  onChange={(e) => setSelectedEventId(e.target.value)}
+                  className="bg-[#1C1B1B] border border-white/10 text-white text-xs rounded-xl px-3 py-2 outline-none focus:border-[#E9C349] font-medium max-w-[180px] sm:max-w-xs truncate cursor-pointer"
+                >
+                  <option value="all">Tous mes événements cumulés</option>
+                  {promoterEvents.map((evt) => (
+                    <option key={evt.id} value={evt.id}>
+                      {evt.title} ({evt.city})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Bannière de retour vers la vue d'ensemble si un sous-onglet est actif */}
