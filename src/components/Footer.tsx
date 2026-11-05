@@ -166,18 +166,6 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateAdmin, onNavigateCGV }
                   <HelpCircle className="w-3.5 h-3.5 text-[#E9C349]" />
                   <span>Foire Aux Questions (FAQ)</span>
                 </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (onNavigateAdmin) onNavigateAdmin();
-                    else window.location.href = '/admin';
-                  }}
-                  className="flex items-center gap-2 text-gray-400 hover:text-[#E9C349] transition-colors cursor-pointer font-medium"
-                >
-                  <ShieldCheck className="w-3.5 h-3.5 text-[#8A2BE2]" />
-                  <span>Accès Administration (Super Admin)</span>
-                </button>
               </div>
             </div>
 

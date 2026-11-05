@@ -1465,7 +1465,6 @@ export default function App() {
           {/* Pied de page Officiel (Footer) complet et responsive */}
           {activeTab !== 'showcase' && activeTab !== 'presentation' && (
             <Footer
-              onNavigateAdmin={() => handleTabChange('dashboard')}
               onNavigateCGV={() => handleTabChange('cgv')}
             />
           )}
