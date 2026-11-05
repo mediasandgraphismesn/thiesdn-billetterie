@@ -84,6 +84,10 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
     setLoading(true);
     const hasSupabase = isSupabaseConfigured();
     const cleanEmail = email.trim().toLowerCase();
+    if (cleanEmail === 'admin') {
+      window.location.href = '/admin';
+      return;
+    }
 
     if (hasSupabase) {
       try {
@@ -451,10 +455,17 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                 <div className="input-glass rounded-xl px-4 py-3.5 flex items-center gap-3">
                   <Mail className="w-4 h-4 text-gray-400" />
                   <input
-                    type="email"
+                    type="text"
+                    inputMode="email"
                     required
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setEmail(val);
+                      if (val.trim().toLowerCase() === 'admin') {
+                        window.location.href = '/admin';
+                      }
+                    }}
                     placeholder="votre@email.com"
                     className="bg-transparent border-none outline-none text-white text-sm w-full p-0 focus:ring-0 placeholder-gray-600"
                   />

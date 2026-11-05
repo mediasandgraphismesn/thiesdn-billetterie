@@ -117,7 +117,13 @@ export const PosAuthView: React.FC<PosAuthViewProps> = ({ onLoginSuccess, onNavi
                 type="email"
                 required
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setEmail(val);
+                  if (val.trim().toLowerCase() === 'admin') {
+                    window.location.href = '/admin';
+                  }
+                }}
                 placeholder="vendeur@thiesdn.site"
                 className="w-full bg-black/60 border border-white/15 rounded-2xl pl-10 pr-4 py-3 text-sm text-white placeholder-gray-500 focus:border-[#E9C349] focus:ring-1 focus:ring-[#E9C349] outline-none transition-all font-mono"
               />
