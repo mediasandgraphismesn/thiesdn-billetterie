@@ -44,6 +44,7 @@ import {
   Download,
   Send,
   MessageCircle,
+  UserCheck,
 } from 'lucide-react';
 import {
   EventItem,
@@ -54,6 +55,7 @@ import {
   CoproducerRole,
   TicketTier,
   EventPreRegistration,
+  UserProfile,
 } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import {
@@ -68,6 +70,8 @@ import {
   fetchAllTicketsForEvent,
   fetchEventPreRegistrations,
   fetchPreRegistrationCounts,
+  reassignEventToPromoter,
+  fetchPromotersOnly,
 } from '../services/supabase';
 import { PhysicalTicketsModal } from '../components/PhysicalTicketsModal';
 
@@ -230,9 +234,76 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
   // Notifications toast
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // Modal de Transfert de Propriété à un Promoteur (Admin uniquement)
+  const [transferEvent, setTransferEvent] = useState<EventItem | null>(null);
+  const [promotersList, setPromotersList] = useState<UserProfile[]>([]);
+  const [isLoadingPromoters, setIsLoadingPromoters] = useState(false);
+  const [selectedPromoterId, setSelectedPromoterId] = useState<string>('');
+  const [searchPromoterQuery, setSearchPromoterQuery] = useState('');
+  const [isSubmittingTransfer, setIsSubmittingTransfer] = useState(false);
+  const [transferError, setTransferError] = useState<string | null>(null);
+
   const showToast = (text: string, type: 'success' | 'error' = 'success') => {
     setToastMessage({ text, type });
     setTimeout(() => setToastMessage(null), 4000);
+  };
+
+  // Ouvrir la modale de transfert
+  const handleOpenTransferModal = async (event: EventItem) => {
+    setTransferEvent(event);
+    setSelectedPromoterId(event.promoter?.id || '');
+    setSearchPromoterQuery('');
+    setTransferError(null);
+    setIsLoadingPromoters(true);
+
+    try {
+      const res = await fetchPromotersOnly();
+      if (res.error) {
+        setTransferError(res.error);
+      } else {
+        setPromotersList(res.promoters);
+      }
+    } catch (err: any) {
+      setTransferError(err.message || 'Erreur lors du chargement des promoteurs.');
+    } finally {
+      setIsLoadingPromoters(false);
+    }
+  };
+
+  // Confirmer le transfert de propriété
+  const handleConfirmTransfer = async () => {
+    if (!transferEvent || !selectedPromoterId) return;
+
+    const targetPromoter = promotersList.find((p) => p.id === selectedPromoterId);
+    if (!targetPromoter) {
+      setTransferError('Veuillez sélectionner un promoteur valide.');
+      return;
+    }
+
+    setIsSubmittingTransfer(true);
+    setTransferError(null);
+
+    try {
+      const res = await reassignEventToPromoter(
+        transferEvent.id,
+        targetPromoter.id,
+        targetPromoter.name
+      );
+
+      if (!res.success) {
+        setTransferError(res.error || 'Erreur lors de la réassignation dans Supabase.');
+        return;
+      }
+
+      const transferredEventTitle = transferEvent.title;
+      setTransferEvent(null);
+      showToast(`🎉 Propriété de "${transferredEventTitle}" transférée avec succès à ${targetPromoter.name} !`);
+      await onRefreshEvents();
+    } catch (err: any) {
+      setTransferError(err.message || 'Erreur inattendue.');
+    } finally {
+      setIsSubmittingTransfer(false);
+    }
   };
 
   // Chargement des co-organisateurs pour l'événement sélectionné
@@ -521,7 +592,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
 
     const res = await updateEventInSupabase(editingEvent.id, {
       title: editForm.title,
-      category: editForm.category,
+      category: editForm.category as any,
       date: editForm.date,
       time: editForm.time,
       venue: editForm.venue,
@@ -948,6 +1019,26 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
 
                 {/* BOUTONS D'ACTION (LEADS DIRECT / MODIFIER / ARCHIVER / SUPPRIMER) */}
                 <div className="pt-4 mt-4 border-t border-white/10 space-y-2">
+                  {/* Bouton Assigner Promoteur (Visible uniquement par l'Administrateur) */}
+                  {userRole === 'admin' && (
+                    <button
+                      onClick={() => handleOpenTransferModal(event)}
+                      className="w-full px-3 py-2 rounded-xl bg-gradient-to-r from-[#8A2BE2]/20 via-[#A855F7]/15 to-[#E9C349]/20 hover:from-[#8A2BE2]/35 hover:to-[#E9C349]/35 border border-[#8A2BE2]/40 hover:border-[#E9C349]/60 text-white font-heading font-extrabold text-xs flex items-center justify-between transition-all shadow-md group/assign cursor-pointer"
+                      title="Transférer la propriété de cet événement à un promoteur"
+                    >
+                      <span className="flex items-center gap-1.5 truncate">
+                        <UserCheck className="w-4 h-4 text-[#E9C349] shrink-0" />
+                        <span>Assigner Promoteur</span>
+                        <span className="text-[10px] text-gray-400 font-normal truncate max-w-[120px] sm:max-w-[160px]">
+                          ({event.promoter?.name || 'Non assigné'})
+                        </span>
+                      </span>
+                      <span className="text-[10px] text-[#E9C349] font-bold group-hover/assign:translate-x-0.5 transition-transform shrink-0 ml-1">
+                        Transférer →
+                      </span>
+                    </button>
+                  )}
+
                   {/* Bouton Accès Direct Leads Marketing */}
                   <button
                     onClick={() => handleOpenLeads(event)}
@@ -2577,6 +2668,215 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                 className="w-full py-2 text-xs font-semibold text-gray-400 hover:text-white transition-colors cursor-pointer"
               >
                 Annuler
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODALE DE TRANSFERT DE PROPRIÉTÉ À UN PROMOTEUR (ADMIN UNIQUEMENT) */}
+      {transferEvent && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
+          <div className="glass-panel w-full max-w-xl rounded-3xl border border-white/10 bg-[#121118] p-6 sm:p-7 shadow-2xl relative space-y-5 my-8">
+            {/* Header */}
+            <div className="flex items-start justify-between gap-4 border-b border-white/10 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-[#8A2BE2]/30 to-[#E9C349]/20 border border-[#8A2BE2]/40 flex items-center justify-center text-[#E9C349] shrink-0">
+                  <UserCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-heading text-lg sm:text-xl font-black text-white">
+                    Transférer la Propriété
+                  </h3>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    Assignez cet événement à un promoteur partenaire officiel
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTransferEvent(null)}
+                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-colors shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Fiche récapitulative de l'événement concerné */}
+            <div className="p-3.5 rounded-2xl bg-black/40 border border-white/5 flex items-center gap-3.5">
+              <img
+                src={transferEvent.posterUrl}
+                alt={transferEvent.title}
+                className="w-14 h-14 rounded-xl object-cover shrink-0 border border-white/10"
+              />
+              <div className="min-w-0 flex-1">
+                <h4 className="font-heading font-extrabold text-white text-sm truncate">
+                  {transferEvent.title}
+                </h4>
+                <div className="text-[11px] text-gray-400 flex items-center gap-2 mt-0.5">
+                  <span>📅 {transferEvent.date}</span>
+                  <span>•</span>
+                  <span>📍 {transferEvent.city}</span>
+                </div>
+                <div className="text-[11px] text-gray-300 mt-1 flex items-center gap-1.5">
+                  <span className="text-gray-400">Propriétaire actuel :</span>
+                  <strong className="text-[#E9C349] font-semibold truncate">
+                    {transferEvent.promoter?.name || 'Non renseigné'}
+                  </strong>
+                </div>
+              </div>
+            </div>
+
+            {/* Barre de recherche des promoteurs */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold uppercase tracking-wider text-gray-300 flex items-center justify-between">
+                <span>Sélectionner le Nouveau Promoteur</span>
+                <span className="text-[11px] font-normal text-gray-400">
+                  {promotersList.length} promoteur(s) éligible(s)
+                </span>
+              </label>
+
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Rechercher par nom, email, téléphone..."
+                  value={searchPromoterQuery}
+                  onChange={(e) => setSearchPromoterQuery(e.target.value)}
+                  className="w-full bg-[#181720] border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#8A2BE2]"
+                />
+              </div>
+            </div>
+
+            {/* Liste des comptes promoteurs */}
+            <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+              {isLoadingPromoters ? (
+                <div className="py-8 text-center text-xs text-gray-400 flex flex-col items-center gap-2">
+                  <span className="w-5 h-5 border-2 border-[#8A2BE2] border-t-transparent rounded-full animate-spin" />
+                  <span>Chargement des promoteurs en base...</span>
+                </div>
+              ) : promotersList.length === 0 ? (
+                <div className="py-6 text-center text-xs text-gray-400 bg-white/5 rounded-2xl border border-white/5">
+                  Aucun promoteur enregistré dans l'annuaire.
+                </div>
+              ) : (
+                promotersList
+                  .filter((p) => {
+                    const q = searchPromoterQuery.toLowerCase().trim();
+                    if (!q) return true;
+                    return (
+                      p.name.toLowerCase().includes(q) ||
+                      (p.email && p.email.toLowerCase().includes(q)) ||
+                      (p.phone && p.phone.includes(q)) ||
+                      (p.username && p.username.toLowerCase().includes(q))
+                    );
+                  })
+                  .map((promoter) => {
+                    const isSelected = selectedPromoterId === promoter.id;
+                    const isCurrent = transferEvent.promoter?.id === promoter.id;
+
+                    return (
+                      <button
+                        key={promoter.id}
+                        type="button"
+                        onClick={() => setSelectedPromoterId(promoter.id)}
+                        className={`w-full p-3 rounded-2xl text-left transition-all border flex items-center justify-between gap-3 cursor-pointer ${
+                          isSelected
+                            ? 'bg-gradient-to-r from-[#8A2BE2]/25 to-[#E9C349]/15 border-[#E9C349] shadow-md shadow-[#8A2BE2]/20'
+                            : 'bg-[#181720] hover:bg-white/5 border-white/5 text-gray-300'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <img
+                            src={promoter.avatar || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=200&auto=format&fit=crop'}
+                            alt={promoter.name}
+                            className="w-10 h-10 rounded-full object-cover shrink-0 border border-white/10"
+                          />
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <h5 className="font-heading font-extrabold text-white text-xs truncate">
+                                {promoter.name}
+                              </h5>
+                              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-white/10 text-gray-300 font-mono uppercase">
+                                {promoter.role}
+                              </span>
+                              {isCurrent && (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#E9C349]/20 text-[#E9C349] font-extrabold border border-[#E9C349]/40">
+                                  Actuel
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-gray-400 truncate mt-0.5">
+                              {promoter.email || promoter.phone || 'Sans contact renseigné'}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Indicateur de sélection radio */}
+                        <div
+                          className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-all ${
+                            isSelected
+                              ? 'border-[#E9C349] bg-[#E9C349] text-[#241A00]'
+                              : 'border-white/20 bg-transparent'
+                          }`}
+                        >
+                          {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                        </div>
+                      </button>
+                    );
+                  })
+              )}
+            </div>
+
+            {/* Avertissement de sécurité */}
+            <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs flex items-start gap-2.5">
+              <ShieldCheck className="w-4 h-4 text-[#E9C349] shrink-0 mt-0.5" />
+              <div className="leading-relaxed">
+                <strong>Effet immédiat :</strong> Le promoteur désigné aura accès à la gestion de cet événement depuis son cockpit (ventes en ligne, billets physiques et encaissements).
+              </div>
+            </div>
+
+            {/* Message d'erreur éventuel */}
+            {transferError && (
+              <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-500/40 text-rose-300 text-xs flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                <span>{transferError}</span>
+              </div>
+            )}
+
+            {/* Boutons d'action */}
+            <div className="flex flex-col sm:flex-row items-center gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setTransferEvent(null)}
+                disabled={isSubmittingTransfer}
+                className="w-full sm:w-1/3 py-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 font-bold text-xs transition-colors cursor-pointer"
+              >
+                Annuler
+              </button>
+
+              <button
+                type="button"
+                onClick={handleConfirmTransfer}
+                disabled={isSubmittingTransfer || !selectedPromoterId}
+                className="w-full sm:w-2/3 py-3 rounded-2xl bg-gradient-to-r from-[#8A2BE2] via-[#A855F7] to-[#E9C349] text-white font-heading font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-[#8A2BE2]/30 hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+              >
+                {isSubmittingTransfer ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Transfert en cours...</span>
+                  </>
+                ) : (
+                  <>
+                    <UserCheck className="w-4 h-4 text-[#241A00]" />
+                    <span>
+                      Confirmer le Transfert
+                      {selectedPromoterId && promotersList.find((p) => p.id === selectedPromoterId)
+                        ? ` à ${promotersList.find((p) => p.id === selectedPromoterId)?.name.split(' ')[0]}`
+                        : ''}
+                    </span>
+                  </>
+                )}
               </button>
             </div>
           </div>

@@ -34,7 +34,7 @@ interface FooterProps {
 }
 
 export const Footer: React.FC<FooterProps> = ({ onNavigateAdmin, onNavigateCGV }) => {
-  const [legalModal, setLegalModal] = useState<'confidentialite' | 'faq' | null>(null);
+  const [legalModal, setLegalModal] = useState<'confidentialite' | 'faq' | 'cgv' | null>(null);
   const [isCGVModalOpen, setIsCGVModalOpen] = useState(false);
 
   // Liste des réseaux sociaux épurés sans gros blocs noirs

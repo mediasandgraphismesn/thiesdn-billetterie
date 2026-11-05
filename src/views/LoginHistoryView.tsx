@@ -74,7 +74,7 @@ export const LoginHistoryView: React.FC = () => {
   const totalPages = Math.ceil(totalCount / pageSize) || 1;
 
   // Liste des pays uniques pour le filtre
-  const uniqueCountries = Array.from(new Set(logs.map((l) => l.country).filter(Boolean)));
+  const uniqueCountries: string[] = Array.from(new Set(logs.map((l) => l.country).filter((c): c is string => Boolean(c))));
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300 pb-16">

@@ -8,6 +8,7 @@ export interface CalendarEventData {
   qrCode?: string;
   holderName?: string;
   description?: string;
+  ticketUrl?: string;
 }
 
 const MONTH_MAP: Record<string, number> = {

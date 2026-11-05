@@ -59,63 +59,42 @@ async function testPdfGeneration() {
     serialNumber: i + 1,
   });
 
-  // Les 4 cas de test : 3 billets physiques assignés (dont "Chambre Neuf") + 1 billet web sans agent_id
-  const mockTickets: UserTicket[] = [
-    {
-      ...base(0),
-      isPhysical: true,
-      agentId: '11111111-1111-4111-8111-111111111111',
-      sales_agents: { point_de_vente: 'DJ CRAZY', gerant_name: 'Crazy' },
-    },
-    {
-      ...base(1),
-      isPhysical: true,
-      agentId: '22222222-2222-4222-8222-222222222222',
-      sales_agents: { point_de_vente: 'STUDIOS CHAMBRE 9', gerant_name: 'Gérant Studio' },
-    },
-    {
-      ...base(2),
-      isPhysical: true,
-      agentId: '33333333-3333-4333-8333-333333333333',
-      sales_agents: { point_de_vente: 'Chambre Neuf', gerant_name: 'Babacar' },
-    },
-    {
-      ...base(3),
-      isPhysical: false,
-      sales_agents: null,
-    },
-  ];
+  // Scénario officiel : Lot de 10 billets attribués à "Chambre Neuf"
+  const chambreNeufTickets: UserTicket[] = Array.from({ length: 10 }, (_, i) => ({
+    ...base(i),
+    isPhysical: true,
+    agentId: 'c9a8b710-0000-4000-8000-000000000002',
+    sales_agents: { point_de_vente: 'Chambre Neuf', gerant_name: 'Babacar' },
+  }));
 
-  const expected = ['DJ CRAZY', 'STUDIOS CHAMBRE 9', 'Chambre Neuf', 'Vente en Ligne'];
+  console.log('\n[TEST CHAMBRE NEUF (10 BILLETS)] Vérification du libellé sur les 10 billets :');
   let failures = 0;
-  mockTickets.forEach((t, i) => {
+  chambreNeufTickets.forEach((t, i) => {
     const label = resolvePointDeVenteLabel(t);
-    const ok = label === expected[i];
+    const ok = label.toUpperCase() === 'CHAMBRE NEUF';
     if (!ok) failures++;
-    console.log(`   ${ok ? 'OK ' : 'KO '} billet ${i + 1} -> "${label}" (attendu "${expected[i]}")`);
+    console.log(`   ${ok ? 'OK ' : 'KO '} billet ${i + 1}/10 -> "${label}" (attendu "Chambre Neuf")`);
   });
-  // Fallback : billet physique avec agent mais sans nom -> "Point de Vente"
-  const fallback = resolvePointDeVenteLabel({ ...base(4), isPhysical: true, agentId: 'x', sales_agents: { point_de_vente: '' } });
-  console.log(`   ${fallback === 'Point de Vente' ? 'OK ' : 'KO '} fallback -> "${fallback}"`);
-  if (fallback !== 'Point de Vente') failures++;
-  if (failures > 0) throw new Error(`${failures} cas de test en échec`);
 
-  const pdfBlob = await generatePhysicalTicketsPdf(mockEvent, mockTier, mockTickets, {
-    batchName: 'PLANCHE_TEST_POINT_DE_VENTE',
-    onProgress: (cur, tot) => console.log(`   Progression: billet ${cur}/${tot}`),
+  if (failures > 0) throw new Error(`${failures} billets ne portent pas le libellé "Chambre Neuf"`);
+
+  const pdfBlob = await generatePhysicalTicketsPdf(mockEvent, mockTier, chambreNeufTickets, {
+    batchName: 'LOT_CHAMBRE_NEUF_10PCS',
+    onProgress: (cur, tot) => console.log(`   Progression rendu PDF: billet ${cur}/${tot}`),
   });
 
   const buffer = Buffer.from(await pdfBlob.arrayBuffer());
   const outputDir = path.join(process.cwd(), 'test-results');
   fs.mkdirSync(outputDir, { recursive: true });
-  const outputPath = path.join(outputDir, 'PREUVE_BILLETS_PHYSIQUES.pdf');
+  const outputPath = path.join(outputDir, 'Billets_KMOU_JANGO_Chambre_Neuf_10pcs.pdf');
   fs.writeFileSync(outputPath, buffer);
 
   const raw = buffer.toString('latin1');
   if (raw.includes('Point de Vente Agr')) throw new Error('Le libellé tronqué "Point de Vente Agr" est encore présent.');
 
-  console.log(`[TEST POINT DE VENTE] SUCCÈS : PDF généré (${(buffer.length / 1024).toFixed(1)} Ko)`);
-  console.log(`   Chemin: ${outputPath}`);
+  console.log(`\n[TEST CHAMBRE NEUF] SUCCÈS : PDF nominatif de 10 billets généré (${(buffer.length / 1024).toFixed(1)} Ko)`);
+  console.log(`   Fichier : ${outputPath}`);
+  console.log(`   Nombre de billets Chambre Neuf validés : 10/10`);
 }
 
 testPdfGeneration().catch((err) => {

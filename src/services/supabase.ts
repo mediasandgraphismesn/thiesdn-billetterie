@@ -108,6 +108,44 @@ const STORAGE_AGENTS_KEY = 'thiesdn_sales_agents_v1';
 
 export const INITIAL_SALES_AGENTS: SalesAgent[] = [
   {
+    id: 'd1c7a230-0000-4000-8000-000000000001',
+    eventId: 'e8f9e7a8-713c-4aa1-9fc3-6fc24e5eddd5',
+    eventTitle: 'BIRTHDAY KMOU JANGO',
+    promoterId: '86109a57-1802-4255-b917-1a293f31af51',
+    pointDeVente: 'DJ CRAZY',
+    gerantName: 'DJ Crazy Officiel',
+    telephone: '+221 77 654 32 10',
+    email: 'djcrazy.thies@gmail.com',
+    quartier: 'Escale Sud (Centre-Ville)',
+    allocatedCount: 0,
+    soldCount: 0,
+    commissionPercent: 10,
+    cashCollected: 0,
+    amountDue: 0,
+    amountPaidToPromoter: 0,
+    status: 'active',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'c9a8b710-0000-4000-8000-000000000002',
+    eventId: 'e8f9e7a8-713c-4aa1-9fc3-6fc24e5eddd5',
+    eventTitle: 'BIRTHDAY KMOU JANGO',
+    promoterId: '86109a57-1802-4255-b917-1a293f31af51',
+    pointDeVente: 'Chambre Neuf',
+    gerantName: 'Babacar',
+    telephone: '+221 77 226 69 16',
+    email: 'chambreneuf.thies@gmail.com',
+    quartier: 'Escale Sud (Centre-Ville)',
+    allocatedCount: 0,
+    soldCount: 0,
+    commissionPercent: 10,
+    cashCollected: 0,
+    amountDue: 0,
+    amountPaidToPromoter: 0,
+    status: 'active',
+    createdAt: new Date().toISOString(),
+  },
+  {
     id: 'agent-fatou-1',
     eventId: 'evt-soiree-prestige',
     eventTitle: 'Nuit du Baobab Prestige',
@@ -1545,6 +1583,47 @@ export const saveStoredTickets = (tickets: UserTicket[]): void => {
   if (typeof window !== 'undefined') {
     localStorage.setItem(STORAGE_TICKETS_KEY, JSON.stringify(tickets));
   }
+};
+
+/**
+ * Nettoie les billets physiques de test (statut printed_not_sold, sans agent_id)
+ * stockés dans le cache local (localStorage) et réinitialise les compteurs pour un événement.
+ */
+export const clearTestPhysicalTickets = (eventId?: string): { count: number } => {
+  const allTickets = getStoredTickets();
+  const remaining = allTickets.filter((t) => {
+    const isTargetEvent = !eventId || t.eventId === eventId;
+    const isUnsoldTest = t.isPhysical && (t.status === 'printed_not_sold' || t.status === 'physical_printed') && !t.agentId;
+    if (isTargetEvent && isUnsoldTest) {
+      return false;
+    }
+    return true;
+  });
+
+  const removedCount = allTickets.length - remaining.length;
+  saveStoredTickets(remaining);
+
+  if (eventId) {
+    const allocations = getStoredTicketAllocations().filter((a) => a.eventId !== eventId);
+    saveStoredTicketAllocations(allocations);
+
+    const agents = getStoredSalesAgents().map((a) => {
+      if (a.eventId === eventId) {
+        return {
+          ...a,
+          allocatedCount: 0,
+          soldCount: 0,
+          cashCollected: 0,
+          amountDue: 0,
+          amountPaidToPromoter: 0,
+        };
+      }
+      return a;
+    });
+    saveSalesAgents(agents);
+  }
+
+  return { count: removedCount };
 };
 
 // ====================================================================
@@ -5105,24 +5184,20 @@ $$;
 -- Toujours utiliser public.is_admin() en SECURITY DEFINER.
 -- ====================================================================
 CREATE OR REPLACE FUNCTION public.is_admin()
-RETURNS BOOLEAN
+RETURNS boolean
 LANGUAGE sql
 SECURITY DEFINER
 SET search_path = ''
 STABLE
 AS $$
-  SELECT coalesce(
-    (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
-    OR (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
-    OR EXISTS (
-      SELECT 1 FROM public.profiles
-      WHERE id = (SELECT auth.uid())
-      AND role = 'admin'
-    ),
-    false
+  SELECT EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = (SELECT auth.uid())
+    AND role = 'admin'
   );
 $$;
 
+REVOKE EXECUTE ON FUNCTION public.is_admin() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.is_admin() TO authenticated, service_role;
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
@@ -6075,6 +6150,57 @@ export const updateEventInSupabase = async (
     return { success: true, event: mapDbEventToItem(data) };
   } catch (err: any) {
     return { success: false, error: err.message };
+  }
+};
+
+/**
+ * Récupère uniquement les utilisateurs avec le rôle promoteur (ou administrateur)
+ * pour l'assignation d'événements.
+ */
+export const fetchPromotersOnly = async (): Promise<{ promoters: UserProfile[]; error: string | null }> => {
+  const { profiles, error } = await fetchAllProfilesFromSupabase();
+  if (error) {
+    return { promoters: [], error };
+  }
+  const promoters = profiles.filter((p) => p.role === 'promoter' || p.role === 'admin');
+  return { promoters, error: null };
+};
+
+/**
+ * Transfère la propriété d'un événement à un nouveau promoteur (ou administrateur).
+ * Met à jour promoter_id et promoter_name dans public.events.
+ */
+export const reassignEventToPromoter = async (
+  eventId: string,
+  newPromoterId: string,
+  newPromoterName?: string
+): Promise<{ success: boolean; error?: string }> => {
+  const client = getSupabaseClient();
+  if (!client) {
+    return { success: true };
+  }
+
+  try {
+    const payload: { promoter_id: string; promoter_name?: string } = {
+      promoter_id: newPromoterId,
+    };
+    if (newPromoterName && newPromoterName.trim()) {
+      payload.promoter_name = newPromoterName.trim();
+    }
+
+    const { error } = await client
+      .from('events')
+      .update(payload)
+      .eq('id', eventId);
+
+    if (error) {
+      console.error('Erreur reassignEventToPromoter Supabase:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Erreur inattendue lors du transfert de propriété.' };
   }
 };
 

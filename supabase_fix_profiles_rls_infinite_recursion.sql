@@ -1,81 +1,104 @@
 -- ==============================================================================
--- FIX CRITIQUE SUPABASE : RLS INFINITE RECURSION SUR LA TABLE "profiles"
--- Erreur résolue : "infinite recursion detected in policy for relation profiles"
+-- THIÈSDN BILLETTERIE — RÉSOLUTION DU BUG RLS 42P17 (INFINITE RECURSION SUR PROFILES)
+-- Ce script corrige la boucle infinie lors des modifications de rôles dans UsersManagementView.
 -- ==============================================================================
 
--- 1. Fonction sécurisée SECURITY DEFINER pour tester si l'utilisateur est admin
---    Le mot-clé SECURITY DEFINER exécute la fonction avec les droits du propriétaire
---    et BYPASSE les politiques RLS sur la table profiles, ce qui élimine la boucle infinie.
+BEGIN;
+
+-- ÉTAPE 1 : Création de la fonction helper is_admin() en SECURITY DEFINER
+-- Le SECURITY DEFINER exécute la requête avec les privilèges postgres (RLS contourné),
+-- ce qui casse définitivement la boucle infinie.
 CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS boolean
 LANGUAGE sql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = ''
 STABLE
 AS $$
   SELECT EXISTS (
     SELECT 1 FROM public.profiles
-    WHERE id = auth.uid()
+    WHERE id = (SELECT auth.uid())
     AND role = 'admin'
   );
 $$;
 
--- Accorder les droits d'exécution aux utilisateurs authentifiés et anonymes
-GRANT EXECUTE ON FUNCTION public.is_admin() TO authenticated, anon, service_role;
+-- Sécurisation des privilèges d'exécution
+REVOKE EXECUTE ON FUNCTION public.is_admin() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.is_admin() TO authenticated, service_role;
 
--- 2. Nettoyage de TOUTES les anciennes politiques potentiellement récursives sur profiles
+-- ÉTAPE 2 : Nettoyage exhaustif des anciennes politiques RLS sur public.profiles
 DROP POLICY IF EXISTS "Admins can update all profiles" ON public.profiles;
-DROP POLICY IF EXISTS "Enable update for admins" ON public.profiles;
-DROP POLICY IF EXISTS "Admins can view all profiles" ON public.profiles;
-DROP POLICY IF EXISTS "Profiles are updatable by users or admins" ON public.profiles;
+DROP POLICY IF EXISTS "Admin update all profiles" ON public.profiles;
 DROP POLICY IF EXISTS "Profiles update policy" ON public.profiles;
+DROP POLICY IF EXISTS "Users update own profile" ON public.profiles;
 DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
-DROP POLICY IF EXISTS "Users can read own profile" ON public.profiles;
-DROP POLICY IF EXISTS "Public profiles are viewable by everyone" ON public.profiles;
-DROP POLICY IF EXISTS "Profiles are viewable by everyone or owner" ON public.profiles;
-DROP POLICY IF EXISTS "Users can update own profile or admins can update any" ON public.profiles;
+DROP POLICY IF EXISTS "Enable update for admins" ON public.profiles;
+
+DROP POLICY IF EXISTS "Admins can view all profiles" ON public.profiles;
+DROP POLICY IF EXISTS "Profiles select policy" ON public.profiles;
+DROP POLICY IF EXISTS "Users can view own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Coproducers can view partner profile" ON public.profiles;
+
+DROP POLICY IF EXISTS "Profiles insert policy" ON public.profiles;
 DROP POLICY IF EXISTS "Users can insert own profile" ON public.profiles;
 
--- 3. Activation du RLS sur profiles
+-- S'assurer que le RLS est activé sur public.profiles
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
--- 4. Politique SELECT : Consultation des profils
---    Chaque utilisateur peut lire les profils (nécessaire pour afficher les noms de promoteurs et l'annuaire admin)
-CREATE POLICY "Profiles are viewable by everyone or owner"
+-- ÉTAPE 3 : Politiques SELECT saines (zéro récursion)
+-- 3.1 Chaque utilisateur authentifié peut voir son propre profil
+CREATE POLICY "Users can view own profile"
 ON public.profiles
 FOR SELECT
-TO authenticated, anon
-USING (true);
+TO authenticated
+USING ( id = (SELECT auth.uid()) );
 
--- 5. Politique UPDATE : Modification des profils
---    Un utilisateur peut modifier son propre profil (id = auth.uid())
---    OU un administrateur peut modifier n'importe quel profil (public.is_admin())
---    ZÉRO RÉCURSION grâce à public.is_admin() en SECURITY DEFINER !
-CREATE POLICY "Users can update own profile or admins can update any"
+-- 3.2 Les administrateurs peuvent voir tous les profils (pour UsersManagementView)
+CREATE POLICY "Admins can view all profiles"
+ON public.profiles
+FOR SELECT
+TO authenticated
+USING ( (SELECT public.is_admin()) );
+
+-- 3.3 Co-producteurs partenaires (lecture sanitisée sans sous-requête sur profiles)
+CREATE POLICY "Coproducers can view partner profile"
+ON public.profiles
+FOR SELECT
+TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM public.event_coproducers
+    WHERE user_id = (SELECT auth.uid())
+      AND promoter_id = public.profiles.id
+  )
+);
+
+-- ÉTAPE 4 : Politiques UPDATE saines (zéro récursion)
+-- 4.1 Les administrateurs peuvent modifier tous les profils (changement de rôle, VIP, etc.)
+CREATE POLICY "Admins can update all profiles"
 ON public.profiles
 FOR UPDATE
 TO authenticated
-USING (
-  id = auth.uid() OR public.is_admin()
-)
-WITH CHECK (
-  id = auth.uid() OR public.is_admin()
-);
+USING ( (SELECT public.is_admin()) )
+WITH CHECK ( (SELECT public.is_admin()) );
 
--- 6. Politique INSERT : Création de profil
---    Permet à un nouvel utilisateur de créer son propre profil lors du SignUp
+-- 4.2 Les utilisateurs mettent à jour leur propre profil (nom, téléphone, quartier, etc.)
+-- Zéro sous-requête récursive sur profiles
+CREATE POLICY "Users can update own profile"
+ON public.profiles
+FOR UPDATE
+TO authenticated
+USING ( id = (SELECT auth.uid()) )
+WITH CHECK ( id = (SELECT auth.uid()) );
+
+-- ÉTAPE 5 : Politiques INSERT
 CREATE POLICY "Users can insert own profile"
 ON public.profiles
 FOR INSERT
 TO authenticated
 WITH CHECK (
-  id = auth.uid()
+  id = (SELECT auth.uid())
+  OR (SELECT public.is_admin())
 );
 
--- 7. Vérification finale
-SELECT
-  policyname,
-  cmd,
-  roles
-FROM pg_policies
-WHERE tablename = 'profiles';
+COMMIT;

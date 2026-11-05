@@ -35,6 +35,14 @@ interface SidebarProps {
   isAdminPreview?: boolean;
 }
 
+interface NavItem {
+  id: string;
+  label: string;
+  icon: any;
+  badge?: string;
+  badgeStyle?: string;
+}
+
 export const Sidebar: React.FC<SidebarProps> = ({
   user,
   activeTab,
@@ -48,7 +56,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isAdminPreview = false,
 }) => {
   // Navigation strictement cloisonnée selon le rôle
-  const getNavItems = () => {
+  const getNavItems = (): NavItem[] => {
     if (user.role === 'admin' && !isAdminPreview) {
       return [
         { id: 'dashboard', label: 'Tableau de bord', icon: LayoutDashboard },
@@ -85,7 +93,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     if (user.role === 'promoter') {
       const promoterCount = myEventsCount ?? 0;
       const hasOrganizedEvents = promoterCount > 0;
-      const items = [
+      const items: NavItem[] = [
         {
           id: 'home',
           label: 'Mes Événements',

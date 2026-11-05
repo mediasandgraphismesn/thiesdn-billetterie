@@ -56,7 +56,8 @@ export const PhysicalTicketsModal: React.FC<PhysicalTicketsModalProps> = ({
       name: 'Standard',
       price: event.price || 5000,
       available: 500,
-      total: 500,
+      description: 'Accès standard',
+      perks: ['Accès standard'],
     };
 
   const quickCounts = [5, 20, 50, 100, 250];

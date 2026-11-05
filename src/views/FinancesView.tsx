@@ -42,6 +42,9 @@ import {
   Scissors,
   Crown,
   Award,
+  ChevronDown,
+  SlidersHorizontal,
+  Trash2,
 } from 'lucide-react';
 import {
   getStoredTransactions,
@@ -68,6 +71,7 @@ import {
   deactivateUnsoldPhysicalTickets,
   getStoredCoproducers,
   createCoproducer,
+  clearTestPhysicalTickets,
 } from '../services/supabase';
 import {
   PlatformPaymentSettings,
@@ -156,6 +160,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
   const [pdfProgress, setPdfProgress] = useState<{ current: number; total: number } | null>(null);
   const [batchCount, setBatchCount] = useState<number>(50);
   const [batchTierId, setBatchTierId] = useState<string>('');
+  const [batchAgentFilter, setBatchAgentFilter] = useState<string>('all');
   const [batchSuccessMessage, setBatchSuccessMessage] = useState<string | null>(null);
 
   // Modale d'ajout d'un point de vente / collaborateur
@@ -182,6 +187,9 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
 
   // Aperçu du Guichet Vendeur Mobile
   const [previewAgent, setPreviewAgent] = useState<SalesAgent | null>(null);
+
+  // Menu Options Avancées
+  const [showOptionsMenu, setShowOptionsMenu] = useState(false);
 
   const isConnected = isSupabaseConfigured();
 
@@ -351,105 +359,6 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
     return tickets.filter((t) => t.eventId === selectedEventId);
   }, [tickets, selectedEventId]);
 
-  const scannedTicketsCount = useMemo(() => {
-    return filteredTickets.filter((t) => t.status === 'used').length;
-  }, [filteredTickets]);
-
-  const totalTicketsSold = useMemo(() => {
-    const fromOrders = confirmedOrders.reduce((acc, o) => acc + o.quantity, 0);
-    return fromOrders > 0 ? fromOrders : filteredTickets.length;
-  }, [confirmedOrders, filteredTickets]);
-
-  const totalGrossCA = useMemo(() => {
-    return confirmedOrders.reduce((acc, o) => acc + o.totalAmount, 0);
-  }, [confirmedOrders]);
-
-  const promoterNetShare = Math.round(totalGrossCA * 0.9);
-  const platformFeeShare = Math.round(totalGrossCA * 0.1);
-
-  // Ventilation par Catégories (Prévente, Jour J, VIP)
-  const statsByCategory = useMemo(() => {
-    // 1. Prévente
-    const preventeOrders = confirmedOrders.filter(
-      (o) =>
-        o.tierName.toLowerCase().includes('prévente') ||
-        o.tierName.toLowerCase().includes('prevente')
-    );
-    const preventeSold = preventeOrders.reduce((acc, o) => acc + o.quantity, 0);
-    const preventeCA = preventeOrders.reduce((acc, o) => acc + o.totalAmount, 0);
-    const preventeQuota =
-      activeEvent?.tiers?.find(
-        (t) => t.id === 't-prev' || t.name.toLowerCase().includes('prévente')
-      )?.available || 150;
-
-    // 2. Jour J
-    const jourJOrders = confirmedOrders.filter((o) =>
-      o.tierName.toLowerCase().includes('jour')
-    );
-    const jourJSold = jourJOrders.reduce((acc, o) => acc + o.quantity, 0);
-    const jourJCA = jourJOrders.reduce((acc, o) => acc + o.totalAmount, 0);
-    const jourJQuota =
-      activeEvent?.tiers?.find(
-        (t) => t.id === 't-jour' || t.name.toLowerCase().includes('jour')
-      )?.available || 200;
-
-    // 3. VIP Prestige
-    const vipOrders = confirmedOrders.filter((o) =>
-      o.tierName.toLowerCase().includes('vip')
-    );
-    const vipSold = vipOrders.reduce((acc, o) => acc + o.quantity, 0);
-    const vipCA = vipOrders.reduce((acc, o) => acc + o.totalAmount, 0);
-    const vipQuota =
-      activeEvent?.tiers?.find(
-        (t) => t.id === 't-vip' || t.name.toLowerCase().includes('vip')
-      )?.available || 50;
-
-    return {
-      prevente: { sold: preventeSold, quota: preventeQuota, ca: preventeCA },
-      jourJ: { sold: jourJSold, quota: jourJQuota, ca: jourJCA },
-      vip: { sold: vipSold, quota: vipQuota, ca: vipCA },
-    };
-  }, [confirmedOrders, activeEvent]);
-
-  // Message WhatsApp global pour contacter tous les clients de l'événement
-  const generateBroadcastWhatsAppUrl = () => {
-    const eventTitle = activeEvent ? activeEvent.title : 'votre événement Thièsdn';
-    const eventDate = activeEvent ? `${activeEvent.date} à ${activeEvent.time}` : 'très prochainement';
-    const eventVenue = activeEvent ? `${activeEvent.venue}, ${activeEvent.city}` : 'dans votre salle';
-
-    const message =
-      `🌟 *RAPPEL OFFICIEL - THIÈSDN BILLETTERIE* 🇸🇳\n` +
-      `━━━━━━━━━━━━━━━━━━━━\n` +
-      `Bonjour cher festivalier !\n\n` +
-      `Nous vous rappelons que la soirée *${eventTitle}* a lieu ce :\n` +
-      `📅 *Date & Heure :* ${eventDate}\n` +
-      `📍 *Lieu :* ${eventVenue}\n\n` +
-      `🎫 *Consignes d'accès :*\n` +
-      `• Pensez à charger votre smartphone pour présenter votre pass QR Code unique à l'entrée.\n` +
-      `• Votre pass officiel est accessible en direct sur https://thiesdn.mgartswork.site/ (onglet "Mes Billets").\n` +
-      `• L'accueil prioritaire débutera dès l'ouverture des portes.\n\n` +
-      `Toute l'équipe vous attend pour vivre un moment d'exception !\n` +
-      `🏛️ *Production & Thièsdn Billetterie*`;
-
-    return `https://wa.me/?text=${encodeURIComponent(message)}`;
-  };
-
-  // Message WhatsApp personnalisé pour un client spécifique
-  const generateClientWhatsAppUrl = (order: OrderRecord) => {
-    const cleanPhone = order.customerPhone ? order.customerPhone.replace(/[^0-9]/g, '') : '';
-    const message =
-      `Bonjour ${order.customerName} ! 🌟\n` +
-      `Rappel officiel pour votre réservation *${order.eventTitle}* (Réf: ${order.reference}).\n` +
-      `Formule : ${order.tierName} (${order.quantity} place(s)).\n` +
-      `Retrouvez votre pass QR Code sur https://thiesdn.mgartswork.site/ (onglet Mes Billets).\n` +
-      `À très vite pour une soirée inoubliable !`;
-
-    const phoneParam = cleanPhone.length >= 9 ? cleanPhone : '';
-    return phoneParam
-      ? `https://wa.me/${phoneParam}?text=${encodeURIComponent(message)}`
-      : `https://wa.me/?text=${encodeURIComponent(message)}`;
-  };
-
   // ====================================================================
   // CALCULS DU RÉSEAU DE VENTE & BILLETS PHYSIQUES
   // ====================================================================
@@ -545,6 +454,154 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
     });
   }, [networkAgents, tickets]);
 
+  // Totaux financiers du réseau physique
+  const networkTotalGrossCollected = useMemo(() => {
+    return networkAgents.reduce((sum, a) => sum + (a.cashCollected || 0), 0);
+  }, [networkAgents]);
+
+  const networkTotalAmountDue = useMemo(() => {
+    return networkAgents.reduce((sum, a) => sum + (a.amountDue || 0), 0);
+  }, [networkAgents]);
+
+  const networkTotalPaid = useMemo(() => {
+    return networkAgents.reduce((sum, a) => sum + (a.amountPaidToPromoter || 0), 0);
+  }, [networkAgents]);
+
+  const networkTotalCommissions = useMemo(() => {
+    return networkAgents.reduce((sum, a) => {
+      const comm = Math.round(a.cashCollected * (a.commissionPercent / 100));
+      return sum + comm;
+    }, 0);
+  }, [networkAgents]);
+
+  // ====================================================================
+  // MISSION 3 : CALCULS OFFICIELS CONSOLIDÉS (CORRECTION CRITIQUE DU BUG 804)
+  // ====================================================================
+  // 1. Billets vendus en ligne (Web)
+  const webTicketsSold = useMemo(() => {
+    return confirmedOrders.reduce((acc, o) => acc + o.quantity, 0);
+  }, [confirmedOrders]);
+
+  const webGrossCA = useMemo(() => {
+    return confirmedOrders.reduce((acc, o) => acc + o.totalAmount, 0);
+  }, [confirmedOrders]);
+
+  // 2. Billets physiques vendus
+  const physicalTicketsSold = totalPhysicalSold;
+  const physicalGrossCA = networkTotalGrossCollected;
+
+  // 3. Billets scannés à l'entrée
+  const scannedTicketsCount = useMemo(() => {
+    return filteredTickets.filter((t) => t.status === 'used' || t.status === 'scanned').length;
+  }, [filteredTickets]);
+
+  // 4. TOTAL BILLETS VENDUS : ZÉRO fallback sur filteredTickets.length !
+  const totalTicketsSold = useMemo(() => {
+    return webTicketsSold + physicalTicketsSold;
+  }, [webTicketsSold, physicalTicketsSold]);
+
+  // 5. CHIFFRE D'AFFAIRES BRUT CONSOLIDÉ (Web + Physique Réel)
+  const totalGrossCA = useMemo(() => {
+    return webGrossCA + physicalGrossCA;
+  }, [webGrossCA, physicalGrossCA]);
+
+  const promoterNetShare = Math.round(totalGrossCA * 0.9);
+  const platformFeeShare = Math.round(totalGrossCA * 0.1);
+
+  // Ventilation par Catégories (Prévente, Jour J, VIP)
+  const statsByCategory = useMemo(() => {
+    // 1. Prévente (Web + Physique)
+    const preventeOrders = confirmedOrders.filter(
+      (o) =>
+        o.tierName.toLowerCase().includes('prévente') ||
+        o.tierName.toLowerCase().includes('prevente')
+    );
+    const preventeWebSold = preventeOrders.reduce((acc, o) => acc + o.quantity, 0);
+    const preventeWebCA = preventeOrders.reduce((acc, o) => acc + o.totalAmount, 0);
+
+    const preventePhysicalSold = soldPhysicalTickets.filter((t) =>
+      t.tierName.toLowerCase().includes('prévente') ||
+      t.tierName.toLowerCase().includes('prevente')
+    ).length;
+    const preventePhysicalPrice = activeEvent?.tiers?.find((t) =>
+      t.name.toLowerCase().includes('prévente') || t.name.toLowerCase().includes('prevente')
+    )?.price || 3000;
+
+    const preventeSold = preventeWebSold + preventePhysicalSold;
+    const preventeCA = preventeWebCA + (preventePhysicalSold * preventePhysicalPrice);
+    const preventeQuota =
+      activeEvent?.tiers?.find(
+        (t) => t.id === 't-prev' || t.name.toLowerCase().includes('prévente')
+      )?.available || 150;
+
+    // 2. Jour J
+    const jourJOrders = confirmedOrders.filter((o) =>
+      o.tierName.toLowerCase().includes('jour')
+    );
+    const jourJSold = jourJOrders.reduce((acc, o) => acc + o.quantity, 0);
+    const jourJCA = jourJOrders.reduce((acc, o) => acc + o.totalAmount, 0);
+    const jourJQuota =
+      activeEvent?.tiers?.find(
+        (t) => t.id === 't-jour' || t.name.toLowerCase().includes('jour')
+      )?.available || 200;
+
+    // 3. VIP Prestige
+    const vipOrders = confirmedOrders.filter((o) =>
+      o.tierName.toLowerCase().includes('vip')
+    );
+    const vipSold = vipOrders.reduce((acc, o) => acc + o.quantity, 0);
+    const vipCA = vipOrders.reduce((acc, o) => acc + o.totalAmount, 0);
+    const vipQuota =
+      activeEvent?.tiers?.find(
+        (t) => t.id === 't-vip' || t.name.toLowerCase().includes('vip')
+      )?.available || 50;
+
+    return {
+      prevente: { sold: preventeSold, quota: preventeQuota, ca: preventeCA },
+      jourJ: { sold: jourJSold, quota: jourJQuota, ca: jourJCA },
+      vip: { sold: vipSold, quota: vipQuota, ca: vipCA },
+    };
+  }, [confirmedOrders, soldPhysicalTickets, activeEvent]);
+
+  // Message WhatsApp global pour contacter tous les clients de l'événement
+  const generateBroadcastWhatsAppUrl = () => {
+    const eventTitle = activeEvent ? activeEvent.title : 'votre événement Thièsdn';
+    const eventDate = activeEvent ? `${activeEvent.date} à ${activeEvent.time}` : 'très prochainement';
+    const eventVenue = activeEvent ? `${activeEvent.venue}, ${activeEvent.city}` : 'dans votre salle';
+
+    const message =
+      `🌟 *RAPPEL OFFICIEL - THIÈSDN BILLETTERIE* 🇸🇳\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `Bonjour cher festivalier !\n\n` +
+      `Nous vous rappelons que la soirée *${eventTitle}* a lieu ce :\n` +
+      `📅 *Date & Heure :* ${eventDate}\n` +
+      `📍 *Lieu :* ${eventVenue}\n\n` +
+      `🎫 *Consignes d'accès :*\n` +
+      `• Pensez à charger votre smartphone pour présenter votre pass QR Code unique à l'entrée.\n` +
+      `• Votre pass officiel est accessible en direct sur https://thiesdn.mgartswork.site/ (onglet "Mes Billets").\n` +
+      `• L'accueil prioritaire débutera dès l'ouverture des portes.\n\n` +
+      `Toute l'équipe vous attend pour vivre un moment d'exception !\n` +
+      `🏛️ *Production & Thièsdn Billetterie*`;
+
+    return `https://wa.me/?text=${encodeURIComponent(message)}`;
+  };
+
+  // Message WhatsApp personnalisé pour un client spécifique
+  const generateClientWhatsAppUrl = (order: OrderRecord) => {
+    const cleanPhone = order.customerPhone ? order.customerPhone.replace(/[^0-9]/g, '') : '';
+    const message =
+      `Bonjour ${order.customerName} ! 🌟\n` +
+      `Rappel officiel pour votre réservation *${order.eventTitle}* (Réf: ${order.reference}).\n` +
+      `Formule : ${order.tierName} (${order.quantity} place(s)).\n` +
+      `Retrouvez votre pass QR Code sur https://thiesdn.mgartswork.site/ (onglet Mes Billets).\n` +
+      `À très vite pour une soirée inoubliable !`;
+
+    const phoneParam = cleanPhone.length >= 9 ? cleanPhone : '';
+    return phoneParam
+      ? `https://wa.me/${phoneParam}?text=${encodeURIComponent(message)}`
+      : `https://wa.me/?text=${encodeURIComponent(message)}`;
+  };
+
   const [deactivateSuccessMessage, setDeactivateSuccessMessage] = useState<string | null>(null);
   const [isDeactivating, setIsDeactivating] = useState(false);
 
@@ -569,29 +626,247 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
     }
   };
 
-  // Totaux financiers du réseau
-  const networkTotalGrossCollected = useMemo(() => {
-    return networkAgents.reduce((sum, a) => sum + (a.cashCollected || 0), 0);
-  }, [networkAgents]);
+  // Action : Purger les billets de test locaux (Mission 1)
+  const handleClearLocalTestTickets = () => {
+    const eventTitle = activeEvent ? activeEvent.title : 'cet événement';
+    const msg = `⚠️ NETTOYAGE DU CACHE LOCAL (BILLETS DE TEST)\n\n` +
+      `Voulez-vous purger les billets physiques de test stockés dans le navigateur pour "${eventTitle}" ?\n\n` +
+      `Cette action supprime les billets imprimés en phase de test non vendus (qui faussaient les compteurs) ` +
+      `et remet à zéro les allocations locales de test.\n\n` +
+      `Aucune commande réelle ne sera supprimée.`;
 
-  const networkTotalAmountDue = useMemo(() => {
-    return networkAgents.reduce((sum, a) => sum + (a.amountDue || 0), 0);
-  }, [networkAgents]);
+    if (!window.confirm(msg)) return;
 
-  const networkTotalPaid = useMemo(() => {
-    return networkAgents.reduce((sum, a) => sum + (a.amountPaidToPromoter || 0), 0);
-  }, [networkAgents]);
+    const res = clearTestPhysicalTickets(activeEvent?.id);
+    setTickets(getStoredTickets());
+    setAgents(getStoredSalesAgents());
+    setAllocations(getStoredTicketAllocations());
+    setShowOptionsMenu(false);
+    alert(`✅ Cache local nettoyé avec succès : ${res.count} billets de test purgés.`);
+  };
 
-  const networkTotalCommissions = useMemo(() => {
-    return networkAgents.reduce((sum, a) => {
-      const comm = Math.round(a.cashCollected * (a.commissionPercent / 100));
-      return sum + comm;
-    }, 0);
-  }, [networkAgents]);
+  // Action : Génération Rapide 300 Billets Physiques en Réserve (Mission 4)
+  const handleQuickGenerate300 = async () => {
+    if (!activeEvent) return;
+    const tier = activeEvent.tiers?.find((t) =>
+      t.name.toLowerCase().includes('prévente') ||
+      t.name.toLowerCase().includes('prevente') ||
+      t.price === 3000
+    ) || activeEvent.tiers?.[0];
+
+    if (!tier) {
+      alert("Aucune formule de billet trouvée pour cet événement.");
+      return;
+    }
+
+    setBatchTierId(tier.id);
+    setBatchAgentFilter('all');
+    setBatchCount(300);
+    setIsGeneratingPdf(true);
+    setPdfProgress({ current: 0, total: 300 });
+    setBatchSuccessMessage(null);
+
+    try {
+      const res = await generatePhysicalTicketBatch(
+        activeEvent,
+        tier,
+        300,
+        activeEvent.promoter?.id || 'usr-promoter-1'
+      );
+
+      const pdfBlob = await generatePhysicalTicketsPdf(activeEvent, tier, res.tickets, {
+        batchName: res.tickets[0]?.batchNumber,
+        onProgress: (current, total) => setPdfProgress({ current, total }),
+      });
+
+      const blobUrl = URL.createObjectURL(pdfBlob);
+      const downloadLink = document.createElement('a');
+      downloadLink.href = blobUrl;
+      const cleanTitle = activeEvent.title.replace(/[^a-zA-Z0-9]/g, '_');
+      const cleanTier = tier.name.replace(/[^a-zA-Z0-9]/g, '_');
+      downloadLink.download = `Billets_A4_${cleanTitle}_${cleanTier}_300pcs_StockGlobal.pdf`;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+      URL.revokeObjectURL(blobUrl);
+
+      setTickets(getStoredTickets());
+      setBatchSuccessMessage(
+        `🎉 Lot officiel de 300 billets en stock global ("${tier.name}") généré avec succès ! Le PDF A4 prêt pour impression a été téléchargé.`
+      );
+    } catch (err: any) {
+      console.error('Erreur génération rapide 300 billets:', err);
+      alert("Erreur lors de la génération du PDF d'impression.");
+    } finally {
+      setIsGeneratingPdf(false);
+      setPdfProgress(null);
+    }
+  };
+
+  // Action : Impression nominative des billets d'un vendeur (Source de vérité : Supabase)
+  const handlePrintAgentTickets = async (agent: SalesAgent) => {
+    if (!activeEvent) return;
+
+    setIsGeneratingPdf(true);
+    setBatchSuccessMessage(null);
+
+    try {
+      let agentTickets: UserTicket[] = [];
+
+      // 1. Requête prioritaire en base PostgreSQL Supabase avec jointure sales_agents
+      const client = getSupabaseClient();
+      if (client) {
+        try {
+          const isValidUuid = (id?: string) =>
+            Boolean(id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
+
+          let query = client
+            .from('tickets')
+            .select('*, sales_agents:agent_id(point_de_vente, gerant_name)')
+            .eq('is_physical', true);
+
+          if (isValidUuid(activeEvent.id)) {
+            query = query.eq('event_id', activeEvent.id);
+          }
+          if (isValidUuid(agent.id)) {
+            query = query.eq('agent_id', agent.id);
+          } else {
+            query = query.or(`agent_name.ilike.%${agent.pointDeVente}%,agent_id.eq.${agent.id}`);
+          }
+
+          const { data: dbTickets, error } = await query.order('serial_number', { ascending: true });
+
+          if (!error && dbTickets && dbTickets.length > 0) {
+            agentTickets = dbTickets.map((row: any) => ({
+              id: row.id,
+              eventId: row.event_id,
+              eventTitle: row.event_title || activeEvent.title,
+              eventPoster: row.event_poster || activeEvent.posterUrl,
+              eventDate: row.event_date || activeEvent.date,
+              eventTime: row.event_time || activeEvent.time,
+              eventVenue: row.event_venue || activeEvent.venue,
+              tierName: row.tier_name || 'Standard',
+              price: Number(row.price) || 3000,
+              qrCode: row.qr_code,
+              seatNumber: row.seat_number,
+              holderName: row.holder_name,
+              purchasedAt: row.purchased_at || row.created_at,
+              status: row.status,
+              isPhysical: true,
+              agentId: agent.id,
+              agentName: agent.pointDeVente,
+              sales_agents: row.sales_agents || {
+                point_de_vente: agent.pointDeVente,
+                gerant_name: agent.gerantName,
+              },
+              batchNumber: row.batch_number,
+              serialNumber: row.serial_number,
+            }));
+          }
+        } catch (dbErr) {
+          console.warn('Erreur lecture Supabase billets agent:', dbErr);
+        }
+      }
+
+      // 2. Repli mémoire / localStorage si Supabase est hors ligne ou n'a pas encore synchronisé
+      if (agentTickets.length === 0) {
+        agentTickets = eventPhysicalTickets.filter((t) => t.agentId === agent.id);
+      }
+
+      // 3. Vérification du stock attribué
+      if (agentTickets.length === 0) {
+        alert(
+          `Aucun billet physique n'est actuellement attribué à "${agent.pointDeVente}".\n\nVeuillez d'abord lui attribuer un stock via le bouton "Attribuer des billets".`
+        );
+        setIsGeneratingPdf(false);
+        setPdfProgress(null);
+        return;
+      }
+
+      // 4. Garantir que le nom officiel du point de vente figure sur chaque billet
+      const formattedTickets = agentTickets.map((t) => ({
+        ...t,
+        agentId: agent.id,
+        agentName: agent.pointDeVente,
+        sales_agents: {
+          point_de_vente: agent.pointDeVente,
+          gerant_name: agent.gerantName,
+        },
+      }));
+
+      const tier =
+        activeEvent.tiers?.find((t) => t.name === formattedTickets[0]?.tierName) ||
+        activeEvent.tiers?.[0];
+      if (!tier) throw new Error('Formule de billet introuvable.');
+
+      setPdfProgress({ current: 0, total: formattedTickets.length });
+
+      // 5. Générer le document PDF haute définition
+      const pdfBlob = await generatePhysicalTicketsPdf(activeEvent, tier, formattedTickets, {
+        batchName: `LOT-${agent.pointDeVente.toUpperCase().replace(/[^A-Z0-9]/g, '_')}`,
+        onProgress: (current, total) => setPdfProgress({ current, total }),
+      });
+
+      // 6. Téléchargement immédiat du PDF nominatif
+      const blobUrl = URL.createObjectURL(pdfBlob);
+      const downloadLink = document.createElement('a');
+      downloadLink.href = blobUrl;
+      const cleanTitle = activeEvent.title.replace(/[^a-zA-Z0-9]/g, '_');
+      const cleanAgent = agent.pointDeVente.replace(/[^a-zA-Z0-9]/g, '_');
+      downloadLink.download = `Billets_${cleanTitle}_${cleanAgent}_${formattedTickets.length}pcs.pdf`;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+      URL.revokeObjectURL(blobUrl);
+
+      setBatchSuccessMessage(
+        `🎉 PDF de ${formattedTickets.length} billets pour "${agent.pointDeVente}" généré avec succès ! Le nom "${agent.pointDeVente}" est imprimé sur chaque billet.`
+      );
+    } catch (err: any) {
+      console.error('Erreur génération billets agent:', err);
+      alert(`Erreur lors de la génération du PDF pour ${agent.pointDeVente}: ${err.message}`);
+    } finally {
+      setIsGeneratingPdf(false);
+      setPdfProgress(null);
+    }
+  };
+
+  // Action : Attribution Rapide 100 Billets à DJ CRAZY (Mission 4)
+  const handleQuickAssignDjCrazy = () => {
+    let djCrazy = networkAgents.find((a) =>
+      a.pointDeVente.toUpperCase().includes('DJ CRAZY') ||
+      a.gerantName.toUpperCase().includes('DJ CRAZY')
+    ) || agents.find((a) => a.pointDeVente.toUpperCase().includes('DJ CRAZY'));
+
+    if (!djCrazy) {
+      djCrazy = networkAgents[0] || agents[0];
+    }
+
+    const preventeTier = activeEvent?.tiers?.find((t) =>
+      t.name.toLowerCase().includes('prévente') ||
+      t.name.toLowerCase().includes('prevente') ||
+      t.price === 3000
+    ) || activeEvent?.tiers?.[0];
+
+    setSelectedAgentForAssign(djCrazy);
+    setAssignTierName(preventeTier?.name || 'Pass Prévente Thiès');
+    setAssignCountInput(100);
+    setShowAssignModal(true);
+  };
 
   // Action : Génération du lot de billets physiques + Téléchargement PDF A4
   const handleGeneratePhysicalBatch = async () => {
     if (!activeEvent) return;
+
+    // Si un point de vente spécifique est sélectionné dans le menu déroulant
+    if (batchAgentFilter !== 'all') {
+      const selectedAgent = networkAgents.find((a) => a.id === batchAgentFilter);
+      if (selectedAgent) {
+        await handlePrintAgentTickets(selectedAgent);
+        return;
+      }
+    }
+
     const tier = activeEvent.tiers?.find((t) => t.id === batchTierId) || activeEvent.tiers?.[0];
     if (!tier) return;
 
@@ -620,7 +895,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
       downloadLink.href = blobUrl;
       const cleanTitle = activeEvent.title.replace(/[^a-zA-Z0-9]/g, '_');
       const cleanTier = tier.name.replace(/[^a-zA-Z0-9]/g, '_');
-      downloadLink.download = `Billets_A4_${cleanTitle}_${cleanTier}_${batchCount}pcs.pdf`;
+      downloadLink.download = `Billets_A4_${cleanTitle}_${cleanTier}_${batchCount}pcs_StockGlobal.pdf`;
       document.body.appendChild(downloadLink);
       downloadLink.click();
       document.body.removeChild(downloadLink);
@@ -629,7 +904,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
       // 4. Mettre à jour l'interface
       setTickets(getStoredTickets());
       setBatchSuccessMessage(
-        `🎉 Lot de ${res.tickets.length} billets généré avec succès ! Le PDF A4 prêt pour impression haute définition a été téléchargé.`
+        `🎉 Lot de ${res.tickets.length} billets en stock global généré avec succès ! Le PDF A4 prêt pour impression a été téléchargé.`
       );
     } catch (err: any) {
       console.error('Erreur génération lot physique:', err);
@@ -908,115 +1183,196 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
           </div>
         </div>
 
-        {/* Barre d'onglets du Cockpit Promoteur & Réseau */}
+        {/* Barre d'onglets simplifiée : 3 ONGLETS DIRECTS + MENU OPTIONS */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
-          <div className="flex bg-[#1C1B1B] p-1 rounded-2xl border border-white/10 self-start sm:self-auto overflow-x-auto max-w-full">
-            {currentRole === 'admin' && (
-              <button
-                type="button"
-                onClick={() => setPromoterTab('compta')}
-                className={`px-4 py-2 rounded-xl text-xs font-heading font-extrabold tracking-wider uppercase transition-all flex items-center gap-2 ${
-                  promoterTab === 'compta'
-                    ? 'bg-[#8A2BE2] text-white shadow-md shadow-[#8A2BE2]/40'
-                    : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                <Wallet className="w-4 h-4" />
-                <span>Comptabilité Plateforme (Option 3)</span>
-              </button>
-            )}
+          <div className="flex flex-wrap items-center bg-[#1C1B1B] p-1 rounded-2xl border border-white/10 gap-1 self-start sm:self-auto">
+            {/* 1. VUE D'ENSEMBLE */}
             <button
-              onClick={() => setPromoterTab('stats')}
-              className={`px-4 py-2 rounded-xl text-xs font-heading font-extrabold tracking-wider uppercase transition-all flex items-center gap-2 ${
+              type="button"
+              onClick={() => {
+                setPromoterTab('stats');
+                setShowOptionsMenu(false);
+              }}
+              className={`px-4 py-2.5 rounded-xl text-xs font-heading font-extrabold tracking-wider uppercase transition-all flex items-center gap-2 ${
                 promoterTab === 'stats'
                   ? 'bg-[#E9C349] text-[#241A00] shadow-md shadow-[#E9C349]/20'
                   : 'text-gray-400 hover:text-white'
               }`}
             >
               <BarChart3 className="w-4 h-4" />
-              <span>Mes Statistiques (Cockpit)</span>
+              <span>Vue d'ensemble</span>
             </button>
 
+            {/* 2. BILLETS PHYSIQUES */}
             <button
-              onClick={() => setPromoterTab('finances')}
-              className={`px-4 py-2 rounded-xl text-xs font-heading font-extrabold tracking-wider uppercase transition-all flex items-center gap-2 ${
+              type="button"
+              onClick={() => {
+                setPromoterTab('network');
+                setShowOptionsMenu(false);
+              }}
+              className={`px-4 py-2.5 rounded-xl text-xs font-heading font-extrabold tracking-wider uppercase transition-all flex items-center gap-2 ${
+                promoterTab === 'network'
+                  ? 'bg-gradient-to-r from-[#8A2BE2] to-[#E9C349] text-white shadow-md shadow-[#8A2BE2]/40'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              <Ticket className="w-4 h-4" />
+              <span>Billets Physiques</span>
+              <span className="bg-white/20 text-white text-[10px] font-extrabold px-1.5 py-0.5 rounded-full">
+                {totalPhysicalDistributed > 0 ? totalPhysicalDistributed : networkAgents.length}
+              </span>
+            </button>
+
+            {/* 3. FINANCES */}
+            <button
+              type="button"
+              onClick={() => {
+                setPromoterTab('finances');
+                setShowOptionsMenu(false);
+              }}
+              className={`px-4 py-2.5 rounded-xl text-xs font-heading font-extrabold tracking-wider uppercase transition-all flex items-center gap-2 ${
                 promoterTab === 'finances'
                   ? 'bg-[#8A2BE2] text-white shadow-md shadow-[#8A2BE2]/30'
                   : 'text-gray-400 hover:text-white'
               }`}
             >
               <Wallet className="w-4 h-4" />
-              <span>Mes Ventes & Reversements (90%)</span>
+              <span>Finances</span>
             </button>
 
-            <button
-              onClick={() => setPromoterTab('network')}
-              className={`px-4 py-2 rounded-xl text-xs font-heading font-extrabold tracking-wider uppercase transition-all flex items-center gap-2 ${
-                promoterTab === 'network'
-                  ? 'bg-gradient-to-r from-[#8A2BE2] to-[#E9C349] text-white shadow-md shadow-[#8A2BE2]/40'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              <Store className="w-4 h-4" />
-              <span>Réseau & Billets Physiques</span>
-              <span className="bg-white/20 text-white text-[10px] font-extrabold px-1.5 py-0.5 rounded-full">
-                {networkAgents.length}
-              </span>
-            </button>
+            {/* MENU OPTIONS AVANCÉES */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowOptionsMenu(!showOptionsMenu)}
+                className={`px-3.5 py-2.5 rounded-xl text-xs font-heading font-extrabold tracking-wider uppercase transition-all flex items-center gap-1.5 ${
+                  ['unsold', 'coprod', 'accreditations', 'stations', 'compta'].includes(promoterTab)
+                    ? 'bg-white/15 text-white border border-white/20'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5 text-[#E9C349]" />
+                <span>Options</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showOptionsMenu ? 'rotate-180' : ''}`} />
+              </button>
 
-            <button
-              onClick={() => setPromoterTab('unsold')}
-              className={`px-4 py-2 rounded-xl text-xs font-heading font-extrabold tracking-wider uppercase transition-all flex items-center gap-2 ${
-                promoterTab === 'unsold'
-                  ? 'bg-gradient-to-r from-amber-600 to-rose-600 text-white shadow-md shadow-amber-500/30'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              <AlertCircle className="w-4 h-4" />
-              <span>Billets Non Vendus</span>
-              <span className="bg-white/20 text-white text-[10px] font-extrabold px-1.5 py-0.5 rounded-full">
-                {totalUnsoldTickets}
-              </span>
-            </button>
+              {showOptionsMenu && (
+                <>
+                  <div
+                    className="fixed inset-0 z-30"
+                    onClick={() => setShowOptionsMenu(false)}
+                  />
+                  <div className="absolute left-0 mt-2 w-72 bg-[#171717] border border-white/15 rounded-2xl shadow-2xl z-40 p-2 space-y-1 animate-in fade-in zoom-in-95 duration-150">
+                    <div className="px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-gray-500 border-b border-white/5">
+                      Modules Spécialisés
+                    </div>
 
-            <button
-              onClick={() => setPromoterTab('coprod')}
-              className={`px-4 py-2 rounded-xl text-xs font-heading font-extrabold tracking-wider uppercase transition-all flex items-center gap-2 ${
-                promoterTab === 'coprod'
-                  ? 'bg-gradient-to-r from-[#E9C349] to-amber-500 text-[#241A00] shadow-md shadow-[#E9C349]/30'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              <Crown className="w-4 h-4" />
-              <span>Co-Production & Artiste</span>
-              <span className="bg-white/20 text-white text-[10px] font-extrabold px-1.5 py-0.5 rounded-full">
-                {coproducers.filter((c) => !activeEvent || c.eventId === activeEvent.id).length}
-              </span>
-            </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPromoterTab('unsold');
+                        setShowOptionsMenu(false);
+                      }}
+                      className={`w-full px-3 py-2 rounded-xl text-xs font-medium flex items-center justify-between text-left transition-colors ${
+                        promoterTab === 'unsold'
+                          ? 'bg-[#E9C349]/20 text-[#E9C349] font-bold'
+                          : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 text-amber-400" />
+                        <span>Billets Non Vendus & Rapatriement</span>
+                      </div>
+                      <span className="text-[10px] font-mono bg-white/10 px-1.5 py-0.5 rounded-full text-gray-300">
+                        {totalUnsoldTickets}
+                      </span>
+                    </button>
 
-            <button
-              onClick={() => setPromoterTab('accreditations')}
-              className={`px-4 py-2 rounded-xl text-xs font-heading font-extrabold tracking-wider uppercase transition-all flex items-center gap-2 ${
-                promoterTab === 'accreditations'
-                  ? 'bg-gradient-to-r from-[#8A2BE2] to-indigo-600 text-white shadow-md shadow-[#8A2BE2]/40'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              <ShieldCheck className="w-4 h-4" />
-              <span>Accréditations</span>
-            </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPromoterTab('coprod');
+                        setShowOptionsMenu(false);
+                      }}
+                      className={`w-full px-3 py-2 rounded-xl text-xs font-medium flex items-center justify-between text-left transition-colors ${
+                        promoterTab === 'coprod'
+                          ? 'bg-[#E9C349]/20 text-[#E9C349] font-bold'
+                          : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Crown className="w-4 h-4 text-[#E9C349]" />
+                        <span>Co-Production & Artiste</span>
+                      </div>
+                      <span className="text-[10px] font-mono bg-white/10 px-1.5 py-0.5 rounded-full text-gray-300">
+                        {coproducers.filter((c) => !activeEvent || c.eventId === activeEvent.id).length}
+                      </span>
+                    </button>
 
-            <button
-              onClick={() => setPromoterTab('stations')}
-              className={`px-4 py-2 rounded-xl text-xs font-heading font-extrabold tracking-wider uppercase transition-all flex items-center gap-2 ${
-                promoterTab === 'stations'
-                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-500/30'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              <Smartphone className="w-4 h-4" />
-              <span>Postes de Contrôle</span>
-            </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPromoterTab('accreditations');
+                        setShowOptionsMenu(false);
+                      }}
+                      className={`w-full px-3 py-2 rounded-xl text-xs font-medium flex items-center gap-2 text-left transition-colors ${
+                        promoterTab === 'accreditations'
+                          ? 'bg-[#8A2BE2]/20 text-[#DCB8FF] font-bold'
+                          : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                      }`}
+                    >
+                      <ShieldCheck className="w-4 h-4 text-[#8A2BE2]" />
+                      <span>Accréditations Staff & Presse</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPromoterTab('stations');
+                        setShowOptionsMenu(false);
+                      }}
+                      className={`w-full px-3 py-2 rounded-xl text-xs font-medium flex items-center gap-2 text-left transition-colors ${
+                        promoterTab === 'stations'
+                          ? 'bg-emerald-500/20 text-emerald-300 font-bold'
+                          : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                      }`}
+                    >
+                      <Smartphone className="w-4 h-4 text-emerald-400" />
+                      <span>Postes de Contrôle QR</span>
+                    </button>
+
+                    {currentRole === 'admin' && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPromoterTab('compta');
+                          setShowOptionsMenu(false);
+                        }}
+                        className={`w-full px-3 py-2 rounded-xl text-xs font-medium flex items-center gap-2 text-left transition-colors ${
+                          promoterTab === 'compta'
+                            ? 'bg-[#8A2BE2] text-white font-bold'
+                            : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                        }`}
+                      >
+                        <Wallet className="w-4 h-4 text-[#8A2BE2]" />
+                        <span>Comptabilité Plateforme (Admin)</span>
+                      </button>
+                    )}
+
+                    <div className="border-t border-white/10 my-1 pt-1">
+                      <button
+                        type="button"
+                        onClick={handleClearLocalTestTickets}
+                        className="w-full px-3 py-2 rounded-xl text-xs font-semibold text-rose-300 hover:bg-rose-950/40 hover:text-rose-200 flex items-center gap-2 transition-colors cursor-pointer"
+                      >
+                        <Trash2 className="w-4 h-4 text-rose-400 shrink-0" />
+                        <span>Purger les billets de test locaux</span>
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
 
           {/* Sélecteur d'Événement pour filtrer les statistiques */}
@@ -1038,6 +1394,20 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
             </div>
           )}
         </div>
+
+        {/* Bannière de retour vers la vue d'ensemble si un sous-onglet est actif */}
+        {['unsold', 'coprod', 'accreditations', 'stations'].includes(promoterTab) && (
+          <div className="flex items-center gap-2 -mt-4">
+            <button
+              type="button"
+              onClick={() => setPromoterTab('stats')}
+              className="text-xs text-gray-400 hover:text-[#E9C349] font-bold flex items-center gap-1 transition-colors"
+            >
+              <ChevronRight className="w-3.5 h-3.5 rotate-180" />
+              <span>Retour à la Vue d'ensemble</span>
+            </button>
+          </div>
+        )}
 
         {/* SOUS-VUE 1 : MES STATISTIQUES (LE COCKPIT) */}
         {promoterTab === 'stats' && (
@@ -1069,7 +1439,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
               </a>
             </div>
 
-            {/* 4 Cartes KPI Temps Réel du Cockpit */}
+            {/* 4 Cartes KPI Temps Réel du Cockpit (Données Consolidées Réelles) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* 1. Billets Vendus Totaux */}
               <div className="glass-panel p-5 rounded-2xl border border-sky-500/30 space-y-2 relative overflow-hidden bg-sky-950/20">
@@ -1080,7 +1450,9 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                 <h3 className="font-heading text-2xl font-black text-white">
                   {totalTicketsSold} <span className="text-xs text-sky-400 font-bold">places</span>
                 </h3>
-                <p className="text-[11px] text-gray-400">Total réservations confirmées</p>
+                <p className="text-[11px] text-gray-400">
+                  {webTicketsSold} en ligne • {physicalTicketsSold} en boutique
+                </p>
               </div>
 
               {/* 2. Chiffre d'Affaires Brut */}
@@ -1088,11 +1460,13 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                 <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
                   <DollarSign className="w-5 h-5" />
                 </div>
-                <p className="text-xs uppercase tracking-wider text-gray-400 font-bold">CA Brut Généré</p>
+                <p className="text-xs uppercase tracking-wider text-gray-400 font-bold">CA Brut Consolidé</p>
                 <h3 className="font-heading text-2xl font-black text-emerald-300">
                   {totalGrossCA.toLocaleString('fr-FR')} <span className="text-xs text-white font-bold">FCFA</span>
                 </h3>
-                <p className="text-[11px] text-gray-400">Volume total encaissé Wave</p>
+                <p className="text-[11px] text-gray-400">
+                  {webGrossCA > 0 ? `${webGrossCA.toLocaleString('fr-FR')} F Web` : '0 F Web'} • {physicalGrossCA > 0 ? `${physicalGrossCA.toLocaleString('fr-FR')} F Réseau` : '0 F Réseau'}
+                </p>
               </div>
 
               {/* 3. Reversement Net Promoteur (90%) */}
@@ -1119,7 +1493,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                 <p className="text-[11px] text-gray-400">
                   {totalTicketsSold > 0
                     ? `${Math.round((scannedTicketsCount / totalTicketsSold) * 100)}% de taux de présence`
-                    : 'Contrôle le jour J'}
+                    : 'Contrôle laser le jour J'}
                 </p>
               </div>
             </div>
@@ -1421,6 +1795,49 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
               </div>
             )}
 
+            {/* BANNIÈRE D'ACTIONS RAPIDES : MISSION 4 (1-CLIC) */}
+            <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-r from-[#241A00]/70 via-[#1C1B1B] to-[#1F1728]/50 border border-[#E9C349]/40 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-[#E9C349]/20 text-[#E9C349] flex items-center justify-center shrink-0 border border-[#E9C349]/30">
+                  <Ticket className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-heading font-black text-sm sm:text-base text-white">
+                      Actions Rapides Impression & Distribution
+                    </h4>
+                    <span className="text-[10px] bg-[#E9C349] text-[#241A00] font-black px-2 py-0.5 rounded-full uppercase">
+                      1-Clic
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-300 mt-0.5">
+                    Générez la planche officielle de 300 pass et attribuez 100 billets directement au point de vente DJ CRAZY.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleQuickGenerate300}
+                  disabled={isGeneratingPdf || !activeEvent}
+                  className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#8A2BE2] to-[#A855F7] text-white font-heading font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-[#8A2BE2]/30 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                >
+                  <Printer className="w-4 h-4 text-[#E9C349]" />
+                  <span>Générer le Stock Global (sans vendeur)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleQuickAssignDjCrazy}
+                  className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#E9C349] to-amber-500 text-[#241A00] font-heading font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-[#E9C349]/30 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center gap-2 cursor-pointer"
+                >
+                  <Truck className="w-4 h-4" />
+                  <span>Attribuer 100 billets à DJ CRAZY</span>
+                </button>
+              </div>
+            </div>
+
             {/* SECTION 1 : GÉNÉRATEUR DE LOTS DE BILLETS PHYSIQUES (A4 IMPRIMABLE) */}
             <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-white/10 relative overflow-hidden bg-gradient-to-br from-[#1C1B1B] via-[#141414] to-[#1F1728]/40 space-y-6">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-5">
@@ -1446,8 +1863,27 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
               </div>
 
               {/* Paramétrage du Lot */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                {/* 1. Choix de la formule / Tier */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {/* 1. Destination des Billets (Stock Global vs Vendeur Spécifique) */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-gray-300">
+                    Destination des Billets
+                  </label>
+                  <select
+                    value={batchAgentFilter}
+                    onChange={(e) => setBatchAgentFilter(e.target.value)}
+                    className="w-full bg-[#141414] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white outline-none focus:border-[#E9C349] font-medium"
+                  >
+                    <option value="all">🌐 Tous les billets (Stock Global)</option>
+                    {networkAgents.map((agent) => (
+                      <option key={agent.id} value={agent.id}>
+                        📍 {agent.pointDeVente} ({agent.allocatedCount} billets attribués)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 2. Choix de la formule / Tier */}
                 <div className="space-y-2">
                   <label className="text-xs font-bold uppercase tracking-wider text-gray-300">
                     Formule & Catégorie
@@ -1455,7 +1891,8 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                   <select
                     value={batchTierId || activeEvent?.tiers?.[0]?.id || ''}
                     onChange={(e) => setBatchTierId(e.target.value)}
-                    className="w-full bg-[#141414] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white outline-none focus:border-[#E9C349] font-medium"
+                    disabled={batchAgentFilter !== 'all'}
+                    className="w-full bg-[#141414] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white outline-none focus:border-[#E9C349] font-medium disabled:opacity-50"
                   >
                     {activeEvent?.tiers?.map((t) => (
                       <option key={t.id} value={t.id}>
@@ -1465,36 +1902,54 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                   </select>
                 </div>
 
-                {/* 2. Volume de billets à générer */}
+                {/* 3. Volume de billets à générer */}
                 <div className="space-y-2">
                   <label className="text-xs font-bold uppercase tracking-wider text-gray-300 flex justify-between">
                     <span>Nombre de Billets</span>
-                    <span className="text-[#E9C349] font-mono">{batchCount} pièces</span>
+                    <span className="text-[#E9C349] font-mono">
+                      {batchAgentFilter === 'all'
+                        ? `${batchCount} pièces`
+                        : `${networkAgents.find((a) => a.id === batchAgentFilter)?.allocatedCount || 0} pièces`}
+                    </span>
                   </label>
-                  <div className="flex gap-1.5">
-                    {[20, 50, 100, 200, 500].map((qty) => (
-                      <button
-                        key={qty}
-                        type="button"
-                        onClick={() => setBatchCount(qty)}
-                        className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all border ${
-                          batchCount === qty
-                            ? 'bg-[#E9C349] text-[#241A00] border-[#E9C349] shadow-md font-extrabold'
-                            : 'bg-[#141414] text-gray-400 border-white/10 hover:text-white'
-                        }`}
-                      >
-                        {qty}
-                      </button>
-                    ))}
-                  </div>
+                  {batchAgentFilter === 'all' ? (
+                    <div className="flex gap-1.5">
+                      {[20, 50, 100, 200, 300, 500].map((qty) => (
+                        <button
+                          key={qty}
+                          type="button"
+                          onClick={() => setBatchCount(qty)}
+                          className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all border ${
+                            batchCount === qty
+                              ? 'bg-[#E9C349] text-[#241A00] border-[#E9C349] shadow-md font-extrabold'
+                              : 'bg-[#141414] text-gray-400 border-white/10 hover:text-white'
+                          }`}
+                        >
+                          {qty}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="py-2.5 px-3 rounded-xl bg-black/40 border border-white/5 text-xs text-gray-400 flex items-center justify-between">
+                      <span>Billets déjà attribués</span>
+                      <span className="text-sky-300 font-bold font-mono">
+                        {networkAgents.find((a) => a.id === batchAgentFilter)?.allocatedCount || 0} pass
+                      </span>
+                    </div>
+                  )}
                 </div>
 
-                {/* 3. Synthèse & Bouton de Téléchargement */}
+                {/* 4. Synthèse & Bouton de Téléchargement */}
                 <div className="space-y-2 md:self-end">
                   <button
                     onClick={handleGeneratePhysicalBatch}
-                    disabled={isGeneratingPdf || !activeEvent}
-                    className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-[#8A2BE2] via-[#A855F7] to-[#E9C349] text-white font-heading font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-[#8A2BE2]/40 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                    disabled={
+                      isGeneratingPdf ||
+                      !activeEvent ||
+                      (batchAgentFilter !== 'all' &&
+                        (networkAgents.find((a) => a.id === batchAgentFilter)?.allocatedCount || 0) === 0)
+                    }
+                    className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-[#8A2BE2] via-[#A855F7] to-[#E9C349] text-white font-heading font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-[#8A2BE2]/40 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
                   >
                     {isGeneratingPdf ? (
                       <>
@@ -1505,8 +1960,12 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                       </>
                     ) : (
                       <>
-                        <Download className="w-4 h-4 text-white" />
-                        <span>Télécharger le PDF A4 ({Math.ceil(batchCount / 4)} pages)</span>
+                        <Printer className="w-4 h-4 text-white" />
+                        <span>
+                          {batchAgentFilter === 'all'
+                            ? `Télécharger Stock Global (${Math.ceil(batchCount / 4)} p.)`
+                            : `🖨️ Imprimer les Billets (${networkAgents.find((a) => a.id === batchAgentFilter)?.allocatedCount || 0} p.)`}
+                        </span>
                       </>
                     )}
                   </button>
@@ -1688,24 +2147,41 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                             </div>
                           </div>
 
-                          <div className="pt-1 flex gap-2">
+                          <div className="pt-1 flex flex-col gap-2">
                             <button
                               type="button"
-                              onClick={() => handleOpenAssignModal(agent)}
-                              className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-sky-500 to-[#8A2BE2] hover:from-sky-400 hover:to-[#9B3BF2] text-white text-xs font-heading font-extrabold flex items-center justify-center gap-2 shadow-lg shadow-sky-500/20 cursor-pointer"
+                              onClick={() => handlePrintAgentTickets(agent)}
+                              disabled={isGeneratingPdf || agent.allocatedCount === 0}
+                              className="w-full py-2.5 rounded-xl bg-gradient-to-r from-[#8A2BE2] to-[#A855F7] hover:from-[#9B3BF2] hover:to-[#B46BF8] disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-heading font-extrabold flex items-center justify-center gap-2 shadow-lg shadow-[#8A2BE2]/20 cursor-pointer"
+                              title={
+                                agent.allocatedCount === 0
+                                  ? 'Aucun billet attribué à ce vendeur'
+                                  : `Imprimer les ${agent.allocatedCount} billets de ${agent.pointDeVente}`
+                              }
                             >
-                              <Truck className="w-4 h-4" />
-                              <span>Attribuer des Billets</span>
+                              <Printer className="w-4 h-4 text-[#E9C349]" />
+                              <span>🖨️ Imprimer les billets de {agent.pointDeVente} ({agent.allocatedCount})</span>
                             </button>
-                            <a
-                              href={`https://wa.me/${agent.telephone.replace(/[^0-9]/g, '')}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="p-2.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 flex items-center justify-center cursor-pointer"
-                              title="Contacter sur WhatsApp"
-                            >
-                              <Phone className="w-4 h-4" />
-                            </a>
+
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenAssignModal(agent)}
+                                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-sky-500 to-[#8A2BE2] hover:from-sky-400 hover:to-[#9B3BF2] text-white text-xs font-heading font-extrabold flex items-center justify-center gap-2 shadow-lg shadow-sky-500/20 cursor-pointer"
+                              >
+                                <Truck className="w-4 h-4" />
+                                <span>Attribuer des Billets</span>
+                              </button>
+                              <a
+                                href={`https://wa.me/${agent.telephone.replace(/[^0-9]/g, '')}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-2.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 flex items-center justify-center cursor-pointer"
+                                title="Contacter sur WhatsApp"
+                              >
+                                <Phone className="w-4 h-4" />
+                              </a>
+                            </div>
                           </div>
                         </div>
                       );
@@ -1747,8 +2223,24 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                                     title={`Attribuer des billets physiques à ${agent.pointDeVente}`}
                                   >
                                     <Truck className="w-3.5 h-3.5 text-sky-400" />
-                                    <span>Attribuer des billets</span>
+                                    <span>Attribuer</span>
                                   </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handlePrintAgentTickets(agent)}
+                                    disabled={isGeneratingPdf || agent.allocatedCount === 0}
+                                    className="px-2.5 py-1 rounded-lg bg-[#8A2BE2]/25 hover:bg-[#8A2BE2]/40 text-[#DCB8FF] border border-[#8A2BE2]/50 disabled:opacity-40 disabled:cursor-not-allowed text-[11px] font-bold flex items-center gap-1.5 transition-all shadow-sm hover:scale-[1.02] active:scale-95 cursor-pointer"
+                                    title={
+                                      agent.allocatedCount === 0
+                                        ? 'Aucun billet attribué à ce vendeur'
+                                        : `Imprimer les ${agent.allocatedCount} billets de ${agent.pointDeVente}`
+                                    }
+                                  >
+                                    <Printer className="w-3.5 h-3.5 text-[#E9C349]" />
+                                    <span>🖨️ Imprimer ({agent.allocatedCount})</span>
+                                  </button>
+
                                   <span className="inline-block bg-white/10 text-gray-300 text-[10px] font-semibold px-2 py-0.5 rounded-full border border-white/10">
                                     📍 {agent.quartier}
                                   </span>
@@ -1821,6 +2313,21 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
 
                               <td className="py-4 px-3 text-right">
                                 <div className="flex items-center justify-end gap-1.5">
+                                  {/* Bouton Impression Nominative des Billets du Vendeur */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handlePrintAgentTickets(agent)}
+                                    disabled={isGeneratingPdf || agent.allocatedCount === 0}
+                                    className="p-2 rounded-xl bg-[#8A2BE2]/20 hover:bg-[#8A2BE2]/30 text-[#DCB8FF] border border-[#8A2BE2]/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                                    title={
+                                      agent.allocatedCount === 0
+                                        ? 'Aucun billet attribué à imprimer'
+                                        : `Imprimer les ${agent.allocatedCount} billets de ${agent.pointDeVente}`
+                                    }
+                                  >
+                                    <Printer className="w-3.5 h-3.5 text-[#E9C349]" />
+                                  </button>
+
                                   {/* Bouton Distribuer des Billets */}
                                   <button
                                     type="button"
@@ -2289,10 +2796,19 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                     user={{
                       id: previewAgent.id,
                       name: previewAgent.gerantName,
+                      username: previewAgent.gerantName.toLowerCase().replace(/\s+/g, '.'),
                       email: previewAgent.email || 'agent@thiesdn.sn',
-                      role: 'sales_agent',
                       phone: previewAgent.telephone,
+                      city: 'Thiès',
+                      address: previewAgent.quartier || 'Thiès',
+                      quartier: previewAgent.quartier || '',
                       avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200',
+                      isVip: false,
+                      role: 'sales_agent',
+                      isEmailConfirmed: true,
+                      termsAccepted: true,
+                      connectedAccounts: { facebook: false, instagram: false, tiktok: false },
+                      privacySettings: { publicProfile: false, biometricLogin: false, emailNotifications: true },
                     }}
                     onNavigateBack={() => setPreviewAgent(null)}
                   />

@@ -9,6 +9,7 @@
       "DOM",
       "DOM.Iterable"
     ],
+    "types": ["vite/client", "node"],
     "skipLibCheck": true,
     "moduleResolution": "bundler",
     "isolatedModules": true,
@@ -22,5 +23,7 @@
     },
     "allowImportingTsExtensions": true,
     "noEmit": true
-  }
+  },
+  "include": ["src/**/*", "test-pdf.ts"],
+  "exclude": ["supabase/**/*", "node_modules", "dist", "out", "video"]
 }
