@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Html5Qrcode } from 'html5-qrcode';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import {
   Store,
   Ticket,
@@ -14,7 +14,6 @@ import {
   Send,
   RefreshCw,
   Plus,
-  Minus,
   Calendar,
   MapPin,
   Clock,
@@ -33,7 +32,6 @@ import {
   getStoredSalesAgents,
   getStoredTickets,
   saveStoredTickets,
-  recordAgentSale,
   recordAgentSettlement,
   saveSalesAgents,
   lookupPhysicalTicketForSale,
@@ -44,6 +42,50 @@ import {
   clearLocalTicketReserveCache,
   getSupabaseClient,
 } from '../services/supabase';
+
+const playPosFeedbackTone = (type: 'success' | 'error') => {
+  try {
+    const AudioCtx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    if (type === 'success') {
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+      osc.frequency.setValueAtTime(880.0, ctx.currentTime + 0.08);
+      gain.gain.setValueAtTime(0.25, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.25);
+    } else {
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(220.0, ctx.currentTime);
+      osc.frequency.setValueAtTime(164.81, ctx.currentTime + 0.12);
+      gain.gain.setValueAtTime(0.25, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.3);
+    }
+  } catch {
+    // Ignore si l'audio est bloqué par le navigateur
+  }
+};
+
+const extractScannedTicketCode = (rawText: string): string => {
+  const trimmed = rawText.trim();
+  const urlMatch = trimmed.match(/(?:\/scan\/|[?&]code=)([A-Za-z0-9\-_]+)/i);
+  return (urlMatch ? urlMatch[1] : trimmed).trim().toUpperCase();
+};
+
+const isTicketUnsoldStatus = (status: UserTicket['status']): boolean =>
+  status === 'printed_not_sold' || status === 'physical_allocated' || status === 'physical_printed';
+
+const isTicketSoldStatus = (status: UserTicket['status']): boolean =>
+  status === 'sold_valid' || status === 'physical_sold' || status === 'scanned' || status === 'used';
 
 interface SalesAgentDashboardViewProps {
   currentAgentId?: string;
@@ -78,8 +120,10 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
   // Modale de déclaration de vente avec deux méthodes : Scan unitaire vs Déclaration manuelle
   const [showSaleModal, setShowSaleModal] = useState(false);
   const [saleMode, setSaleMode] = useState<'scan' | 'manual'>('scan');
-  const [saleQuantity, setSaleQuantity] = useState(1);
   const [manualTicketCode, setManualTicketCode] = useState('');
+  const [selectedManualTicketCode, setSelectedManualTicketCode] = useState('');
+  const [manualFilterQuery, setManualFilterQuery] = useState('');
+  const [inventoryFilter, setInventoryFilter] = useState<'all' | 'printed_not_sold' | 'sold'>('all');
   const [pendingTicketForConfirm, setPendingTicketForConfirm] = useState<UserTicket | null>(null);
   const [isSubmittingSale, setIsSubmittingSale] = useState(false);
   const [buyerName, setBuyerName] = useState('');
@@ -87,84 +131,29 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
   const [saleSuccessMessage, setSaleSuccessMessage] = useState<string | null>(null);
   const [saleErrorMessage, setSaleErrorMessage] = useState<string | null>(null);
   const [isCameraScanning, setIsCameraScanning] = useState(false);
+  const [isStartingCamera, setIsStartingCamera] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
+  const scannerRunIdRef = useRef<number>(0);
   const lastScannedTimeRef = useRef<number>(0);
+  const buyerNameInputRef = useRef<HTMLInputElement | null>(null);
 
-  const stopCameraScanner = async () => {
-    if (scannerRef.current) {
+  const stopCameraScanner = useCallback(async () => {
+    scannerRunIdRef.current += 1;
+    const instance = scannerRef.current;
+    scannerRef.current = null;
+    if (instance) {
       try {
-        if (scannerRef.current.isScanning) {
-          await scannerRef.current.stop();
+        if (instance.isScanning) {
+          await instance.stop();
         }
+        instance.clear();
       } catch {
-        // ignore
+        // Ignorer les erreurs de nettoyage caméra si le nœud DOM est déjà démonté
       }
-      scannerRef.current = null;
     }
     setIsCameraScanning(false);
-  };
-
-  const startCameraScanner = async () => {
-    setCameraError(null);
-    setIsCameraScanning(true);
-
-    setTimeout(async () => {
-      const elementId = 'pos-camera-viewfinder';
-      const el = document.getElementById(elementId);
-      if (!el) return;
-
-      try {
-        if (scannerRef.current) {
-          try {
-            await scannerRef.current.stop();
-          } catch {}
-          scannerRef.current = null;
-        }
-
-        const html5Qr = new Html5Qrcode(elementId);
-        scannerRef.current = html5Qr;
-
-        await html5Qr.start(
-          { facingMode: 'environment' },
-          {
-            fps: 10,
-            qrbox: (viewfinderWidth, viewfinderHeight) => {
-              const edge = Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.75);
-              return { width: edge, height: edge };
-            },
-            aspectRatio: 1.0,
-          },
-          (decodedText) => {
-            const now = Date.now();
-            if (now - lastScannedTimeRef.current < 2500) return;
-            lastScannedTimeRef.current = now;
-
-            const clean = decodedText.trim().toUpperCase();
-            setManualTicketCode(clean);
-            handleCheckTicketForSale(clean);
-            stopCameraScanner();
-          },
-          () => {}
-        );
-      } catch (err: any) {
-        console.warn('Erreur activation camera POS:', err);
-        setCameraError("Impossible d'activer la caméra. Vérifiez les autorisations de votre navigateur.");
-      }
-    }, 200);
-  };
-
-  useEffect(() => {
-    return () => {
-      if (scannerRef.current) {
-        try {
-          if (scannerRef.current.isScanning) {
-            scannerRef.current.stop();
-          }
-        } catch {}
-        scannerRef.current = null;
-      }
-    };
+    setIsStartingCamera(false);
   }, []);
 
   // Modale de demande de reversement
@@ -181,31 +170,129 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
     return events.find((e) => e.id === activeAgent.eventId) || null;
   }, [events, activeAgent]);
 
-  // Billets alloués et vendus pour cet agent
+  // Refs synchronisées pour éviter toute closure obsolète dans les callbacks caméra
+  const activeAgentRef = useRef<SalesAgent | null>(activeAgent);
+  const ticketsRef = useRef<UserTicket[]>(tickets);
+  const selectedAgentIdRef = useRef<string>(selectedAgentId);
+  useEffect(() => {
+    activeAgentRef.current = activeAgent;
+  }, [activeAgent]);
+  useEffect(() => {
+    ticketsRef.current = tickets;
+  }, [tickets]);
+  useEffect(() => {
+    selectedAgentIdRef.current = selectedAgentId;
+  }, [selectedAgentId]);
+
+  // Billets strictement alloués et vendus pour ce point de vente
   const agentTickets = useMemo(() => {
     if (!activeAgent) return [];
     return tickets.filter((t) => t.agentId === activeAgent.id);
   }, [tickets, activeAgent]);
 
-  const remainingTickets = useMemo(() => {
+  const unsoldAgentTickets = useMemo(
+    () => agentTickets.filter((t) => isTicketUnsoldStatus(t.status)),
+    [agentTickets]
+  );
+
+  const soldAgentTickets = useMemo(
+    () => agentTickets.filter((t) => isTicketSoldStatus(t.status)),
+    [agentTickets]
+  );
+
+  const allocatedCountDisplay = useMemo(() => {
     if (!activeAgent) return 0;
-    const unsoldInStock = agentTickets.filter(
-      (t) =>
-        t.status === 'printed_not_sold' ||
-        t.status === 'physical_allocated' ||
-        t.status === 'physical_printed'
-    ).length;
-    if (agentTickets.length > 0) return unsoldInStock;
-    return Math.max(0, activeAgent.allocatedCount - activeAgent.soldCount);
+    return agentTickets.length > 0 ? agentTickets.length : activeAgent.allocatedCount;
   }, [activeAgent, agentTickets]);
 
-  const estimatedTotalCash = activeAgent ? activeAgent.cashCollected : 0;
+  const soldCountDisplay = useMemo(() => {
+    if (!activeAgent) return 0;
+    return agentTickets.length > 0 ? soldAgentTickets.length : activeAgent.soldCount;
+  }, [activeAgent, agentTickets.length, soldAgentTickets.length]);
+
+  const remainingTickets = useMemo(() => {
+    if (!activeAgent) return 0;
+    if (agentTickets.length > 0) return unsoldAgentTickets.length;
+    return Math.max(0, activeAgent.allocatedCount - activeAgent.soldCount);
+  }, [activeAgent, agentTickets.length, unsoldAgentTickets.length]);
+
+  const estimatedTotalCash = useMemo(() => {
+    if (!activeAgent) return 0;
+    if (soldAgentTickets.length > 0) {
+      return soldAgentTickets.reduce((sum, t) => sum + (Number(t.price) || 0), 0);
+    }
+    return activeAgent.cashCollected;
+  }, [activeAgent, soldAgentTickets]);
+
   const agentCommissionEarned = activeAgent
     ? Math.round((estimatedTotalCash * activeAgent.commissionPercent) / 100)
     : 0;
-  const netDueToPromoter = activeAgent ? activeAgent.amountDue : 0;
 
-  const handleRefresh = async () => {
+  const netDueToPromoter = useMemo(() => {
+    if (!activeAgent) return 0;
+    if (soldAgentTickets.length > 0) {
+      return Math.max(0, estimatedTotalCash - agentCommissionEarned - (activeAgent.amountPaidToPromoter || 0));
+    }
+    return activeAgent.amountDue;
+  }, [activeAgent, soldAgentTickets.length, estimatedTotalCash, agentCommissionEarned]);
+
+  const filteredManualUnsoldTickets = useMemo(() => {
+    const q = manualFilterQuery.trim().toUpperCase();
+    if (!q) return unsoldAgentTickets;
+    return unsoldAgentTickets.filter(
+      (t) =>
+        t.qrCode.toUpperCase().includes(q) ||
+        t.tierName.toUpperCase().includes(q) ||
+        (t.serialNumber ? `#${t.serialNumber}`.includes(q) : false)
+    );
+  }, [unsoldAgentTickets, manualFilterQuery]);
+
+  const selectedManualTicket = useMemo(
+    () => unsoldAgentTickets.find((t) => t.qrCode === selectedManualTicketCode) || null,
+    [unsoldAgentTickets, selectedManualTicketCode]
+  );
+
+  const sortedFilteredInventoryTickets = useMemo(() => {
+    const base =
+      inventoryFilter === 'printed_not_sold'
+        ? unsoldAgentTickets
+        : inventoryFilter === 'sold'
+          ? soldAgentTickets
+          : agentTickets;
+
+    const getPriority = (status: UserTicket['status']): number => {
+      if (isTicketUnsoldStatus(status)) return 0;
+      if (status === 'sold_valid' || status === 'physical_sold') return 1;
+      if (status === 'scanned' || status === 'used') return 2;
+      return 3;
+    };
+
+    return [...base].sort((a, b) => {
+      const pDiff = getPriority(a.status) - getPriority(b.status);
+      if (pDiff !== 0) return pDiff;
+      if (typeof a.serialNumber === 'number' && typeof b.serialNumber === 'number') {
+        return a.serialNumber - b.serialNumber;
+      }
+      return a.qrCode.localeCompare(b.qrCode);
+    });
+  }, [agentTickets, unsoldAgentTickets, soldAgentTickets, inventoryFilter]);
+
+  useEffect(() => {
+    if (currentAgentId && currentAgentId !== selectedAgentId) {
+      setSelectedAgentId(currentAgentId);
+    }
+  }, [currentAgentId, selectedAgentId]);
+
+  useEffect(() => {
+    if (saleMode === 'manual' && unsoldAgentTickets.length > 0) {
+      const stillValid = unsoldAgentTickets.some((t) => t.qrCode === selectedManualTicketCode);
+      if (!stillValid) {
+        setSelectedManualTicketCode(unsoldAgentTickets[0].qrCode);
+      }
+    }
+  }, [saleMode, unsoldAgentTickets, selectedManualTicketCode]);
+
+  const handleRefresh = useCallback(async (agentOverrideId?: string) => {
     setIsRefreshing(true);
     clearLocalTicketReserveCache();
 
@@ -219,10 +306,10 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
         setAgents(getStoredSalesAgents());
       }
 
+      const preferredId = agentOverrideId || currentAgentId || selectedAgentIdRef.current;
       const normalizedUserPhone = (user?.phone || '').replace(/[^0-9]/g, '');
       const targetAgent =
-        loadedAgents.find((a) => currentAgentId && a.id === currentAgentId) ||
-        loadedAgents.find((a) => selectedAgentId && a.id === selectedAgentId) ||
+        loadedAgents.find((a) => preferredId && a.id === preferredId) ||
         loadedAgents.find((a) => user?.assignedAgentId && a.id === user.assignedAgentId) ||
         loadedAgents.find((a) => user?.id && a.userId === user.id) ||
         loadedAgents.find(
@@ -233,18 +320,30 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
         ) ||
         loadedAgents[0];
 
-      if (targetAgent && !selectedAgentId) {
+      if (targetAgent && targetAgent.id !== selectedAgentIdRef.current) {
         setSelectedAgentId(targetAgent.id);
       }
 
       const ticketsRes = await fetchAllSoldTicketsFromSupabase(
-        targetAgent?.eventId ? { eventId: targetAgent.eventId } : undefined
+        targetAgent
+          ? {
+              agentId: targetAgent.id,
+              eventId: targetAgent.eventId,
+            }
+          : undefined
       );
       if (!ticketsRes.error) {
-        setTickets(ticketsRes.tickets);
-        saveStoredTickets(ticketsRes.tickets);
+        const strictAgentTickets = targetAgent
+          ? ticketsRes.tickets.filter((t) => t.agentId === targetAgent.id)
+          : ticketsRes.tickets;
+        setTickets(strictAgentTickets);
+        saveStoredTickets(strictAgentTickets);
       } else {
-        setTickets(getStoredTickets());
+        const storedFallback = getStoredTickets();
+        const strictFallback = targetAgent
+          ? storedFallback.filter((t) => t.agentId === targetAgent.id)
+          : storedFallback;
+        setTickets(strictFallback);
       }
     } else {
       setAgents(getStoredSalesAgents());
@@ -252,52 +351,154 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
     }
 
     setIsRefreshing(false);
-  };
+  }, [isConnected, currentAgentId, user?.assignedAgentId, user?.id, user?.phone, user?.email]);
 
   useEffect(() => {
-    void handleRefresh();
-  }, [user?.id, currentAgentId]);
+    void handleRefresh(currentAgentId);
+  }, [handleRefresh, currentAgentId]);
 
   // Méthode A : Scan préalable et vérification du billet
-  const handleCheckTicketForSale = (code: string) => {
+  const handleCheckTicketForSale = useCallback((code: string, fromCamera = false): boolean => {
     setSaleErrorMessage(null);
     setSaleSuccessMessage(null);
-    if (!activeAgent || !code.trim()) {
+    const currentAgent = activeAgentRef.current;
+    const cleanCode = extractScannedTicketCode(code);
+    if (!currentAgent || !cleanCode) {
       setPendingTicketForConfirm(null);
-      return;
+      return false;
     }
 
-    const check = lookupPhysicalTicketForSale(activeAgent.id, code.trim());
+    const check = lookupPhysicalTicketForSale(currentAgent.id, cleanCode, ticketsRef.current);
     if (!check.found || !check.ticket) {
-      setSaleErrorMessage(check.message || 'Billet introuvable.');
+      setSaleErrorMessage(check.message || 'Billet introuvable dans votre stock.');
       setPendingTicketForConfirm(null);
-      return;
+      if (fromCamera) playPosFeedbackTone('error');
+      return false;
     }
 
     if (!check.canBeSold) {
       setSaleErrorMessage(check.message || 'Ce billet ne peut pas être vendu.');
       setPendingTicketForConfirm(null);
-      return;
+      if (fromCamera) playPosFeedbackTone('error');
+      return false;
     }
 
     setPendingTicketForConfirm(check.ticket);
-  };
+    if (fromCamera) {
+      playPosFeedbackTone('success');
+    }
+    setTimeout(() => {
+      buyerNameInputRef.current?.focus();
+    }, 150);
+    return true;
+  }, []);
 
-  // Confirmation explicite de la vente unitaire (avec Instantanéité POS / Optimistic UI)
-  const handleConfirmSingleSale = async () => {
-    if (!activeAgent || !pendingTicketForConfirm) return;
+  const startCameraScanner = useCallback(async () => {
+    await stopCameraScanner();
+    const runId = scannerRunIdRef.current;
+    setCameraError(null);
+    setIsStartingCamera(true);
+
+    await new Promise((resolve) => setTimeout(resolve, 180));
+    if (runId !== scannerRunIdRef.current) {
+      setIsStartingCamera(false);
+      return;
+    }
+
+    const elementId = 'pos-camera-viewfinder';
+    const el = document.getElementById(elementId);
+    if (!el) {
+      setIsStartingCamera(false);
+      return;
+    }
+
+    try {
+      const html5Qr = new Html5Qrcode(elementId, {
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.QR_CODE,
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.CODE_39,
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.DATA_MATRIX,
+        ],
+        verbose: false,
+      });
+      scannerRef.current = html5Qr;
+
+      await html5Qr.start(
+        { facingMode: 'environment' },
+        {
+          fps: 10,
+          qrbox: (viewfinderWidth, viewfinderHeight) => {
+            const boxW = Math.max(180, Math.floor(viewfinderWidth * 0.84));
+            const boxH = Math.max(150, Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.72));
+            return { width: boxW, height: boxH };
+          },
+          aspectRatio: 1.0,
+        },
+        (decodedText) => {
+          if (runId !== scannerRunIdRef.current) return;
+          const now = Date.now();
+          if (now - lastScannedTimeRef.current < 2500) return;
+          lastScannedTimeRef.current = now;
+
+          const clean = extractScannedTicketCode(decodedText);
+          setManualTicketCode(clean);
+          void stopCameraScanner();
+          handleCheckTicketForSale(clean, true);
+        },
+        () => {
+          // Frames vides ignorées pendant la recherche
+        }
+      );
+
+      if (runId === scannerRunIdRef.current) {
+        setIsCameraScanning(true);
+        setIsStartingCamera(false);
+      } else {
+        await stopCameraScanner();
+      }
+    } catch (err: unknown) {
+      console.warn('Erreur activation camera POS:', err);
+      if (runId === scannerRunIdRef.current) {
+        setCameraError(
+          "Impossible d'activer l'appareil photo. Vérifiez les permissions caméra ou saisissez le code ci-dessous."
+        );
+        setIsCameraScanning(false);
+        setIsStartingCamera(false);
+      }
+    }
+  }, [handleCheckTicketForSale, stopCameraScanner]);
+
+  useEffect(() => {
+    if (showSaleModal && saleMode === 'scan' && !pendingTicketForConfirm) {
+      void startCameraScanner();
+    } else {
+      void stopCameraScanner();
+    }
+    return () => {
+      void stopCameraScanner();
+    };
+  }, [showSaleModal, saleMode, pendingTicketForConfirm, startCameraScanner, stopCameraScanner]);
+
+  // Helper partagé pour activer un billet physique nominatif (Scan Caméra ou Déclaration Manuelle)
+  const submitSingleNominalSale = async (targetTicket: UserTicket) => {
+    if (!activeAgent) return;
     if (!buyerName.trim() || !buyerPhone.trim()) {
       setSaleErrorMessage('Le nom et le téléphone du client sont obligatoires pour activer le billet.');
       return;
     }
+
     setIsSubmittingSale(true);
     setSaleErrorMessage(null);
     setSaleSuccessMessage(null);
 
-    // Instantanéité POS : Mise à jour optimiste du stock visuel immédiatement
     const prevAgents = [...agents];
     const prevTickets = [...tickets];
-    const soldPrice = pendingTicketForConfirm.price || 3500;
+    const soldPrice = targetTicket.price || 3500;
+    const trimmedName = buyerName.trim();
+    const trimmedPhone = buyerPhone.trim();
 
     setAgents((prev) =>
       prev.map((a) =>
@@ -314,89 +515,66 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
 
     setTickets((prev) =>
       prev.map((t) =>
-        t.qrCode === pendingTicketForConfirm.qrCode || t.id === pendingTicketForConfirm.id
+        t.qrCode === targetTicket.qrCode || t.id === targetTicket.id
           ? {
               ...t,
-              isSold: true,
-              status: 'valid',
-              customerName: buyerName.trim(),
-              customerPhone: buyerPhone.trim(),
+              status: 'sold_valid',
+              holderName: trimmedName,
+              holderPhone: trimmedPhone,
+              soldAt: new Date().toISOString(),
             }
           : t
       )
     );
 
-    const res = await confirmSinglePhysicalTicketSale(activeAgent.id, pendingTicketForConfirm.qrCode, {
-      name: buyerName,
-      phone: buyerPhone,
-    });
+    const res = await confirmSinglePhysicalTicketSale(
+      activeAgent.id,
+      targetTicket.qrCode,
+      {
+        name: trimmedName,
+        phone: trimmedPhone,
+      },
+      prevTickets
+    );
     setIsSubmittingSale(false);
 
     if (!res.success) {
-      // Rollback en cas d'échec
       setAgents(prevAgents);
       setTickets(prevTickets);
       setSaleErrorMessage(res.message);
+      playPosFeedbackTone('error');
       return;
     }
 
+    playPosFeedbackTone('success');
     setSaleSuccessMessage(res.message);
     setPendingTicketForConfirm(null);
     setBuyerName('');
     setBuyerPhone('');
     setManualTicketCode('');
-    handleRefresh();
-
-    setTimeout(() => {
-      setShowSaleModal(false);
-      setSaleSuccessMessage(null);
-    }, 2200);
-  };
-
-  // Méthode B : Déclaration manuelle par nombre de billets (avec Instantanéité POS / Optimistic UI)
-  const handleQuickAddSale = async (qty: number) => {
-    if (!activeAgent) return;
-    setIsSubmittingSale(true);
-    setSaleErrorMessage(null);
-    setSaleSuccessMessage(null);
-
-    // Instantanéité POS : Décrémentation visuelle immédiate du stock
-    const prevAgents = [...agents];
-    const unitPrice = activeEvent?.tiers?.[0]?.price || 3500;
-    const addedCash = qty * unitPrice;
-
-    setAgents((prev) =>
-      prev.map((a) =>
-        a.id === activeAgent.id
-          ? {
-              ...a,
-              soldCount: a.soldCount + qty,
-              cashCollected: a.cashCollected + addedCash,
-              amountDue: a.amountDue + Math.round(addedCash * (1 - a.commissionPercent / 100)),
-            }
-          : a
-      )
-    );
-
-    const res = await recordAgentSale(activeAgent.id, qty);
-
-    setIsSubmittingSale(false);
-    if (!res.success) {
-      // Rollback en cas d'échec
-      setAgents(prevAgents);
-      setSaleErrorMessage(res.message);
-      return;
-    }
-
-    setSaleSuccessMessage(res.message);
-    setManualTicketCode('');
-    setSaleQuantity(1);
-    handleRefresh();
+    setSelectedManualTicketCode('');
+    setManualFilterQuery('');
+    void handleRefresh(activeAgent.id);
 
     setTimeout(() => {
       setShowSaleModal(false);
       setSaleSuccessMessage(null);
     }, 2000);
+  };
+
+  // Confirmation explicite depuis l'onglet Scan Billet Unique
+  const handleConfirmSingleSale = async () => {
+    if (!pendingTicketForConfirm) return;
+    await submitSingleNominalSale(pendingTicketForConfirm);
+  };
+
+  // Confirmation explicite depuis l'onglet Déclaration Manuelle (billet sélectionné en stock)
+  const handleConfirmManualSingleSale = async () => {
+    if (!selectedManualTicket) {
+      setSaleErrorMessage('Veuillez sélectionner un billet disponible dans votre stock.');
+      return;
+    }
+    await submitSingleNominalSale(selectedManualTicket);
   };
 
   const handleDeclareSettlement = async (e: React.FormEvent) => {
@@ -520,7 +698,11 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
           {agents.length > 1 && (
             <select
               value={selectedAgentId}
-              onChange={(e) => setSelectedAgentId(e.target.value)}
+              onChange={(e) => {
+                const nextId = e.target.value;
+                setSelectedAgentId(nextId);
+                void handleRefresh(nextId);
+              }}
               className="bg-[#1C1B1B] border border-white/10 text-white text-xs rounded-xl px-3 py-2 outline-none font-bold"
             >
               {agents.map((ag) => (
@@ -584,7 +766,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
         <div className="glass-panel p-4 rounded-2xl border border-white/10 space-y-1">
           <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Billets Reçus</p>
           <h4 className="font-heading text-xl sm:text-2xl font-black text-white">
-            {activeAgent.allocatedCount} <span className="text-xs text-gray-400 font-bold">billets</span>
+            {allocatedCountDisplay} <span className="text-xs text-gray-400 font-bold">billets</span>
           </h4>
           <p className="text-[10px] text-gray-400">Dépôt total confié</p>
         </div>
@@ -593,11 +775,11 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
         <div className="glass-panel p-4 rounded-2xl border border-emerald-500/30 bg-emerald-950/20 space-y-1">
           <p className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider">Billets Vendus</p>
           <h4 className="font-heading text-xl sm:text-2xl font-black text-emerald-300">
-            {activeAgent.soldCount} <span className="text-xs text-white font-bold">écoulés</span>
+            {soldCountDisplay} <span className="text-xs text-white font-bold">écoulés</span>
           </h4>
           <p className="text-[10px] text-emerald-400/80">
-            {activeAgent.allocatedCount > 0
-              ? `${Math.round((activeAgent.soldCount / activeAgent.allocatedCount) * 100)}% du lot vendu`
+            {allocatedCountDisplay > 0
+              ? `${Math.round((soldCountDisplay / allocatedCountDisplay) * 100)}% du lot vendu`
               : 'En cours'}
           </p>
         </div>
@@ -630,9 +812,12 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
           onClick={() => {
             setSaleErrorMessage(null);
             setSaleSuccessMessage(null);
+            setCameraError(null);
             setSaleMode('scan');
             setPendingTicketForConfirm(null);
             setManualTicketCode('');
+            setBuyerName('');
+            setBuyerPhone('');
             setShowSaleModal(true);
           }}
           disabled={remainingTickets <= 0}
@@ -647,16 +832,20 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
           onClick={() => {
             setSaleErrorMessage(null);
             setSaleSuccessMessage(null);
+            setCameraError(null);
             setSaleMode('manual');
             setPendingTicketForConfirm(null);
             setManualTicketCode('');
+            setBuyerName('');
+            setBuyerPhone('');
+            setManualFilterQuery('');
             setShowSaleModal(true);
           }}
           disabled={remainingTickets <= 0}
           className="py-4 px-4 rounded-2xl bg-[#1C1B1B] hover:bg-[#252525] border border-[#E9C349]/40 text-[#E9C349] font-heading font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-md active:scale-98 disabled:opacity-50"
         >
           <Ticket className="w-4 h-4" />
-          <span>Déclaration par Lot (Journée)</span>
+          <span>Déclaration Manuelle</span>
         </button>
 
         <button
@@ -692,8 +881,12 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
               <button
                 type="button"
                 onClick={() => {
+                  void stopCameraScanner();
                   setShowSaleModal(false);
                   setPendingTicketForConfirm(null);
+                  setManualTicketCode('');
+                  setBuyerName('');
+                  setBuyerPhone('');
                 }}
                 className="text-gray-400 hover:text-white text-xs font-bold p-1 rounded-lg bg-white/5"
               >
@@ -723,6 +916,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
               <button
                 type="button"
                 onClick={() => {
+                  void stopCameraScanner();
                   setSaleMode('manual');
                   setSaleErrorMessage(null);
                   setSaleSuccessMessage(null);
@@ -738,17 +932,72 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
               </button>
             </div>
 
-            {/* MÉTHODE A : SCAN PAR LE COLLABORATEUR AVEC CONFIRMATION OBLIGATOIRE */}
+            {/* MÉTHODE A : SCAN CAMÉRA + SAISIE MANUELLE + CONFIRMATION NOMINATIVE */}
             {saleMode === 'scan' && (
               <div className="space-y-4">
-                <p className="text-xs text-gray-300 leading-relaxed">
-                  Scannez ou saisissez le code QR du billet papier pour l'activer avant de le remettre au client.
-                </p>
+                {/* Viseur Caméra Arrière Temps Réel (auto-démarré si aucun billet en attente) */}
+                {!pendingTicketForConfirm && (
+                  <div className="rounded-2xl border border-[#E9C349]/30 bg-black/70 overflow-hidden">
+                    <div className="flex items-center justify-between px-3 py-2 border-b border-white/10 bg-white/[0.03]">
+                      <div className="flex items-center gap-2 text-xs font-bold text-[#E9C349]">
+                        <Camera className="w-3.5 h-3.5" />
+                        <span>
+                          {isStartingCamera
+                            ? 'Activation caméra...'
+                            : isCameraScanning
+                              ? 'Caméra active — Visez le QR ou Code-Barres'
+                              : 'Scanner Caméra'}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (isCameraScanning || isStartingCamera) {
+                            void stopCameraScanner();
+                          } else {
+                            void startCameraScanner();
+                          }
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-[11px] font-bold text-white flex items-center gap-1 transition-colors"
+                      >
+                        {isCameraScanning || isStartingCamera ? (
+                          <>
+                            <CameraOff className="w-3 h-3" />
+                            <span>Arrêter</span>
+                          </>
+                        ) : (
+                          <>
+                            <Camera className="w-3 h-3" />
+                            <span>Activer</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
 
-                {/* Saisie ou Scan du code */}
+                    <div className="relative">
+                      <div id="pos-camera-viewfinder" className="w-full min-h-[210px] bg-black" />
+                      {cameraError && (
+                        <div className="p-3 bg-rose-950/70 border-t border-rose-500/30 text-[11px] text-rose-200 flex items-center justify-between gap-2">
+                          <span>{cameraError}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void startCameraScanner();
+                            }}
+                            className="shrink-0 px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-white font-bold"
+                          >
+                            Réessayer
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Saisie manuelle de secours (codes abîmés / sans caméra) */}
                 <div className="space-y-1.5">
                   <label className="text-[10px] uppercase font-bold text-gray-400 tracking-wider flex items-center justify-between">
-                    <span>Code Billet Papier (QR Code)</span>
+                    <span>Saisie manuelle (si QR abîmé)</span>
                     <span className="text-[#E9C349] font-mono">BPT-PHY-...</span>
                   </label>
                   <div className="flex gap-2">
@@ -823,6 +1072,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                     {/* Identité obligatoire de l'acheteur (billet nominatif anti-photocopie) */}
                     <div className="space-y-2">
                       <input
+                        ref={buyerNameInputRef}
                         type="text"
                         autoComplete="name"
                         value={buyerName}
@@ -871,114 +1121,145 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                 )}
 
                 {/* Billets inactifs prêts à être vendus en raccourcis */}
-                {!pendingTicketForConfirm && (
+                {!pendingTicketForConfirm && unsoldAgentTickets.length > 0 && (
                   <div className="space-y-1.5 pt-1">
                     <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">
                       Billets en stock prêts pour la vente rapide :
                     </p>
                     <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto pr-1">
-                      {agentTickets
-                        .filter(
-                          (t) =>
-                            t.status === 'printed_not_sold' ||
-                            t.status === 'physical_allocated' ||
-                            t.status === 'physical_printed'
-                        )
-                        .slice(0, 6)
-                        .map((t) => (
-                          <button
-                            key={t.id}
-                            type="button"
-                            onClick={() => {
-                              setManualTicketCode(t.qrCode);
-                              handleCheckTicketForSale(t.qrCode);
-                            }}
-                            className="px-2.5 py-1.5 rounded-lg bg-black/40 hover:bg-[#E9C349]/20 border border-white/10 hover:border-[#E9C349]/40 text-left font-mono text-[11px] text-gray-300 hover:text-white transition-colors flex items-center gap-1.5"
-                          >
-                            <QrCode className="w-3 h-3 text-[#E9C349]" />
-                            <span>{t.qrCode.split('-').slice(-2).join('-')}</span>
-                            <span className="text-[10px] text-gray-500">
-                              ({t.price.toLocaleString('fr-FR')} F)
-                            </span>
-                          </button>
-                        ))}
+                      {unsoldAgentTickets.slice(0, 6).map((t) => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => {
+                            setManualTicketCode(t.qrCode);
+                            handleCheckTicketForSale(t.qrCode);
+                          }}
+                          className="px-2.5 py-1.5 rounded-lg bg-black/40 hover:bg-[#E9C349]/20 border border-white/10 hover:border-[#E9C349]/40 text-left font-mono text-[11px] text-gray-300 hover:text-white transition-colors flex items-center gap-1.5"
+                        >
+                          <QrCode className="w-3 h-3 text-[#E9C349]" />
+                          <span>{t.qrCode.split('-').slice(-2).join('-')}</span>
+                          <span className="text-[10px] text-gray-500">
+                            ({t.price.toLocaleString('fr-FR')} F)
+                          </span>
+                        </button>
+                      ))}
                     </div>
                   </div>
                 )}
               </div>
             )}
 
-            {/* MÉTHODE B : DÉCLARATION MANUELLE DU NOMBRE DE BILLETS VENDUS */}
+            {/* MÉTHODE B : DÉCLARATION MANUELLE NOMINATIVE PAR SÉLECTION DU STOCK */}
             {saleMode === 'manual' && (
               <div className="space-y-4">
-                <p className="text-xs text-amber-300 leading-relaxed p-3 rounded-xl bg-amber-500/10 border border-amber-500/30">
-                  Les billets sont désormais nominatifs : l'activation par lot anonyme est désactivée. Utilisez « Scan Billet Unique » et saisissez le nom et le téléphone de chaque client.
+                <p className="text-xs text-gray-300 leading-relaxed p-3 rounded-xl bg-[#8A2BE2]/10 border border-[#8A2BE2]/30">
+                  Caméra indisponible ou QR abîmé ? Sélectionnez le billet remis au client dans votre stock ci-dessous et renseignez obligatoirement son nom et son numéro de téléphone.
                 </p>
 
-                {/* Raccourcis de quantité */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-center gap-4 bg-black/40 p-3 rounded-2xl border border-white/5">
-                    <button
-                      type="button"
-                      onClick={() => setSaleQuantity(Math.max(1, saleQuantity - 1))}
-                      className="w-10 h-10 rounded-xl bg-[#2A2A2A] hover:bg-[#333] text-white flex items-center justify-center font-bold text-lg"
-                    >
-                      <Minus className="w-4 h-4" />
-                    </button>
+                {unsoldAgentTickets.length === 0 ? (
+                  <div className="p-4 rounded-2xl bg-black/40 border border-white/10 text-center text-xs text-gray-400">
+                    Aucun billet disponible en stock pour ce guichet.
+                  </div>
+                ) : (
+                  <>
+                    {/* Recherche rapide dans le stock */}
+                    <div className="space-y-2">
+                      <div className="relative">
+                        <Search className="w-3.5 h-3.5 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          value={manualFilterQuery}
+                          onChange={(e) => setManualFilterQuery(e.target.value)}
+                          placeholder="Filtrer par code QR, #série ou catégorie..."
+                          className="w-full pl-9 pr-3 py-2 rounded-xl bg-black/40 border border-white/10 focus:border-[#8A2BE2] outline-none text-xs text-white placeholder:text-gray-500"
+                        />
+                      </div>
 
-                    <div className="text-center">
-                      <span className="font-heading font-black text-3xl text-[#E9C349] block">
-                        {saleQuantity}
-                      </span>
-                      <span className="text-[10px] text-gray-400 font-bold uppercase">
-                        billet(s) à activer
-                      </span>
+                      <div className="space-y-1">
+                        <label className="text-[10px] uppercase font-bold text-gray-400 tracking-wider block">
+                          Billet à activer ({filteredManualUnsoldTickets.length} disponible(s)) *
+                        </label>
+                        <select
+                          value={selectedManualTicketCode}
+                          onChange={(e) => {
+                            setSelectedManualTicketCode(e.target.value);
+                            setSaleErrorMessage(null);
+                          }}
+                          className="w-full bg-black/60 border border-white/15 focus:border-[#E9C349] rounded-xl px-3 py-2.5 text-xs text-white font-mono outline-none"
+                        >
+                          <option value="">
+                            — Sélectionner un billet en stock —
+                          </option>
+                          {filteredManualUnsoldTickets.map((t) => (
+                            <option key={t.id} value={t.qrCode}>
+                              {t.serialNumber ? `#${t.serialNumber} • ` : ''}
+                              {t.qrCode} — {t.tierName} ({t.price.toLocaleString('fr-FR')} F)
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    {selectedManualTicket && (
+                      <div className="p-3 rounded-xl bg-black/40 border border-[#E9C349]/30 text-xs flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="font-mono font-bold text-white truncate">
+                            {selectedManualTicket.qrCode}
+                          </p>
+                          <p className="text-[11px] text-gray-400">
+                            {selectedManualTicket.tierName} • Statut : printed_not_sold → sold_valid
+                          </p>
+                        </div>
+                        <span className="font-heading font-black text-[#E9C349] text-sm shrink-0">
+                          {selectedManualTicket.price.toLocaleString('fr-FR')} F
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Identité obligatoire du client */}
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        autoComplete="name"
+                        value={buyerName}
+                        onChange={(e) => setBuyerName(e.target.value)}
+                        placeholder="Nom complet du client *"
+                        className="w-full px-3 py-2.5 rounded-xl bg-black/60 border border-white/15 focus:border-[#E9C349] outline-none text-sm text-white placeholder:text-gray-500"
+                      />
+                      <input
+                        type="tel"
+                        inputMode="tel"
+                        autoComplete="tel"
+                        value={buyerPhone}
+                        onChange={(e) => setBuyerPhone(e.target.value.replace(/[^0-9+\s]/g, ''))}
+                        placeholder="Téléphone * (ex : 77 555 12 34)"
+                        className="w-full px-3 py-2.5 rounded-xl bg-black/60 border border-white/15 focus:border-[#E9C349] outline-none text-sm text-white font-mono placeholder:text-gray-500"
+                      />
                     </div>
 
                     <button
                       type="button"
-                      onClick={() => setSaleQuantity(Math.min(remainingTickets, saleQuantity + 1))}
-                      className="w-10 h-10 rounded-xl bg-[#2A2A2A] hover:bg-[#333] text-white flex items-center justify-center font-bold text-lg"
+                      disabled={
+                        isSubmittingSale ||
+                        !selectedManualTicket ||
+                        !buyerName.trim() ||
+                        !buyerPhone.trim()
+                      }
+                      onClick={() => {
+                        void handleConfirmManualSingleSale();
+                      }}
+                      className="w-full btn-gold-glow py-3.5 rounded-xl font-heading font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg disabled:opacity-40 disabled:cursor-not-allowed"
                     >
-                      <Plus className="w-4 h-4" />
+                      <CheckCheck className="w-4 h-4 text-[#241A00]" />
+                      <span>
+                        {isSubmittingSale
+                          ? 'Activation en cours...'
+                          : 'Activer ce Billet Nominatif'}
+                      </span>
                     </button>
-                  </div>
-
-                  <div className="flex justify-center gap-2 pt-1">
-                    {[1, 2, 5, 10, 20].map((q) => (
-                      <button
-                        key={q}
-                        type="button"
-                        disabled={q > remainingTickets}
-                        onClick={() => setSaleQuantity(q)}
-                        className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
-                          saleQuantity === q
-                            ? 'bg-[#E9C349] text-[#241A00]'
-                            : 'bg-white/5 text-gray-400 hover:text-white'
-                        } disabled:opacity-30`}
-                      >
-                        +{q}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="p-3 rounded-xl bg-black/40 border border-white/10 text-xs flex justify-between items-center">
-                    <span className="text-gray-400">Total Encaissé Estimé :</span>
-                    <span className="font-heading font-black text-white text-sm">
-                      {(saleQuantity * (agentTickets[0]?.price || 3500)).toLocaleString('fr-FR')} FCFA
-                    </span>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  disabled={true}
-                  onClick={() => handleQuickAddSale(saleQuantity)}
-                  className="w-full btn-gold-glow py-3.5 rounded-xl font-heading font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg opacity-40 cursor-not-allowed"
-                >
-                  <CheckCheck className="w-4 h-4 text-[#241A00]" />
-                  <span>Activation par lot désactivée (billets nominatifs)</span>
-                </button>
+                  </>
+                )}
               </div>
             )}
 
@@ -1012,24 +1293,42 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
               Suivi unitaire de chaque code QR : inactif tant que non vendu.
             </p>
           </div>
-          <span className="text-xs font-mono text-gray-400">
-            Total lot : {agentTickets.length} billet(s)
-          </span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {(
+              [
+                { id: 'all', label: `Tous (${agentTickets.length})` },
+                { id: 'printed_not_sold', label: `En stock (${unsoldAgentTickets.length})` },
+                { id: 'sold', label: `Vendus (${soldAgentTickets.length})` },
+              ] as const
+            ).map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setInventoryFilter(tab.id)}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-bold transition-colors ${
+                  inventoryFilter === tab.id
+                    ? 'bg-[#E9C349] text-[#241A00]'
+                    : 'bg-white/5 text-gray-300 hover:bg-white/10'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {agentTickets.length === 0 ? (
+        {sortedFilteredInventoryTickets.length === 0 ? (
           <p className="text-xs text-gray-500 py-4 text-center">
-            Aucun billet n'a encore été attribué à ce guichet pour le moment.
+            {agentTickets.length === 0
+              ? "Aucun billet n'a encore été attribué à ce guichet pour le moment."
+              : 'Aucun billet ne correspond à ce filtre.'}
           </p>
         ) : (
           <>
             {/* Vue Cartes Mobile (< 768px) */}
             <div className="block md:hidden space-y-3">
-              {agentTickets.map((t) => {
-                const isUnsold =
-                  t.status === 'printed_not_sold' ||
-                  t.status === 'physical_allocated' ||
-                  t.status === 'physical_printed';
+              {sortedFilteredInventoryTickets.map((t) => {
+                const isUnsold = isTicketUnsoldStatus(t.status);
                 const isSoldValid = t.status === 'sold_valid' || t.status === 'physical_sold';
                 const isScanned = t.status === 'scanned' || t.status === 'used';
                 const isCancelled = t.status === 'cancelled';
@@ -1045,7 +1344,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                         {isUnsold && (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 text-[10px] font-bold">
                             <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                            Inactif
+                            En stock
                           </span>
                         )}
                         {isSoldValid && (
@@ -1070,7 +1369,12 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                     </div>
 
                     <div className="flex items-center justify-between text-xs bg-black/30 p-2.5 rounded-xl border border-white/5">
-                      <span className="text-gray-300 font-medium truncate">{t.tierName}</span>
+                      <span className="text-gray-300 font-medium truncate">
+                        {t.tierName}
+                        {!isUnsold && t.holderName && t.holderName !== 'Billet Physique Non Vendu'
+                          ? ` • ${t.holderName}`
+                          : ''}
+                      </span>
                       <span className="font-heading font-extrabold text-[#E9C349] text-sm">
                         {t.price.toLocaleString('fr-FR')} FCFA
                       </span>
@@ -1080,10 +1384,12 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                       <button
                         type="button"
                         onClick={() => {
-                          setManualTicketCode(t.qrCode);
-                          handleCheckTicketForSale(t.qrCode);
+                          setBuyerName('');
+                          setBuyerPhone('');
                           setSaleMode('scan');
                           setShowSaleModal(true);
+                          setManualTicketCode(t.qrCode);
+                          handleCheckTicketForSale(t.qrCode);
                         }}
                         className="w-full min-h-[44px] rounded-xl bg-gradient-to-r from-[#E9C349]/20 to-[#E9C349]/30 hover:from-[#E9C349]/30 hover:to-[#E9C349]/40 text-[#E9C349] font-heading font-bold text-xs border border-[#E9C349]/40 flex items-center justify-center gap-2 transition-all cursor-pointer"
                       >
@@ -1091,8 +1397,8 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                         <span>Activer la Vente Nominative</span>
                       </button>
                     ) : (
-                      <div className="w-full py-2 rounded-xl bg-white/5 text-center text-xs text-gray-500 italic">
-                        Billet déjà validé et sécurisé
+                      <div className="w-full py-2 rounded-xl bg-white/5 text-center text-xs text-gray-400">
+                        {t.holderPhone ? `Client : ${t.holderName} (${t.holderPhone})` : 'Billet déjà validé et sécurisé'}
                       </div>
                     )}
                   </div>
@@ -1113,11 +1419,8 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
-                {agentTickets.map((t) => {
-                  const isUnsold =
-                    t.status === 'printed_not_sold' ||
-                    t.status === 'physical_allocated' ||
-                    t.status === 'physical_printed';
+                {sortedFilteredInventoryTickets.map((t) => {
+                  const isUnsold = isTicketUnsoldStatus(t.status);
                   const isSoldValid = t.status === 'sold_valid' || t.status === 'physical_sold';
                   const isScanned = t.status === 'scanned' || t.status === 'used';
                   const isCancelled = t.status === 'cancelled';
@@ -1128,7 +1431,14 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                         <QrCode className="w-3.5 h-3.5 text-gray-500 shrink-0" />
                         <span>{t.qrCode}</span>
                       </td>
-                      <td className="py-2.5 px-3 text-gray-300">{t.tierName}</td>
+                      <td className="py-2.5 px-3 text-gray-300">
+                        <span>{t.tierName}</span>
+                        {!isUnsold && t.holderName && t.holderName !== 'Billet Physique Non Vendu' && (
+                          <span className="block text-[10px] text-gray-400">
+                            {t.holderName} {t.holderPhone ? `• ${t.holderPhone}` : ''}
+                          </span>
+                        )}
+                      </td>
                       <td className="py-2.5 px-3 font-bold text-white">
                         {t.price.toLocaleString('fr-FR')} F
                       </td>
@@ -1136,7 +1446,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                         {isUnsold && (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 text-[10px] font-bold">
                             <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                            Inactif (Non Vendu)
+                            En stock (printed_not_sold)
                           </span>
                         )}
                         {isSoldValid && (
@@ -1163,10 +1473,12 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                           <button
                             type="button"
                             onClick={() => {
-                              setManualTicketCode(t.qrCode);
-                              handleCheckTicketForSale(t.qrCode);
+                              setBuyerName('');
+                              setBuyerPhone('');
                               setSaleMode('scan');
                               setShowSaleModal(true);
+                              setManualTicketCode(t.qrCode);
+                              handleCheckTicketForSale(t.qrCode);
                             }}
                             className="px-2.5 py-1 rounded-lg bg-[#E9C349]/20 hover:bg-[#E9C349]/30 text-[#E9C349] font-bold text-[10px] border border-[#E9C349]/40 transition-all"
                           >

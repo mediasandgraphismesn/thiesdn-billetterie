@@ -1689,10 +1689,33 @@ export interface SalesAgentAuthProvisionResult {
   userId?: string;
   email?: string;
   tempPassword?: string;
+  password?: string;
   created?: boolean;
   passwordReset?: boolean;
   error?: string;
 }
+
+const extractEdgeFunctionErrorMessage = async (
+  err: unknown,
+  fallbackMessage: string
+): Promise<string> => {
+  if (err && typeof err === 'object' && 'context' in err) {
+    const ctx = (err as { context?: unknown }).context;
+    if (ctx && typeof ctx === 'object' && 'json' in ctx && typeof (ctx as Response).json === 'function') {
+      try {
+        const body = (await (ctx as Response).clone().json()) as { error?: string; message?: string };
+        if (body?.error) return body.error;
+        if (body?.message) return body.message;
+      } catch {
+        // ignore JSON parse fallback
+      }
+    }
+  }
+  if (err instanceof Error && err.message) {
+    return err.message;
+  }
+  return fallbackMessage;
+};
 
 /**
  * Appelle la Supabase Edge Function `create-sales-agent-account` pour créer ou lier
@@ -1700,6 +1723,7 @@ export interface SalesAgentAuthProvisionResult {
  */
 export const provisionSalesAgentAuthAccount = async (params: {
   agentId: string;
+  action?: 'provision' | 'reset_password';
   email?: string;
   pointDeVente?: string;
   gerantName?: string;
@@ -1713,15 +1737,32 @@ export const provisionSalesAgentAuthAccount = async (params: {
   }
 
   try {
-    const { data, error } = await client.functions.invoke<SalesAgentAuthProvisionResult>(
-      'create-sales-agent-account',
+    const functionName =
+      params.action === 'reset_password'
+        ? 'create-sales-agent-account/reset-password'
+        : 'create-sales-agent-account';
+
+    let { data, error } = await client.functions.invoke<SalesAgentAuthProvisionResult>(
+      functionName,
       { body: params }
     );
 
+    // Repli automatique si l'Edge Function déployée n'expose pas le sous-chemin /reset-password
+    if (error && params.action === 'reset_password') {
+      ({ data, error } = await client.functions.invoke<SalesAgentAuthProvisionResult>(
+        'create-sales-agent-account',
+        { body: { ...params, action: 'reset_password', regeneratePassword: true } }
+      ));
+    }
+
     if (error) {
+      const detailedError = await extractEdgeFunctionErrorMessage(
+        error,
+        "Erreur lors de l'appel à l'Edge Function vendeur."
+      );
       return {
         success: false,
-        error: error.message || "Erreur lors de l'appel à l'Edge Function vendeur.",
+        error: detailedError,
       };
     }
 
@@ -1732,24 +1773,48 @@ export const provisionSalesAgentAuthAccount = async (params: {
       };
     }
 
+    const normalizedResult: SalesAgentAuthProvisionResult = {
+      ...data,
+      tempPassword: data.tempPassword || data.password,
+    };
+
     // Mettre à jour le cache local de l'agent avec son userId & email liés
     const currentAgents = getStoredSalesAgents();
     const updatedAgents = currentAgents.map((a) =>
       a.id === params.agentId
         ? {
             ...a,
-            userId: data.userId || a.userId,
-            email: data.email || a.email,
+            userId: normalizedResult.userId || a.userId,
+            email: normalizedResult.email || a.email,
           }
         : a
     );
     saveSalesAgents(updatedAgents);
 
-    return data;
+    return normalizedResult;
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Erreur réseau Edge Function.';
     return { success: false, error: message };
   }
+};
+
+/**
+ * Réinitialise le mot de passe Auth d'un point de vente via la route `/reset-password`
+ * de l'Edge Function `create-sales-agent-account`.
+ */
+export const resetSalesAgentPasswordAccount = async (params: {
+  agentId: string;
+  email?: string;
+  pointDeVente?: string;
+  gerantName?: string;
+  telephone?: string;
+  eventId?: string;
+}): Promise<SalesAgentAuthProvisionResult> => {
+  return provisionSalesAgentAuthAccount({
+    ...params,
+    action: 'reset_password',
+    regeneratePassword: true,
+  });
 };
 
 export const createSalesAgent = async (agentData: {
@@ -2352,15 +2417,18 @@ export const assignTicketsToAgent = async (
  */
 export const lookupPhysicalTicketForSale = (
   agentId: string,
-  ticketCode: string
+  ticketCode: string,
+  candidateTickets?: UserTicket[]
 ): {
   found: boolean;
   message?: string;
   ticket?: UserTicket;
   canBeSold: boolean;
 } => {
-  const clean = ticketCode.trim().toUpperCase();
-  const allTickets = getStoredTickets();
+  const raw = ticketCode.trim();
+  const urlCodeMatch = raw.match(/(?:\/scan\/|[?&]code=)([^/?#&\s]+)/i);
+  const clean = (urlCodeMatch ? urlCodeMatch[1] : raw).trim().toUpperCase();
+  const allTickets = candidateTickets && candidateTickets.length > 0 ? candidateTickets : getStoredTickets();
   const t = allTickets.find(
     (item) => item.qrCode.toUpperCase() === clean || item.id.toUpperCase() === clean
   );
@@ -2426,7 +2494,8 @@ export const confirmSinglePhysicalTicketSale = async (
     name: string;
     phone: string;
     email?: string;
-  }
+  },
+  candidateTickets?: UserTicket[]
 ): Promise<{ success: boolean; message: string; ticket?: UserTicket; agent?: SalesAgent }> => {
   // RÈGLE ANTI-FRAUDE : Le nom et le téléphone du client sont obligatoires
   if (!customerData?.name?.trim() || !customerData?.phone?.trim()) {
@@ -2436,7 +2505,7 @@ export const confirmSinglePhysicalTicketSale = async (
     };
   }
 
-  const check = lookupPhysicalTicketForSale(agentId, ticketCode);
+  const check = lookupPhysicalTicketForSale(agentId, ticketCode, candidateTickets);
   if (!check.found || !check.ticket) {
     return { success: false, message: check.message || 'Billet introuvable.' };
   }
@@ -2450,7 +2519,8 @@ export const confirmSinglePhysicalTicketSale = async (
     return { success: false, message: 'Collaborateur introuvable.' };
   }
 
-  const agent = agents[agentIndex];
+  const previousAgentSnapshot = { ...agents[agentIndex] };
+  const agent = { ...agents[agentIndex] };
   const allTickets = getStoredTickets();
   const targetId = check.ticket.id;
   const nowIso = new Date().toISOString();
@@ -2473,21 +2543,17 @@ export const confirmSinglePhysicalTicketSale = async (
     return t;
   });
 
-  saveStoredTickets(updatedTickets);
-
   const price = check.ticket.price;
   const netDueAdd = Math.round(price * (1 - agent.commissionPercent / 100));
 
   agent.soldCount += 1;
   agent.cashCollected += price;
   agent.amountDue += netDueAdd;
-  agents[agentIndex] = agent;
-  saveSalesAgents(agents);
 
   const client = getSupabaseClient();
   if (client) {
     try {
-      await client
+      const { data: updatedRow, error: ticketUpdateErr } = await client
         .from('tickets')
         .update({
           status: 'sold_valid',
@@ -2498,20 +2564,62 @@ export const confirmSinglePhysicalTicketSale = async (
           agent_id: agent.id,
           agent_name: agent.pointDeVente,
         })
-        .eq('id', targetId);
+        .eq('id', targetId)
+        .select('id, status')
+        .maybeSingle();
 
-      await client
-        .from('sales_agents')
-        .update({
-          sold_count: agent.soldCount,
-          cash_collected: agent.cashCollected,
-          amount_due: agent.amountDue,
-        })
-        .eq('id', agent.id);
-    } catch (e: any) {
-      console.warn('Sync Supabase confirmSinglePhysicalTicketSale:', e.message);
+      if (ticketUpdateErr || !updatedRow) {
+        // Repli via RPC SECURITY DEFINER si la policy UPDATE directe bloque
+        const { data: rpcData, error: rpcErr } = await client.rpc('activate_physical_ticket_sale', {
+          p_agent_id: agent.id,
+          p_ticket_code: check.ticket.qrCode,
+          p_holder_name: customerData.name.trim(),
+          p_holder_phone: customerData.phone.trim(),
+          p_holder_email: customerData.email?.trim() || null,
+        });
+
+        const rpcResult = rpcData as { success?: boolean; message?: string } | null;
+        if (rpcErr || !rpcResult?.success) {
+          saveStoredTickets(allTickets);
+          agents[agentIndex] = previousAgentSnapshot;
+          saveSalesAgents(agents);
+          return {
+            success: false,
+            message:
+              rpcResult?.message ||
+              rpcErr?.message ||
+              ticketUpdateErr?.message ||
+              'Impossible d’activer le billet sur Supabase (droits RLS ou billet déjà vendu).',
+          };
+        }
+      } else {
+        const { error: agentUpdateErr } = await client
+          .from('sales_agents')
+          .update({
+            sold_count: agent.soldCount,
+            cash_collected: agent.cashCollected,
+            amount_due: agent.amountDue,
+          })
+          .eq('id', agent.id);
+        if (agentUpdateErr) {
+          console.warn('Sync sales_agents confirmSinglePhysicalTicketSale:', agentUpdateErr.message);
+        }
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Erreur réseau Supabase';
+      saveStoredTickets(allTickets);
+      agents[agentIndex] = previousAgentSnapshot;
+      saveSalesAgents(agents);
+      return {
+        success: false,
+        message: `Échec de synchronisation serveur : ${msg}`,
+      };
     }
   }
+
+  saveStoredTickets(updatedTickets);
+  agents[agentIndex] = agent;
+  saveSalesAgents(agents);
 
   return {
     success: true,
@@ -6699,18 +6807,21 @@ interface SupabaseTicketRow {
 export const fetchAllSoldTicketsFromSupabase = async (
   options?: {
     eventId?: string;
+    agentId?: string;
     isPhysical?: boolean;
     status?: string;
   }
 ): Promise<{ tickets: UserTicket[]; error: string | null }> => {
   const client = getSupabaseClient();
   const eventId = options?.eventId && options.eventId !== 'all' ? options.eventId : undefined;
+  const agentId = options?.agentId && options.agentId !== 'all' ? options.agentId : undefined;
   const isPhysical = options?.isPhysical;
   const status = options?.status;
 
   if (!client) {
     let fallback = getStoredTickets();
     if (eventId) fallback = fallback.filter((t) => t.eventId === eventId);
+    if (agentId) fallback = fallback.filter((t) => t.agentId === agentId);
     if (isPhysical !== undefined) fallback = fallback.filter((t) => t.isPhysical === isPhysical);
     if (status) fallback = fallback.filter((t) => t.status === status);
     return { tickets: fallback, error: null };
@@ -6729,6 +6840,9 @@ export const fetchAllSoldTicketsFromSupabase = async (
       if (eventId) {
         query = query.eq('event_id', eventId);
       }
+      if (agentId) {
+        query = query.eq('agent_id', agentId);
+      }
       if (isPhysical !== undefined) {
         query = query.eq('is_physical', isPhysical);
       }
@@ -6743,6 +6857,7 @@ export const fetchAllSoldTicketsFromSupabase = async (
         useAgentJoin = false;
         let fallbackQuery = client.from('tickets').select('*');
         if (eventId) fallbackQuery = fallbackQuery.eq('event_id', eventId);
+        if (agentId) fallbackQuery = fallbackQuery.eq('agent_id', agentId);
         if (isPhysical !== undefined) fallbackQuery = fallbackQuery.eq('is_physical', isPhysical);
         if (status) fallbackQuery = fallbackQuery.eq('status', status);
         ({ data, error } = await fallbackQuery.order('created_at', { ascending: false }).range(from, to));
@@ -6752,6 +6867,7 @@ export const fetchAllSoldTicketsFromSupabase = async (
         console.warn('Erreur fetchAllSoldTicketsFromSupabase:', error.message);
         let fallback = getStoredTickets();
         if (eventId) fallback = fallback.filter((t) => t.eventId === eventId);
+        if (agentId) fallback = fallback.filter((t) => t.agentId === agentId);
         if (isPhysical !== undefined) fallback = fallback.filter((t) => t.isPhysical === isPhysical);
         if (status) fallback = fallback.filter((t) => t.status === status);
         return { tickets: fallback, error: error.message };
@@ -6804,14 +6920,15 @@ export const fetchAllSoldTicketsFromSupabase = async (
     }));
 
     // Synchroniser le cache local strictement avec la vérité Supabase (sans réinjecter de faux billets)
-    if (!eventId && isPhysical === undefined && !status) {
+    if (!eventId && !agentId && isPhysical === undefined && !status) {
       saveStoredTickets(mapped);
     } else {
       const outsideScope = getStoredTickets().filter((localTicket) => {
         const matchesEvent = !eventId || localTicket.eventId === eventId;
+        const matchesAgent = !agentId || localTicket.agentId === agentId;
         const matchesPhysical = isPhysical === undefined || Boolean(localTicket.isPhysical) === isPhysical;
         const matchesStatus = !status || localTicket.status === status;
-        return !(matchesEvent && matchesPhysical && matchesStatus);
+        return !(matchesEvent && matchesAgent && matchesPhysical && matchesStatus);
       });
       saveStoredTickets([...mapped, ...outsideScope]);
     }

@@ -15,6 +15,7 @@ const corsHeaders = {
 
 interface ProvisionPayload {
   agentId?: string;
+  action?: 'provision' | 'reset_password';
   email?: string;
   pointDeVente?: string;
   gerantName?: string;
@@ -54,16 +55,134 @@ function buildFallbackPosEmail(phone?: string, fallbackSeed?: string): string {
   return `${safeSeed}@pos.thiesdn.site`;
 }
 
-function generateTempPassword(): string {
-  // Caractères lisibles (sans O/0, I/1, l) pour saisie rapide sur mobile /pos
-  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789abcdefghjkmnpqrstuvwxyz';
-  const bytes = new Uint8Array(8);
+function pickRandomChars(charset: string, count: number): string[] {
+  const bytes = new Uint8Array(count);
   crypto.getRandomValues(bytes);
-  let suffix = '';
-  for (let i = 0; i < bytes.length; i++) {
-    suffix += alphabet[bytes[i] % alphabet.length];
+  const chars: string[] = [];
+  for (let i = 0; i < count; i++) {
+    chars.push(charset[bytes[i] % charset.length]);
   }
-  return `Pos#${suffix}`;
+  return chars;
+}
+
+/**
+ * Mot de passe temporaire de 8 caractères lisibles sans caractères ambigus (0/O, 1/I/l),
+ * compatible avec les politiques Auth (majuscule, minuscule, chiffre, caractère spécial '!').
+ */
+function generateTempPassword(): string {
+  const chars = [
+    ...pickRandomChars('ABCDEFGHJKLMNPQRSTUVWXYZ', 2),
+    ...pickRandomChars('abcdefghjkmnpqrstuvwxyz', 3),
+    ...pickRandomChars('23456789', 2),
+    '!',
+  ];
+  const shuffleBytes = new Uint8Array(chars.length);
+  crypto.getRandomValues(shuffleBytes);
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = shuffleBytes[i] % (i + 1);
+    const tmp = chars[i];
+    chars[i] = chars[j];
+    chars[j] = tmp;
+  }
+  return chars.join('');
+}
+
+async function upsertSalesAgentProfile(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  userId: string,
+  name: string,
+  email: string,
+  phone: string
+): Promise<string | null> {
+  // Uniquement les colonnes garanties sur public.profiles (jamais is_email_confirmed / updated_at)
+  const { error: fullErr } = await supabaseAdmin
+    .from('profiles')
+    .upsert(
+      {
+        id: userId,
+        name,
+        email,
+        phone: phone || null,
+        role: 'sales_agent',
+      },
+      { onConflict: 'id' }
+    );
+
+  if (!fullErr) return null;
+
+  const { error: minimalErr } = await supabaseAdmin
+    .from('profiles')
+    .upsert(
+      {
+        id: userId,
+        name,
+        role: 'sales_agent',
+      },
+      { onConflict: 'id' }
+    );
+
+  return minimalErr ? minimalErr.message : null;
+}
+
+async function linkSalesAgentRow(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  agentId: string,
+  userId: string,
+  email: string
+): Promise<string | null> {
+  const { error } = await supabaseAdmin
+    .from('sales_agents')
+    .update({
+      user_id: userId,
+      email,
+    })
+    .eq('id', agentId);
+
+  return error ? error.message : null;
+}
+
+async function findExistingAuthUserByEmail(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  targetEmail: string
+): Promise<{ id: string; email: string; role: string } | null> {
+  const { data: existingProfile } = await supabaseAdmin
+    .from('profiles')
+    .select('id, role, email')
+    .ilike('email', targetEmail)
+    .maybeSingle();
+
+  if (existingProfile?.id) {
+    return {
+      id: String(existingProfile.id),
+      email: String(existingProfile.email || targetEmail),
+      role: String(existingProfile.role || '').toLowerCase(),
+    };
+  }
+
+  // Repli si un compte auth.users existe déjà sans ligne dans public.profiles
+  const { data: listData } = await supabaseAdmin.auth.admin.listUsers({
+    page: 1,
+    perPage: 1000,
+  });
+  const matched = listData?.users?.find(
+    (u) => (u.email || '').trim().toLowerCase() === targetEmail
+  );
+  if (!matched?.id) return null;
+
+  const { data: profileById } = await supabaseAdmin
+    .from('profiles')
+    .select('id, role, email')
+    .eq('id', matched.id)
+    .maybeSingle();
+
+  return {
+    id: String(matched.id),
+    email: String(matched.email || profileById?.email || targetEmail),
+    role: String(
+      profileById?.role ||
+        (typeof matched.user_metadata?.role === 'string' ? matched.user_metadata.role : '')
+    ).toLowerCase(),
+  };
 }
 
 serve(async (req: Request) => {
@@ -180,7 +299,9 @@ serve(async (req: Request) => {
         ? rawEmail
         : buildFallbackPosEmail(targetPhone, agentRow.id);
 
-    const shouldRegenerate = Boolean(payload.regeneratePassword);
+    const isResetRoute = new URL(req.url).pathname.replace(/\/+$/, '').endsWith('/reset-password');
+    const shouldRegenerate =
+      isResetRoute || payload.action === 'reset_password' || Boolean(payload.regeneratePassword);
 
     // 4. Cas A : Le point de vente possède déjà un user_id lié
     if (agentRow.user_id && UUID_REGEX.test(String(agentRow.user_id))) {
@@ -226,25 +347,28 @@ serve(async (req: Request) => {
         }
       }
 
-      await supabaseAdmin
-        .from('profiles')
-        .upsert(
-          {
-            id: existingUserId,
-            name: targetName,
-            email: authEmail,
-            phone: targetPhone || null,
-            role: 'sales_agent',
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: 'id' }
+      const profileErr = await upsertSalesAgentProfile(
+        supabaseAdmin,
+        existingUserId,
+        targetName,
+        authEmail,
+        targetPhone
+      );
+      if (profileErr) {
+        return jsonResponse(
+          { success: false, error: `Erreur mise à jour profil vendeur : ${profileErr}` },
+          500
         );
+      }
 
       if (!agentRow.email && authEmail) {
-        await supabaseAdmin
-          .from('sales_agents')
-          .update({ email: authEmail })
-          .eq('id', agentRow.id);
+        const linkErr = await linkSalesAgentRow(supabaseAdmin, agentRow.id, existingUserId, authEmail);
+        if (linkErr) {
+          return jsonResponse(
+            { success: false, error: `Erreur liaison sales_agents : ${linkErr}` },
+            500
+          );
+        }
       }
 
       return jsonResponse({
@@ -252,6 +376,7 @@ serve(async (req: Request) => {
         userId: existingUserId,
         email: authEmail,
         tempPassword,
+        password: tempPassword,
         created: false,
         passwordReset: shouldRegenerate,
       });
@@ -280,12 +405,8 @@ serve(async (req: Request) => {
       provisionedEmail = createdData.user.email || targetEmail;
       wasCreated = true;
     } else {
-      // Vérifier si un profil existe déjà avec cet email
-      const { data: existingByEmail } = await supabaseAdmin
-        .from('profiles')
-        .select('id, role, email')
-        .ilike('email', targetEmail)
-        .maybeSingle();
+      // Vérifier si un profil ou compte auth.users orphelin existe déjà avec cet email
+      const existingByEmail = await findExistingAuthUserByEmail(supabaseAdmin, targetEmail);
 
       if (!existingByEmail?.id) {
         return jsonResponse(
@@ -308,7 +429,7 @@ serve(async (req: Request) => {
         );
       }
 
-      // Vérifier si ce profil n'est pas déjà lié à un autre sales_agent actif
+      // Vérifier si ce compte n'est pas déjà lié à un autre sales_agent actif
       const { data: otherAgent } = await supabaseAdmin
         .from('sales_agents')
         .select('id, point_de_vente')
@@ -359,39 +480,31 @@ serve(async (req: Request) => {
     }
 
     // 6. Garantir le rôle sales_agent dans public.profiles & lier public.sales_agents.user_id
-    const { error: profileUpsertErr } = await supabaseAdmin
-      .from('profiles')
-      .upsert(
-        {
-          id: provisionedUserId,
-          name: targetName,
-          email: provisionedEmail,
-          phone: targetPhone || null,
-          role: 'sales_agent',
-          is_email_confirmed: true,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'id' }
-      );
+    const profileUpsertErr = await upsertSalesAgentProfile(
+      supabaseAdmin,
+      provisionedUserId,
+      targetName,
+      provisionedEmail,
+      targetPhone
+    );
 
     if (profileUpsertErr) {
       return jsonResponse(
-        { success: false, error: `Erreur mise à jour profil vendeur : ${profileUpsertErr.message}` },
+        { success: false, error: `Erreur mise à jour profil vendeur : ${profileUpsertErr}` },
         500
       );
     }
 
-    const { error: linkErr } = await supabaseAdmin
-      .from('sales_agents')
-      .update({
-        user_id: provisionedUserId,
-        email: provisionedEmail,
-      })
-      .eq('id', agentRow.id);
+    const linkErr = await linkSalesAgentRow(
+      supabaseAdmin,
+      agentRow.id,
+      provisionedUserId,
+      provisionedEmail
+    );
 
     if (linkErr) {
       return jsonResponse(
-        { success: false, error: `Compte créé mais erreur liaison sales_agents : ${linkErr.message}` },
+        { success: false, error: `Compte créé mais erreur liaison sales_agents : ${linkErr}` },
         500
       );
     }
@@ -401,6 +514,7 @@ serve(async (req: Request) => {
       userId: provisionedUserId,
       email: provisionedEmail,
       tempPassword,
+      password: tempPassword,
       created: wasCreated,
       passwordReset: true,
     });

@@ -47,6 +47,7 @@ import {
   Trash2,
   MoreVertical,
   MessageCircle,
+  KeyRound,
 } from 'lucide-react';
 import {
   getStoredTransactions,
@@ -66,6 +67,7 @@ import {
   createSalesAgent,
   buildFallbackPosEmail,
   provisionSalesAgentAuthAccount,
+  resetSalesAgentPasswordAccount,
   TicketAllocation,
   generatePhysicalTicketBatch,
   assignTicketsToAgent,
@@ -190,6 +192,9 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
   const [newAgentCommission, setNewAgentCommission] = useState(10);
   const [isSavingAgent, setIsSavingAgent] = useState(false);
   const [provisioningAgentId, setProvisioningAgentId] = useState<string | null>(null);
+  const [agentCredentialsById, setAgentCredentialsById] = useState<
+    Record<string, { email: string; tempPassword: string }>
+  >({});
   const [agentAccessBanner, setAgentAccessBanner] = useState<{
     agent: SalesAgent;
     email: string;
@@ -863,14 +868,31 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
       : `https://wa.me/?text=${encodeURIComponent(message)}`;
   };
 
-  // Provisioning / réinitialisation Auth du vendeur + ouverture WhatsApp
+  // Provisioning / envoi des accès WhatsApp (email de secours + mot de passe généré)
   const handleSendAgentAccessWhatsApp = async (agent: SalesAgent) => {
     setActiveAgentMenuId(null);
-    setProvisioningAgentId(agent.id);
 
     const fallbackEmail = agent.email?.trim() || buildFallbackPosEmail(agent.telephone, agent.id);
+    const cachedCreds = agentCredentialsById[agent.id];
+
+    // Si des identifiants viennent déjà d'être générés dans cette session et que l'agent a un userId, on réutilise sans écraser
+    if (agent.userId && cachedCreds?.tempPassword) {
+      const resolvedEmail = cachedCreds.email || fallbackEmail;
+      const waUrl = buildAgentAccessWhatsAppUrl(agent, resolvedEmail, cachedCreds.tempPassword);
+      setAgentAccessBanner({
+        agent,
+        email: resolvedEmail,
+        tempPassword: cachedCreds.tempPassword,
+        waUrl,
+      });
+      window.open(waUrl, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    setProvisioningAgentId(agent.id);
     const provisionRes = await provisionSalesAgentAuthAccount({
       agentId: agent.id,
+      action: 'provision',
       email: fallbackEmail,
       pointDeVente: agent.pointDeVente,
       gerantName: agent.gerantName,
@@ -878,12 +900,16 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
       eventId: agent.eventId || activeEvent?.id,
       regeneratePassword: true,
     });
-
     setProvisioningAgentId(null);
 
-    if (provisionRes.success) {
+    const resolvedPassword = provisionRes.tempPassword || provisionRes.password;
+    if (provisionRes.success && resolvedPassword) {
       const resolvedEmail = provisionRes.email || fallbackEmail;
-      const waUrl = buildAgentAccessWhatsAppUrl(agent, resolvedEmail, provisionRes.tempPassword);
+      setAgentCredentialsById((prev) => ({
+        ...prev,
+        [agent.id]: { email: resolvedEmail, tempPassword: resolvedPassword },
+      }));
+      const waUrl = buildAgentAccessWhatsAppUrl(agent, resolvedEmail, resolvedPassword);
       setAgents((prev) =>
         prev.map((a) =>
           a.id === agent.id
@@ -894,7 +920,16 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
       setAgentAccessBanner({
         agent: { ...agent, userId: provisionRes.userId || agent.userId, email: resolvedEmail },
         email: resolvedEmail,
-        tempPassword: provisionRes.tempPassword,
+        tempPassword: resolvedPassword,
+        waUrl,
+      });
+      window.open(waUrl, '_blank', 'noopener,noreferrer');
+    } else if (provisionRes.success) {
+      const resolvedEmail = provisionRes.email || fallbackEmail;
+      const waUrl = buildAgentAccessWhatsAppUrl(agent, resolvedEmail);
+      setAgentAccessBanner({
+        agent: { ...agent, userId: provisionRes.userId || agent.userId, email: resolvedEmail },
+        email: resolvedEmail,
         waUrl,
       });
       window.open(waUrl, '_blank', 'noopener,noreferrer');
@@ -906,7 +941,59 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
         waUrl,
         warning:
           `${provisionRes.error || 'Edge Function indisponible.'} ` +
-          `Déployez l'Edge Function create-sales-agent-account pour générer un mot de passe automatiquement.`,
+          `Vérifiez le déploiement de l'Edge Function create-sales-agent-account.`,
+      });
+    }
+  };
+
+  // Réinitialisation forcée du mot de passe vendeur via /reset-password + envoi WhatsApp
+  const handleResetAgentPassword = async (agent: SalesAgent) => {
+    setActiveAgentMenuId(null);
+    setProvisioningAgentId(agent.id);
+
+    const fallbackEmail = agent.email?.trim() || buildFallbackPosEmail(agent.telephone, agent.id);
+    const resetRes = await resetSalesAgentPasswordAccount({
+      agentId: agent.id,
+      email: fallbackEmail,
+      pointDeVente: agent.pointDeVente,
+      gerantName: agent.gerantName,
+      telephone: agent.telephone,
+      eventId: agent.eventId || activeEvent?.id,
+    });
+
+    setProvisioningAgentId(null);
+
+    const resolvedPassword = resetRes.tempPassword || resetRes.password;
+    if (resetRes.success && resolvedPassword) {
+      const resolvedEmail = resetRes.email || fallbackEmail;
+      setAgentCredentialsById((prev) => ({
+        ...prev,
+        [agent.id]: { email: resolvedEmail, tempPassword: resolvedPassword },
+      }));
+      const waUrl = buildAgentAccessWhatsAppUrl(agent, resolvedEmail, resolvedPassword);
+      setAgents((prev) =>
+        prev.map((a) =>
+          a.id === agent.id
+            ? { ...a, userId: resetRes.userId || a.userId, email: resolvedEmail }
+            : a
+        )
+      );
+      setAgentAccessBanner({
+        agent: { ...agent, userId: resetRes.userId || agent.userId, email: resolvedEmail },
+        email: resolvedEmail,
+        tempPassword: resolvedPassword,
+        waUrl,
+      });
+      window.open(waUrl, '_blank', 'noopener,noreferrer');
+    } else {
+      const waUrl = buildAgentAccessWhatsAppUrl(agent, fallbackEmail);
+      setAgentAccessBanner({
+        agent,
+        email: fallbackEmail,
+        waUrl,
+        warning:
+          resetRes.error ||
+          "Impossible de réinitialiser le mot de passe pour ce point de vente.",
       });
     }
   };
@@ -1000,15 +1087,22 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
           res.credentials?.email ||
           res.agent.email ||
           buildFallbackPosEmail(res.agent.telephone, res.agent.id);
+        const generatedPassword = res.credentials?.tempPassword;
+        if (generatedPassword) {
+          setAgentCredentialsById((prev) => ({
+            ...prev,
+            [res.agent!.id]: { email: accessEmail, tempPassword: generatedPassword },
+          }));
+        }
         const waUrl = buildAgentAccessWhatsAppUrl(
           res.agent,
           accessEmail,
-          res.credentials?.tempPassword
+          generatedPassword
         );
         setAgentAccessBanner({
           agent: res.agent,
           email: accessEmail,
-          tempPassword: res.credentials?.tempPassword,
+          tempPassword: generatedPassword,
           waUrl,
           warning: res.provisioningError,
         });
@@ -1257,6 +1351,17 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
           <MessageCircle className="w-4 h-4 text-emerald-400 shrink-0" />
           <span>
             {isProvisioningThis ? 'Préparation des accès...' : 'Envoyer les accès WhatsApp'}
+          </span>
+        </button>
+        <button
+          type="button"
+          disabled={isProvisioningThis}
+          onClick={() => void handleResetAgentPassword(agent)}
+          className="w-full text-left px-3 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/25 text-xs text-amber-300 font-bold flex items-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
+        >
+          <KeyRound className="w-4 h-4 text-[#E9C349] shrink-0" />
+          <span>
+            {isProvisioningThis ? 'Réinitialisation...' : 'Réinitialiser mot de passe'}
           </span>
         </button>
         <button
