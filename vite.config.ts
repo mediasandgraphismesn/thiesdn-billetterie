@@ -10,8 +10,19 @@ export default defineConfig(() => {
       react(),
       tailwindcss(),
       VitePWA({
+        strategies: 'injectManifest',
+        srcDir: 'public',
+        filename: 'sw.js',
         registerType: 'autoUpdate',
-        includeAssets: ['apple-touch-icon.png', 'icon-192x192.png', 'icon-512x512.png', 'logo-tight.png', 'logo.png', 'poster-kmou-jango.jpg', 'poster-saly-jazz.jpg', 'push-handler.js'],
+        includeAssets: [
+          'apple-touch-icon.png',
+          'icon-192x192.png',
+          'icon-512x512.png',
+          'logo-tight.png',
+          'logo.png',
+          'poster-kmou-jango.jpg',
+          'poster-saly-jazz.jpg',
+        ],
         manifest: {
           name: 'Thièsdn',
           short_name: 'Thièsdn',
@@ -43,31 +54,9 @@ export default defineConfig(() => {
             },
           ],
         },
-        workbox: {
-          skipWaiting: true,
-          importScripts: ['/push-handler.js'],
-          clientsClaim: true,
+        injectManifest: {
           maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5 Mo pour autoriser le precache du bundle
           globPatterns: ['**/*.{js,css,html,png,svg,woff2,ico,wasm}'],
-          runtimeCaching: [
-            {
-              // Ne JAMAIS mettre en cache les requêtes de base de données ou d'authentification Supabase
-              urlPattern: /^https:\/\/jgvuzlchemqcfygsylln\.supabase\.co\/.*/i,
-              handler: 'NetworkOnly',
-            },
-            {
-              // Cache adaptatif pour les images proxy WebP
-              urlPattern: /^https:\/\/images\.weserv\.nl\/.*/i,
-              handler: 'StaleWhileRevalidate',
-              options: {
-                cacheName: 'weserv-images-cache',
-                expiration: {
-                  maxEntries: 120,
-                  maxAgeSeconds: 7 * 24 * 60 * 60, // 7 jours
-                },
-              },
-            },
-          ],
         },
       }),
     ],

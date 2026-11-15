@@ -292,8 +292,10 @@ export interface NotificationItem {
   message: string;
   timestamp: string;
   read: boolean;
-  type: 'event' | 'ticket' | 'moderation' | 'vip' | 'event_status' | 'sales' | 'stock' | 'payout' | 'decompte' | string;
+  type: 'purchase' | 'info' | 'warning' | 'event' | 'ticket' | 'moderation' | 'vip' | 'event_status' | 'sales' | 'stock' | 'payout' | 'decompte' | string;
   url?: string;
+  actionUrl?: string;
+  sourceTable?: 'notifications' | 'user_notifications' | 'local';
 }
 
 export type AccreditationType = 'staff' | 'invite' | 'presse';

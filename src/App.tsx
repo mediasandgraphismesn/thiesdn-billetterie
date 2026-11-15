@@ -552,7 +552,7 @@ export default function App() {
     };
   }, [isAuthenticated, isAuthLoading, effectiveRole, user?.id, user?.email, isPosRoute]);
 
-  // Chargement et écoute Realtime des notifications utilisateur (user_notifications)
+  // Chargement et écoute Realtime des notifications multi-canal (public.notifications + legacy user_notifications)
   useEffect(() => {
     if (!isAuthenticated || !user?.id) {
       setNotifications([]);
@@ -567,9 +567,85 @@ export default function App() {
     const client = getSupabaseClient();
     if (!client) return;
 
-    // Écoute Realtime sur user_notifications filtrée sur l'utilisateur connecté
+    const handleRealtimeInsert = (
+      payload: { new?: Record<string, unknown> },
+      sourceTable: 'notifications' | 'user_notifications'
+    ) => {
+      const row = payload.new;
+      if (!row || typeof row.id !== 'string') return;
+
+      const title = typeof row.title === 'string' ? row.title : 'Nouvelle alerte';
+      const body = typeof row.body === 'string' ? row.body : '';
+      const rawUrl =
+        sourceTable === 'notifications'
+          ? (typeof row.action_url === 'string' ? row.action_url : undefined)
+          : (typeof row.url === 'string' ? row.url : undefined);
+      const rawType =
+        sourceTable === 'notifications'
+          ? (typeof row.type === 'string' ? row.type : 'info')
+          : (typeof row.kind === 'string' ? row.kind : 'info');
+      const timestamp =
+        typeof row.created_at === 'string' ? row.created_at : new Date().toISOString();
+      const isRead = sourceTable === 'notifications' ? Boolean(row.read) : Boolean(row.read_at);
+
+      playNotificationChime();
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+        navigator.vibrate([300, 150, 300, 150, 600]);
+      }
+
+      const newItem: NotificationItem = {
+        id: row.id,
+        title,
+        message: body,
+        timestamp,
+        read: isRead,
+        type: rawType,
+        url: rawUrl,
+        actionUrl: rawUrl,
+        sourceTable,
+      };
+
+      setNotifications((prev) => {
+        if (prev.some((n) => n.id === newItem.id)) return prev;
+        return [newItem, ...prev];
+      });
+
+      setUserAlertToast({
+        id: row.id,
+        title,
+        body,
+        url: rawUrl,
+      });
+    };
+
     const channel = client
       .channel(`user-notifications-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => handleRealtimeInsert(payload as { new?: Record<string, unknown> }, 'notifications')
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const row = (payload as { new?: Record<string, unknown> }).new;
+          if (!row || typeof row.id !== 'string') return;
+          setNotifications((prev) =>
+            prev.map((n) => (n.id === row.id ? { ...n, read: Boolean(row.read) } : n))
+          );
+        }
+      )
       .on(
         'postgres_changes',
         {
@@ -578,36 +654,7 @@ export default function App() {
           table: 'user_notifications',
           filter: `user_id=eq.${user.id}`,
         },
-        (payload) => {
-          const row = payload.new as any;
-          if (!row) return;
-
-          // Carillon sonore Web Audio & vibration haptique
-          playNotificationChime();
-          if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-            navigator.vibrate([300, 150, 300, 150, 600]);
-          }
-
-          const newItem: NotificationItem = {
-            id: row.id,
-            title: row.title,
-            message: row.body,
-            timestamp: row.created_at,
-            read: false,
-            type: row.kind,
-            url: row.url || undefined,
-          };
-
-          setNotifications((prev) => [newItem, ...prev]);
-
-          // Toast interactif natif
-          setUserAlertToast({
-            id: row.id,
-            title: row.title,
-            body: row.body,
-            url: row.url || undefined,
-          });
-        }
+        (payload) => handleRealtimeInsert(payload as { new?: Record<string, unknown> }, 'user_notifications')
       )
       .subscribe();
 
@@ -1042,14 +1089,18 @@ export default function App() {
     setUser((prev) => ({ ...prev, ...updated }));
   };
 
-  const handleMarkNotificationRead = (id: string, url?: string) => {
-    markNotificationAsRead(id);
+  const handleMarkNotificationRead = (
+    id: string,
+    url?: string,
+    sourceTable?: NotificationItem['sourceTable']
+  ) => {
+    void markNotificationAsRead(id, sourceTable);
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, read: true } : n))
     );
     if (url) {
       const match = url.match(/[?&]tab=([a-zA-Z0-9_-]+)/);
-      if (match && match[1]) {
+      if (match && match[1] && isTabAllowedForRole(match[1], effectiveRole, isAuthenticated)) {
         handleTabChange(match[1]);
       }
     }
@@ -1367,7 +1418,7 @@ export default function App() {
                     onClick={() => {
                       if (userAlertToast.url) {
                         const match = userAlertToast.url.match(/[?&]tab=([a-zA-Z0-9_-]+)/);
-                        if (match && match[1]) {
+                        if (match && match[1] && isTabAllowedForRole(match[1], effectiveRole, isAuthenticated)) {
                           handleTabChange(match[1]);
                         }
                       }

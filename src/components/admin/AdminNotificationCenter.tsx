@@ -14,6 +14,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { getSupabaseClient } from '../../services/supabase';
+import { persistPushSubscription } from '../../services/userNotificationService';
 import { UserProfile } from '../../types';
 
 interface PushSubscriptionRow {
@@ -267,23 +268,7 @@ export const AdminNotificationCenter: React.FC<AdminNotificationCenterProps> = (
         });
       }
 
-      const subJson = subscription.toJSON();
-      const client = getSupabaseClient();
-      if (!client) throw new Error('Client Supabase non initialisé');
-
-      const { error: upsertErr } = await client.from('push_subscriptions').upsert(
-        {
-          user_id: user.id,
-          endpoint: subscription.endpoint,
-          p256dh: subJson.keys?.p256dh || '',
-          auth: subJson.keys?.auth || '',
-          user_agent: navigator.userAgent.slice(0, 255),
-          last_seen_at: new Date().toISOString(),
-        },
-        { onConflict: 'endpoint' }
-      );
-
-      if (upsertErr) throw upsertErr;
+      await persistPushSubscription(user.id, subscription);
 
       setStatusFeedback({
         type: 'success',

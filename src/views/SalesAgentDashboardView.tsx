@@ -30,8 +30,11 @@ import {
   WifiOff,
   CloudUpload,
   LogOut,
+  Bell,
+  BellRing,
 } from 'lucide-react';
 import { SalesAgent, UserTicket, EventItem, UserProfile } from '../types';
+import { usePushNotifications } from '../hooks/usePushNotifications';
 import {
   startOptimizedScanner,
   OptimizedScannerHandle,
@@ -125,6 +128,16 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
   onSignOut,
 }) => {
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const {
+    isSupported: isPushSupported,
+    isSubscribed: isPushSubscribed,
+    isLoading: isPushLoading,
+    isIosNeedsInstall: isPosIosNeedsInstall,
+    error: pushError,
+    statusMessage: pushStatusMessage,
+    subscribe: subscribePosPush,
+  } = usePushNotifications(user?.id);
+  const [posPushFeedback, setPosPushFeedback] = useState<{ ok: boolean; text: string } | null>(null);
   const isConnected = isSupabaseConfigured();
   const initialOfflineSnapshot = useMemo(
     () => loadPosAgentSnapshot(currentAgentId || user?.assignedAgentId),
@@ -1040,6 +1053,46 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
           <button
             type="button"
             onClick={() => {
+              void (async () => {
+                setPosPushFeedback(null);
+                const res = await subscribePosPush();
+                setPosPushFeedback({ ok: res.success, text: res.message });
+              })();
+            }}
+            disabled={isPushLoading}
+            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-heading font-bold uppercase tracking-wider border transition-all cursor-pointer disabled:opacity-50 ${
+              isPushSubscribed
+                ? 'bg-emerald-950/50 border-emerald-500/40 text-emerald-300 hover:bg-emerald-950/75'
+                : 'bg-[#8A2BE2]/20 hover:bg-[#8A2BE2]/35 border-[#8A2BE2]/50 text-[#DCB8FF]'
+            }`}
+            title={
+              isPosIosNeedsInstall
+                ? "Installez la PWA sur l'écran d'accueil iOS pour activer les alertes"
+                : !isPushSupported
+                  ? 'Notifications Push non supportées sur ce navigateur'
+                  : isPushSubscribed
+                    ? 'Alertes Push actives sur ce guichet'
+                    : 'Activer les notifications push sur ce guichet'
+            }
+            aria-label="Activer les notifications push"
+          >
+            {isPushSubscribed ? (
+              <BellRing className="w-4 h-4 text-emerald-400 shrink-0" />
+            ) : (
+              <Bell className={`w-4 h-4 text-[#E9C349] shrink-0 ${isPushLoading ? 'animate-pulse' : ''}`} />
+            )}
+            <span>
+              {isPushLoading
+                ? 'Activation...'
+                : isPushSubscribed
+                  ? 'Alertes actives'
+                  : 'Activer les alertes'}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
               void handleRefresh();
             }}
             disabled={isRefreshing}
@@ -1065,6 +1118,26 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
           )}
         </div>
       </div>
+
+      {/* Feedback activation notifications Push sur ce guichet POS */}
+      {(posPushFeedback || pushError || pushStatusMessage) && (
+        <div
+          className={`p-3 rounded-2xl border text-xs font-medium flex items-center justify-between gap-2 animate-in fade-in ${
+            posPushFeedback?.ok === false || (pushError && !posPushFeedback?.ok)
+              ? 'bg-rose-950/60 border-rose-500/40 text-rose-200'
+              : 'bg-emerald-950/60 border-emerald-500/40 text-emerald-200'
+          }`}
+        >
+          <span>{posPushFeedback?.text || pushError || pushStatusMessage}</span>
+          <button
+            type="button"
+            onClick={() => setPosPushFeedback(null)}
+            className="text-white/70 hover:text-white text-[11px] font-bold px-2 py-0.5 rounded-lg bg-white/5 cursor-pointer"
+          >
+            OK
+          </button>
+        </div>
+      )}
 
       {/* Bandeau confirmation synchronisation automatique après reconnexion */}
       {offlineSyncBanner && (

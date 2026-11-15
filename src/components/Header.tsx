@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
-  Bell,
   Sliders,
   Shield,
   User,
@@ -10,11 +9,16 @@ import {
   Handshake,
 } from 'lucide-react';
 import { NotificationItem, UserProfile } from '../types';
+import { NotificationBell } from './NotificationBell';
 
 interface HeaderProps {
   user: UserProfile;
   notifications: NotificationItem[];
-  onMarkNotificationRead: (id: string, url?: string) => void;
+  onMarkNotificationRead: (
+    id: string,
+    url?: string,
+    sourceTable?: NotificationItem['sourceTable']
+  ) => void;
   onClearNotifications: () => void;
   currentRole: 'user' | 'promoter' | 'admin' | 'sales_agent' | 'artist';
   isAuthenticated?: boolean;
@@ -42,14 +46,10 @@ export const Header: React.FC<HeaderProps> = ({
   onNavigate,
   isAdminPreview = false,
 }) => {
-  const [showNotifications, setShowNotifications] = useState(false);
-
-  const unreadCount = notifications.filter((n) => !n.read).length;
-
   return (
     <header className="bg-[#131313]/95 backdrop-blur-xl border-b border-white/10 sticky top-0 z-50 px-3 sm:px-6 h-[60px] w-full flex items-center justify-between transition-all pt-[env(safe-area-inset-top)]">
       {/* Brand & Logo Officiel */}
-      <div 
+      <div
         onClick={() => onNavigate(currentRole === 'admin' && !isAdminPreview ? 'dashboard' : 'home')}
         className="flex items-center gap-2 sm:gap-3 cursor-pointer group min-w-0 flex-1 sm:flex-initial mr-2 sm:mr-0"
       >
@@ -134,72 +134,14 @@ export const Header: React.FC<HeaderProps> = ({
           <Sliders className="w-4 h-4" />
         </button>
 
-        {/* Notifications Popover : Uniquement pour les utilisateurs connectés */}
-        {isAuthenticated && (
-          <div className="relative">
-            <button
-              onClick={() => setShowNotifications(!showNotifications)}
-              className="w-10 h-10 min-w-[40px] min-h-[40px] flex items-center justify-center rounded-xl bg-[#1C1B1B] hover:bg-[#2A2A2A] border border-white/10 text-[#DCB8FF] transition-all relative"
-              aria-label="Notifications"
-            >
-              <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
-              {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#E9C349] text-[#241A00] rounded-full text-[10px] font-extrabold flex items-center justify-center shadow-md">
-                  {unreadCount}
-                </span>
-              )}
-            </button>
-
-            {showNotifications && (
-              <div className="fixed inset-x-3 top-16 sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-3 sm:w-96 glass-panel rounded-2xl p-4 shadow-2xl z-50 animate-in fade-in slide-in-from-top-2 duration-200 border border-white/10">
-                <div className="flex items-center justify-between pb-3 border-b border-white/10">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-heading font-bold text-sm text-white">Notifications</h3>
-                    {unreadCount > 0 && (
-                      <span className="bg-[#8A2BE2]/30 text-[#DCB8FF] text-[11px] font-semibold px-2 py-0.5 rounded-full">
-                        {unreadCount} nouvelles
-                      </span>
-                    )}
-                  </div>
-                  {notifications.length > 0 && (
-                    <button
-                      onClick={onClearNotifications}
-                      className="text-[11px] text-[#DCB8FF] hover:underline"
-                    >
-                      Tout marquer comme lu
-                    </button>
-                  )}
-                </div>
-
-                <div className="divide-y divide-white/5 max-h-80 overflow-y-auto mt-2">
-                  {notifications.length === 0 ? (
-                    <div className="py-6 text-center text-xs text-gray-400">
-                      Aucune notification pour le moment.
-                    </div>
-                  ) : (
-                    notifications.map((notif) => (
-                      <div
-                        key={notif.id}
-                        onClick={() => onMarkNotificationRead(notif.id, notif.url)}
-                        className={`p-3 rounded-xl transition-all cursor-pointer ${
-                          notif.read ? 'opacity-60' : 'bg-white/5'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <h4 className="text-xs font-bold text-white">{notif.title}</h4>
-                          <span className="text-[10px] text-gray-400 whitespace-nowrap">
-                            {notif.timestamp}
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-gray-300 mt-0.5">{notif.message}</p>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+        {/* Notifications Multi-Canal & Web Push : Cloche + badge rouge + Opt-in */}
+        <NotificationBell
+          userId={user.id}
+          notifications={notifications}
+          onMarkNotificationRead={onMarkNotificationRead}
+          onClearNotifications={onClearNotifications}
+          isAuthenticated={isAuthenticated}
+        />
 
         {/* User Avatar & Accès Profil */}
         {isAuthenticated && (

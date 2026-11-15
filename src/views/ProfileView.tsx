@@ -832,7 +832,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             )}
 
             {/* Activation Push sur cet Appareil */}
-            {['admin', 'promoter', 'artist'].includes(user.role) && (
+            {!isPosAccount && (
               <div className="p-4 rounded-2xl bg-white/5 border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-xl bg-[#8A2BE2]/20 border border-[#8A2BE2]/40 text-[#DCB8FF] flex items-center justify-center shrink-0">
