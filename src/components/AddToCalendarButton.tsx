@@ -11,12 +11,14 @@ interface AddToCalendarButtonProps {
   eventData: CalendarEventData;
   className?: string;
   variant?: 'primary' | 'secondary' | 'compact';
+  iconOnly?: boolean;
 }
 
 export const AddToCalendarButton: React.FC<AddToCalendarButtonProps> = ({
   eventData,
   className = '',
   variant = 'primary',
+  iconOnly = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
@@ -55,11 +57,19 @@ export const AddToCalendarButton: React.FC<AddToCalendarButtonProps> = ({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs uppercase tracking-wider transition-all ${buttonStyles[variant]}`}
+        title="Ajouter au calendrier"
+        aria-label="Ajouter au calendrier"
+        className={`flex items-center justify-center ${
+          iconOnly ? 'w-9 h-9 p-0' : 'gap-2 py-3 px-4'
+        } rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer ${buttonStyles[variant]}`}
       >
-        <Calendar className="w-4 h-4 text-current" />
-        <span>Ajouter au calendrier</span>
-        <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+        <Calendar className="w-4 h-4 text-current shrink-0" />
+        {!iconOnly && (
+          <>
+            <span>Ajouter au calendrier</span>
+            <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+          </>
+        )}
       </button>
 
       {isOpen && (

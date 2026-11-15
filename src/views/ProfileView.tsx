@@ -958,35 +958,63 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             Vous n'avez pas encore acheté de billet. Explorez nos soirées exclusives !
           </p>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {tickets.map((tkt) => (
-              <div
-                key={tkt.id}
-                onClick={() => onOpenTicketPass(tkt)}
-                className="p-4 rounded-2xl bg-[#1A1A1A] border border-white/10 hover:border-[#8A2BE2] cursor-pointer transition-all flex items-center justify-between gap-3 group"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <img
-                    src={tkt.eventPoster}
-                    alt={tkt.eventTitle}
-                    className="w-14 h-14 rounded-xl object-cover flex-shrink-0 group-hover:scale-105 transition-transform"
-                  />
-                  <div className="min-w-0">
-                    <span className="text-[10px] font-bold text-[#E9C349] uppercase block truncate">
-                      {tkt.tierName}
-                    </span>
-                    <h4 className="font-heading font-bold text-sm text-white truncate">
-                      {tkt.eventTitle}
-                    </h4>
-                    <p className="text-xs text-gray-400 truncate">{tkt.eventDate}</p>
-                  </div>
-                </div>
+          <div className="space-y-2.5">
+            {tickets.map((tkt) => {
+              const statusBadge =
+                tkt.status === 'used' || tkt.status === 'scanned'
+                  ? { label: 'Scanné', cls: 'bg-blue-500/15 text-blue-300 border-blue-500/30' }
+                  : tkt.status === 'cancelled'
+                  ? { label: 'Annulé', cls: 'bg-red-500/15 text-red-300 border-red-500/30' }
+                  : tkt.status === 'pending' || tkt.status === 'payment_signaled'
+                  ? { label: 'En vérif.', cls: 'bg-amber-500/15 text-amber-300 border-amber-500/30' }
+                  : { label: 'Valide', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' };
 
-                <button className="btn-primary-glow p-2 rounded-xl text-white flex-shrink-0">
-                  <ExternalLink className="w-4 h-4" />
-                </button>
-              </div>
-            ))}
+              return (
+                <div
+                  key={tkt.id}
+                  onClick={() => onOpenTicketPass(tkt)}
+                  className="p-3 rounded-2xl bg-[#1A1A1A] border border-white/10 hover:border-[#8A2BE2] cursor-pointer transition-all flex items-center justify-between gap-3 group"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <img
+                      src={tkt.eventPoster}
+                      alt={tkt.eventTitle}
+                      loading="lazy"
+                      decoding="async"
+                      className="w-12 h-12 rounded-xl object-cover flex-shrink-0 group-hover:scale-105 transition-transform"
+                    />
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold text-[#E9C349] uppercase truncate">
+                          {tkt.tierName}
+                        </span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${statusBadge.cls}`}>
+                          {statusBadge.label}
+                        </span>
+                      </div>
+                      <h4 className="font-heading font-bold text-sm text-white truncate">
+                        {tkt.eventTitle}
+                      </h4>
+                      <p className="text-xs text-gray-400 truncate">
+                        {tkt.eventDate}{tkt.eventTime ? ` • ${tkt.eventTime}` : ''}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenTicketPass(tkt);
+                    }}
+                    className="btn-primary-glow px-3 py-2 rounded-xl text-white text-xs font-bold flex items-center gap-1.5 flex-shrink-0 whitespace-nowrap"
+                  >
+                    <Ticket className="w-3.5 h-3.5" />
+                    <span>Voir mon Pass</span>
+                  </button>
+                </div>
+              );
+            })}
           </div>
         )}
       </section>

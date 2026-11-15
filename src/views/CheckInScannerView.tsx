@@ -649,6 +649,8 @@ export const CheckInScannerView: React.FC<CheckInScannerViewProps> = ({
                 <img
                   src={tkt.eventPoster}
                   alt={tkt.eventTitle}
+                  loading="lazy"
+                  decoding="async"
                   className="w-12 h-12 rounded-xl object-cover"
                 />
                 <div>

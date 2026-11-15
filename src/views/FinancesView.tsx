@@ -97,6 +97,8 @@ import { ArtistDashboardView } from './ArtistDashboardView';
 import { AccreditationsView } from './AccreditationsView';
 import { ScanStationsView } from './ScanStationsView';
 import { AssignPhysicalTicketsModal } from '../components/AssignPhysicalTicketsModal';
+import { SoldTicketsSection } from '../components/admin/SoldTicketsSection';
+import { TicketDetailModal } from '../components/TicketDetailModal';
 
 interface FinancesViewProps {
   currentRole: 'user' | 'promoter' | 'admin';
@@ -217,6 +219,8 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
 
   // Aperçu du Guichet Vendeur Mobile
   const [previewAgent, setPreviewAgent] = useState<SalesAgent | null>(null);
+  // Inspection modale d'un billet vendu (mode promoteur/admin)
+  const [selectedTicketForModal, setSelectedTicketForModal] = useState<UserTicket | null>(null);
 
   // Menu Options Avancées
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
@@ -437,6 +441,11 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
     status === 'scanned' ||
     status === 'used' ||
     status === 'valid';
+
+  const promoterSoldTickets = useMemo(
+    () => filteredTickets.filter((t) => isSoldTicketStatus(t.status)),
+    [filteredTickets]
+  );
 
   // Billets digitaux vendus ou scannés de l'événement actif UNIQUEMENT
   const digitalSoldTickets = useMemo(() => {
@@ -2996,6 +3005,22 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                 </div>
               </div>
             )}
+
+            {/* Registre compact des billets vendus + Modale QR à la demande */}
+            <div className="pt-4 border-t border-white/10">
+              <SoldTicketsSection
+                tickets={promoterSoldTickets}
+                events={promoterEvents}
+                onOpenTicketModal={(tkt) => setSelectedTicketForModal(tkt)}
+              />
+            </div>
+
+            <TicketDetailModal
+              ticket={selectedTicketForModal}
+              isOpen={selectedTicketForModal !== null}
+              onClose={() => setSelectedTicketForModal(null)}
+              mode="admin"
+            />
           </div>
         )}
 

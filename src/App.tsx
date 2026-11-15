@@ -4,7 +4,7 @@ import { Sidebar } from './components/Sidebar';
 import { BottomNav } from './components/BottomNav';
 import { ShaderBackground } from './components/ShaderBackground';
 import { EventDetailModal } from './components/EventDetailModal';
-import { TicketPassModal } from './components/TicketPassModal';
+import { TicketDetailModal } from './components/TicketDetailModal';
 import { Footer } from './components/Footer';
 import { PWAInstallPrompt } from './components/PWAInstallPrompt';
 import { ShieldAlert, Eye, ArrowRight, X } from 'lucide-react';
@@ -1880,10 +1880,11 @@ export default function App() {
       />
 
       {/* Digital Ticket Pass Modal */}
-      <TicketPassModal
+      <TicketDetailModal
         ticket={selectedTicketForPass}
         isOpen={selectedTicketForPass !== null}
         onClose={() => setSelectedTicketForPass(null)}
+        mode="client"
       />
 
       {/* Bannière PWA d'installation (mobile exclusif) */}

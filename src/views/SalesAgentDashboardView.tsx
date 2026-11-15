@@ -32,6 +32,8 @@ import {
   LogOut,
   Bell,
   BellRing,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { SalesAgent, UserTicket, EventItem, UserProfile } from '../types';
 import { usePushNotifications } from '../hooks/usePushNotifications';
@@ -181,6 +183,9 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
   const [selectedManualTicketCode, setSelectedManualTicketCode] = useState('');
   const [manualFilterQuery, setManualFilterQuery] = useState('');
   const [inventoryFilter, setInventoryFilter] = useState<'all' | 'printed_not_sold' | 'sold'>('all');
+  const [inventorySearch, setInventorySearch] = useState('');
+  const [inventoryPage, setInventoryPage] = useState(1);
+  const INVENTORY_PAGE_SIZE = 25;
   const [pendingTicketForConfirm, setPendingTicketForConfirm] = useState<UserTicket | null>(null);
   const [isSubmittingSale, setIsSubmittingSale] = useState(false);
   const [buyerName, setBuyerName] = useState('');
@@ -347,6 +352,17 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
           ? soldAgentTickets
           : agentTickets;
 
+    const q = inventorySearch.trim().toLowerCase();
+    const filtered = q
+      ? base.filter(
+          (t) =>
+            (t.qrCode || '').toLowerCase().includes(q) ||
+            (t.tierName || '').toLowerCase().includes(q) ||
+            (t.holderName || '').toLowerCase().includes(q) ||
+            (t.holderPhone || '').toLowerCase().includes(q)
+        )
+      : base;
+
     const getPriority = (status: UserTicket['status']): number => {
       if (isTicketUnsoldStatus(status)) return 0;
       if (status === 'sold_valid' || status === 'physical_sold') return 1;
@@ -354,7 +370,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
       return 3;
     };
 
-    return [...base].sort((a, b) => {
+    return [...filtered].sort((a, b) => {
       const pDiff = getPriority(a.status) - getPriority(b.status);
       if (pDiff !== 0) return pDiff;
       if (typeof a.serialNumber === 'number' && typeof b.serialNumber === 'number') {
@@ -362,7 +378,18 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
       }
       return a.qrCode.localeCompare(b.qrCode);
     });
-  }, [agentTickets, unsoldAgentTickets, soldAgentTickets, inventoryFilter]);
+  }, [agentTickets, unsoldAgentTickets, soldAgentTickets, inventoryFilter, inventorySearch]);
+
+  useEffect(() => {
+    setInventoryPage(1);
+  }, [inventoryFilter, inventorySearch, selectedAgentId]);
+
+  const inventoryTotalPages = Math.max(1, Math.ceil(sortedFilteredInventoryTickets.length / INVENTORY_PAGE_SIZE));
+  const safeInventoryPage = Math.min(inventoryPage, inventoryTotalPages);
+  const paginatedInventoryTickets = useMemo(() => {
+    const start = (safeInventoryPage - 1) * INVENTORY_PAGE_SIZE;
+    return sortedFilteredInventoryTickets.slice(start, start + INVENTORY_PAGE_SIZE);
+  }, [sortedFilteredInventoryTickets, safeInventoryPage]);
 
   useEffect(() => {
     if (currentAgentId && currentAgentId !== selectedAgentId) {
@@ -1753,15 +1780,15 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
       )}
 
       {/* INVENTAIRE DÉTAILLÉ DU STOCK PHYSIQUE DU COLLABORATEUR */}
-      <div className="glass-panel p-5 rounded-3xl border border-white/10 space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-3">
+      <div className="glass-panel p-4 sm:p-5 rounded-3xl border border-white/10 space-y-3.5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-white/10 pb-3">
           <div>
             <h3 className="font-heading font-extrabold text-base text-white flex items-center gap-2">
               <Ticket className="w-4 h-4 text-[#E9C349]" />
-              <span>Inventaire des Billets Physiques du Guichet</span>
+              <span>Inventaire des Billets Physiques ({sortedFilteredInventoryTickets.length})</span>
             </h3>
             <p className="text-xs text-gray-400">
-              Suivi unitaire de chaque code QR : inactif tant que non vendu.
+              Liste textuelle compacte • Aucun QR code affiché ici : cliquez sur « Scanner/Vendre » pour activer un billet.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
@@ -1788,6 +1815,18 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
           </div>
         </div>
 
+        {/* Recherche rapide dans l'inventaire */}
+        <div className="relative">
+          <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <input
+            type="text"
+            value={inventorySearch}
+            onChange={(e) => setInventorySearch(e.target.value)}
+            placeholder="Rechercher un code billet, acheteur, catégorie..."
+            className="w-full pl-9 pr-3 py-2 rounded-xl bg-black/30 border border-white/10 text-xs sm:text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-[#E9C349]"
+          />
+        </div>
+
         {sortedFilteredInventoryTickets.length === 0 ? (
           <p className="text-xs text-gray-500 py-4 text-center">
             {agentTickets.length === 0
@@ -1796,191 +1835,126 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
           </p>
         ) : (
           <>
-            {/* Vue Cartes Mobile (< 768px) */}
-            <div className="block md:hidden space-y-3">
-              {sortedFilteredInventoryTickets.map((t) => {
+            {/* Liste textuelle ultra-simple (Code du billet, Statut, Bouton Scanner/Vendre) */}
+            <div className="rounded-2xl bg-black/25 border border-white/10 divide-y divide-white/5 overflow-hidden">
+              {paginatedInventoryTickets.map((t) => {
                 const isUnsold = isTicketUnsoldStatus(t.status);
                 const isSoldValid = t.status === 'sold_valid' || t.status === 'physical_sold';
                 const isScanned = t.status === 'scanned' || t.status === 'used';
                 const isCancelled = t.status === 'cancelled';
+                const isPendingSync =
+                  isSoldValid && pendingOfflineQrSet.has((t.qrCode || '').trim().toUpperCase());
+
+                const statusLabel = isUnsold
+                  ? 'En stock'
+                  : isScanned
+                    ? 'Scanné'
+                    : isCancelled
+                      ? 'Désactivé'
+                      : isPendingSync
+                        ? 'Vendu (Synchro attente)'
+                        : 'Vendu';
+
+                const statusClass = isUnsold
+                  ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                  : isScanned
+                    ? 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30'
+                    : isCancelled
+                      ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+                      : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
 
                 return (
-                  <div key={t.id} className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-1.5 font-mono font-bold text-white text-xs truncate">
-                        <QrCode className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                        <span className="truncate">{t.qrCode}</span>
-                      </div>
-                      <div>
-                        {isUnsold && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 text-[10px] font-bold">
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                            En stock
-                          </span>
-                        )}
-                        {isSoldValid && (
-                          <div className="flex flex-wrap items-center gap-1 justify-end">
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold">
-                              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                              Vendu
-                            </span>
-                            {pendingOfflineQrSet.has(t.qrCode.trim().toUpperCase()) && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-200 border border-amber-400/40 text-[10px] font-bold">
-                                <CloudUpload className="w-2.5 h-2.5" />
-                                Attente synchro
-                              </span>
-                            )}
-                          </div>
-                        )}
-                        {isScanned && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 text-[10px] font-bold">
-                            <Check className="w-3 h-3 text-indigo-400" />
-                            Scanné
-                          </span>
-                        )}
-                        {isCancelled && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-300 border border-rose-500/30 text-[10px] font-bold">
-                            <AlertCircle className="w-3 h-3 text-rose-400" />
-                            Désactivé
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between text-xs bg-black/30 p-2.5 rounded-xl border border-white/5">
-                      <span className="text-gray-300 font-medium truncate">
-                        {t.tierName}
+                  <div
+                    key={t.id}
+                    className="px-3 py-2.5 flex items-center justify-between gap-2.5 hover:bg-white/[0.02] transition-colors"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="font-mono font-bold text-xs sm:text-sm text-white truncate">
+                        {t.qrCode}
+                      </p>
+                      <p className="text-[11px] text-gray-400 truncate">
+                        {t.tierName} • {(t.price || 0).toLocaleString('fr-FR')} F
                         {!isUnsold && t.holderName && t.holderName !== 'Billet Physique Non Vendu'
                           ? ` • ${t.holderName}`
                           : ''}
-                      </span>
-                      <span className="font-heading font-extrabold text-[#E9C349] text-sm">
-                        {t.price.toLocaleString('fr-FR')} FCFA
-                      </span>
+                      </p>
                     </div>
 
-                    {isUnsold ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setBuyerName('');
-                          setBuyerPhone('');
-                          setSaleMode('scan');
-                          setShowSaleModal(true);
-                          setManualTicketCode(t.qrCode);
-                          handleCheckTicketForSale(t.qrCode);
-                        }}
-                        className="w-full min-h-[44px] rounded-xl bg-gradient-to-r from-[#E9C349]/20 to-[#E9C349]/30 hover:from-[#E9C349]/30 hover:to-[#E9C349]/40 text-[#E9C349] font-heading font-bold text-xs border border-[#E9C349]/40 flex items-center justify-center gap-2 transition-all cursor-pointer"
-                      >
-                        <ShoppingCart className="w-4 h-4" />
-                        <span>Activer la Vente Nominative</span>
-                      </button>
-                    ) : (
-                      <div className="w-full py-2 rounded-xl bg-white/5 text-center text-xs text-gray-400">
-                        {t.holderPhone ? `Client : ${t.holderName} (${t.holderPhone})` : 'Billet déjà validé et sécurisé'}
-                      </div>
-                    )}
+                    <span
+                      className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusClass}`}
+                    >
+                      {statusLabel}
+                    </span>
+
+                    <div className="shrink-0">
+                      {isUnsold ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setBuyerName('');
+                            setBuyerPhone('');
+                            setSaleMode('scan');
+                            setShowSaleModal(true);
+                            setManualTicketCode(t.qrCode);
+                            handleCheckTicketForSale(t.qrCode);
+                          }}
+                          className="px-2.5 py-1.5 rounded-lg bg-[#E9C349]/20 hover:bg-[#E9C349]/30 text-[#E9C349] font-bold text-[11px] border border-[#E9C349]/40 transition-colors whitespace-nowrap"
+                        >
+                          Scanner/Vendre
+                        </button>
+                      ) : (
+                        <span className="inline-block px-2 py-1 text-[10px] font-medium text-gray-500">
+                          Validé
+                        </span>
+                      )}
+                    </div>
                   </div>
                 );
               })}
             </div>
 
-            {/* Vue Tableau Desktop (>= 768px) */}
-            <div className="overflow-x-auto hidden md:block">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-white/5 text-gray-400 uppercase font-heading text-[10px]">
-                  <th className="py-2.5 px-3">Numéro / Code</th>
-                  <th className="py-2.5 px-3">Catégorie</th>
-                  <th className="py-2.5 px-3">Prix</th>
-                  <th className="py-2.5 px-3">Statut Sécurité</th>
-                  <th className="py-2.5 px-3 text-right">Action Vente</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {sortedFilteredInventoryTickets.map((t) => {
-                  const isUnsold = isTicketUnsoldStatus(t.status);
-                  const isSoldValid = t.status === 'sold_valid' || t.status === 'physical_sold';
-                  const isScanned = t.status === 'scanned' || t.status === 'used';
-                  const isCancelled = t.status === 'cancelled';
+            {/* Pagination 25 billets par page */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-1 text-xs text-gray-400">
+              <span>
+                Affichage{' '}
+                <strong className="text-white">
+                  {(safeInventoryPage - 1) * INVENTORY_PAGE_SIZE + 1}
+                </strong>
+                –
+                <strong className="text-white">
+                  {Math.min(
+                    safeInventoryPage * INVENTORY_PAGE_SIZE,
+                    sortedFilteredInventoryTickets.length
+                  )}
+                </strong>{' '}
+                sur <strong className="text-white">{sortedFilteredInventoryTickets.length}</strong>{' '}
+                billet(s)
+              </span>
 
-                  return (
-                    <tr key={t.id} className="hover:bg-white/[0.02] transition-colors">
-                      <td className="py-2.5 px-3 font-mono font-bold text-white flex items-center gap-1.5">
-                        <QrCode className="w-3.5 h-3.5 text-gray-500 shrink-0" />
-                        <span>{t.qrCode}</span>
-                      </td>
-                      <td className="py-2.5 px-3 text-gray-300">
-                        <span>{t.tierName}</span>
-                        {!isUnsold && t.holderName && t.holderName !== 'Billet Physique Non Vendu' && (
-                          <span className="block text-[10px] text-gray-400">
-                            {t.holderName} {t.holderPhone ? `• ${t.holderPhone}` : ''}
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-2.5 px-3 font-bold text-white">
-                        {t.price.toLocaleString('fr-FR')} F
-                      </td>
-                      <td className="py-2.5 px-3">
-                        {isUnsold && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 text-[10px] font-bold">
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                            En stock (printed_not_sold)
-                          </span>
-                        )}
-                        {isSoldValid && (
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold">
-                              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                              Vendu (sold_valid)
-                            </span>
-                            {pendingOfflineQrSet.has(t.qrCode.trim().toUpperCase()) && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-200 border border-amber-400/40 text-[10px] font-bold">
-                                <CloudUpload className="w-3 h-3" />
-                                Mode Hors-Ligne - En attente de synchronisation
-                              </span>
-                            )}
-                          </div>
-                        )}
-                        {isScanned && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 text-[10px] font-bold">
-                            <Check className="w-3 h-3 text-indigo-400" />
-                            Scanné à l'Entrée
-                          </span>
-                        )}
-                        {isCancelled && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-300 border border-rose-500/30 text-[10px] font-bold">
-                            <AlertCircle className="w-3 h-3 text-rose-400" />
-                            Désactivé
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-2.5 px-3 text-right">
-                        {isUnsold ? (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setBuyerName('');
-                              setBuyerPhone('');
-                              setSaleMode('scan');
-                              setShowSaleModal(true);
-                              setManualTicketCode(t.qrCode);
-                              handleCheckTicketForSale(t.qrCode);
-                            }}
-                            className="px-2.5 py-1 rounded-lg bg-[#E9C349]/20 hover:bg-[#E9C349]/30 text-[#E9C349] font-bold text-[10px] border border-[#E9C349]/40 transition-all"
-                          >
-                            Activer la Vente
-                          </button>
-                        ) : (
-                          <span className="text-[10px] text-gray-500 italic">Validé</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={safeInventoryPage <= 1}
+                  onClick={() => setInventoryPage((p) => Math.max(1, p - 1))}
+                  className="px-2.5 py-1 rounded-xl bg-white/5 hover:bg-white/10 disabled:opacity-40 disabled:pointer-events-none border border-white/10 text-white font-semibold inline-flex items-center gap-1"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                  <span>Précédent</span>
+                </button>
+                <span className="px-2 py-1 rounded-lg bg-white/5 border border-white/10 text-white font-bold">
+                  {safeInventoryPage} / {inventoryTotalPages}
+                </span>
+                <button
+                  type="button"
+                  disabled={safeInventoryPage >= inventoryTotalPages}
+                  onClick={() => setInventoryPage((p) => Math.min(inventoryTotalPages, p + 1))}
+                  className="px-2.5 py-1 rounded-xl bg-white/5 hover:bg-white/10 disabled:opacity-40 disabled:pointer-events-none border border-white/10 text-white font-semibold inline-flex items-center gap-1"
+                >
+                  <span>Suivant</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
           </>
         )}
       </div>

@@ -35,7 +35,7 @@ import { StatsCard } from '../components/admin/StatsCard';
 import { OrdersTable } from '../components/admin/OrdersTable';
 import { SoldTicketsSection } from '../components/admin/SoldTicketsSection';
 import { fetchAllSoldTicketsFromSupabase } from '../services/supabase';
-import { TicketPassModal } from '../components/TicketPassModal';
+import { TicketDetailModal } from '../components/TicketDetailModal';
 
 interface AdminDashboardProps {
   events: EventItem[];
@@ -480,10 +480,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       />
 
       {/* Modale d'inspection et téléchargement direct du Pass HD */}
-      <TicketPassModal
+      <TicketDetailModal
         ticket={selectedTicketForPass}
         isOpen={selectedTicketForPass !== null}
         onClose={() => setSelectedTicketForPass(null)}
+        mode="admin"
       />
 
       {/* SECTION SECONDAIRE : ÉVÉNEMENTS EN ATTENTE DE MODÉRATION */}

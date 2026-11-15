@@ -22,6 +22,8 @@ import {
   MessageSquare,
   RotateCcw,
   User,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { UserTicket, OrderRecord } from '../types';
 import { getStoredOrders, fetchOrdersFromSupabase, cancelTicketAssignment } from '../services/supabase';
@@ -56,6 +58,14 @@ export const TicketsWalletView: React.FC<TicketsWalletViewProps> = ({
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [selectedTicketForAssign, setSelectedTicketForAssign] = useState<UserTicket | null>(null);
   const [cancellingTicketId, setCancellingTicketId] = useState<string | null>(null);
+  const [upcomingPage, setUpcomingPage] = useState<number>(1);
+  const [pastPage, setPastPage] = useState<number>(1);
+  const WALLET_PAGE_SIZE = 25;
+
+  useEffect(() => {
+    setUpcomingPage(1);
+    setPastPage(1);
+  }, [tickets.length, orderFilter, ticketFilter]);
 
   useEffect(() => {
     fetchOrdersFromSupabase(userId ? { userId } : undefined).then((res) => {
@@ -119,6 +129,39 @@ export const TicketsWalletView: React.FC<TicketsWalletViewProps> = ({
     : tickets;
   const upcomingTickets = filteredByOrderTickets.filter((t) => !isTicketPast(t));
   const pastTickets = tickets.filter((t) => isTicketPast(t));
+
+  const upcomingTotalPages = Math.max(1, Math.ceil(upcomingTickets.length / WALLET_PAGE_SIZE));
+  const safeUpcomingPage = Math.min(upcomingPage, upcomingTotalPages);
+  const paginatedUpcomingTickets = upcomingTickets.slice(
+    (safeUpcomingPage - 1) * WALLET_PAGE_SIZE,
+    safeUpcomingPage * WALLET_PAGE_SIZE
+  );
+
+  const pastTotalPages = Math.max(1, Math.ceil(pastTickets.length / WALLET_PAGE_SIZE));
+  const safePastPage = Math.min(pastPage, pastTotalPages);
+  const paginatedPastTickets = pastTickets.slice(
+    (safePastPage - 1) * WALLET_PAGE_SIZE,
+    safePastPage * WALLET_PAGE_SIZE
+  );
+
+  const getTicketStatusMeta = (ticket: UserTicket) => {
+    if (ticket.status === 'used' || ticket.status === 'scanned') {
+      return { label: 'Scanné', className: 'bg-blue-500/15 text-blue-300 border-blue-500/30' };
+    }
+    if (ticket.status === 'cancelled') {
+      return { label: 'Annulé', className: 'bg-red-500/15 text-red-300 border-red-500/30' };
+    }
+    if (ticket.status === 'pending' || ticket.status === 'payment_signaled') {
+      return { label: 'Paiement en vérif.', className: 'bg-amber-500/15 text-amber-300 border-amber-500/30' };
+    }
+    if (ticket.assignmentStatus === 'pending') {
+      return { label: "En attente d'acceptation", className: 'bg-amber-500/15 text-amber-300 border-amber-500/30' };
+    }
+    if (ticket.assignmentStatus === 'accepted') {
+      return { label: 'Transféré', className: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' };
+    }
+    return { label: 'Valide', className: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' };
+  };
 
   const pendingOrders = orders.filter((o) => o.status === 'pending' || o.status === 'payment_signaled');
 
@@ -237,202 +280,190 @@ export const TicketsWalletView: React.FC<TicketsWalletViewProps> = ({
                   </button>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  {upcomingTickets.map((ticket) => (
-                    <div
-                      key={ticket.id}
-                      onClick={() => onOpenPass(ticket)}
-                      className="glass-panel rounded-3xl p-5 hover:border-[#8A2BE2] transition-all cursor-pointer group relative overflow-hidden shadow-xl"
-                    >
-                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                        {/* Poster Thumbnail optimisé WebP + Lazy Loading */}
-                        <div className="w-full sm:w-28 h-28 rounded-2xl overflow-hidden flex-shrink-0 relative bg-[#141414]">
-                          <SafeImage
-                            src={getOptimizedImageUrl(ticket.eventPoster, 400)}
-                            rawSrc={ticket.eventPoster}
-                            alt={ticket.eventTitle}
-                            loading="lazy"
-                            decoding="async"
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                          />
-                          <div className="absolute top-1 left-1 bg-[#E9C349] text-[#241A00] text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded">
-                            {ticket.tierName}
-                          </div>
-                        </div>
+                <div className="space-y-2.5">
+                  {paginatedUpcomingTickets.map((ticket) => {
+                    const statusMeta = getTicketStatusMeta(ticket);
 
-                        {/* Details */}
-                        <div className="flex-1 min-w-0 space-y-1.5">
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-extrabold uppercase text-[#E9C349] tracking-wider">
-                              Pass Exclusif
-                            </span>
-                            <span className="w-1.5 h-1.5 rounded-full bg-[#8A2BE2]" />
-                            <span className="text-[11px] text-[#DCB8FF] font-semibold">
-                              {ticket.seatNumber || 'VIP Accès'}
-                            </span>
-                          </div>
-
-                          <h3 className="font-heading text-lg font-bold text-white truncate group-hover:text-[#DCB8FF] transition-colors">
-                            {ticket.eventTitle}
-                          </h3>
-
-                          <div className="flex flex-wrap items-center gap-3 text-xs text-gray-300">
-                            <div className="flex items-center gap-1.5">
-                              <Calendar className="w-3.5 h-3.5 text-[#DCB8FF]" />
-                              <span>{ticket.eventDate} • {ticket.eventTime}</span>
-                            </div>
-                            <div className="flex items-center gap-1.5 truncate">
-                              <MapPin className="w-3.5 h-3.5 text-[#E9C349]" />
-                              <span className="truncate">{ticket.eventVenue}</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* QR Code Trigger Button & Calendrier */}
-                        <div
-                          className="w-full sm:w-auto flex items-center justify-between sm:flex-col sm:items-end gap-2.5 pt-3 sm:pt-0 border-t sm:border-t-0 border-white/5 flex-shrink-0"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <div className="text-left sm:text-right">
-                            <p className="text-[10px] text-gray-400 font-mono">{ticket.qrCode}</p>
-                            <p className="font-heading font-extrabold text-sm text-[#E9C349] tabular-nums">
-                              {ticket.price.toLocaleString('fr-FR')} FCFA
-                            </p>
-                          </div>
-
-                          <div className="flex flex-wrap sm:flex-col items-center sm:items-end gap-2">
-                            <button
-                              onClick={() => onOpenPass(ticket)}
-                              className="btn-primary-glow px-4 py-2 rounded-xl text-xs font-heading font-bold flex items-center gap-2"
-                            >
-                              <QrCode className="w-4 h-4" />
-                              <span>Afficher Pass</span>
-                            </button>
-
-                            <AddToCalendarButton
-                              eventData={{
-                                title: ticket.eventTitle,
-                                dateStr: ticket.eventDate,
-                                timeStr: ticket.eventTime,
-                                venue: ticket.eventVenue,
-                                city: 'Thiès / Petite Côte',
-                                tierName: ticket.tierName,
-                                qrCode: ticket.qrCode,
-                                holderName: ticket.holderName,
-                                ticketUrl: typeof window !== 'undefined' ? window.location.href : 'https://thiesdn.mgartswork.site/',
-                              }}
-                              variant="compact"
+                    return (
+                      <div
+                        key={ticket.id}
+                        onClick={() => onOpenPass(ticket)}
+                        className="p-3 sm:p-3.5 rounded-2xl bg-[#161616] border border-white/10 hover:border-[#8A2BE2] transition-all cursor-pointer group flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                      >
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <div className="w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 bg-[#141414] border border-white/10">
+                            <SafeImage
+                              src={getOptimizedImageUrl(ticket.eventPoster, 200)}
+                              rawSrc={ticket.eventPoster}
+                              alt={ticket.eventTitle}
+                              loading="lazy"
+                              decoding="async"
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                             />
                           </div>
-                        </div>
-                      </div>
 
-                      {/* SECTION ASSIGNATION / TRANSFERT À UN AMI */}
-                      <div
-                        className="mt-4 pt-3.5 border-t border-white/5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {ticket.assignmentStatus === 'pending' ? (
-                          <div className="flex-1 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3 w-full">
-                            <div className="flex items-center gap-2">
-                              <Clock className="w-4 h-4 text-amber-400 shrink-0 animate-pulse" />
-                              <div>
-                                <p className="text-xs font-bold text-amber-200">
-                                  En attente d'acceptation par <span className="text-white font-black">{ticket.assignedToName}</span>
-                                </p>
-                                <p className="text-[10px] text-amber-300/80 font-mono">
-                                  {ticket.assignedToPhone}
-                                </p>
-                              </div>
+                          <div className="min-w-0 flex-1 space-y-0.5">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="text-[10px] font-extrabold uppercase text-[#E9C349] tracking-wider">
+                                {ticket.tierName}
+                              </span>
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusMeta.className}`}
+                              >
+                                {statusMeta.label}
+                              </span>
+                              {ticket.assignmentStatus === 'pending' && ticket.assignedToName && (
+                                <span className="text-[10px] text-amber-300 truncate">
+                                  → {ticket.assignedToName}
+                                </span>
+                              )}
+                              {ticket.assignmentStatus === 'accepted' && ticket.assignedToName && (
+                                <span className="text-[10px] text-emerald-300 truncate">
+                                  → {ticket.assignedToName}
+                                </span>
+                              )}
                             </div>
 
-                            <div className="flex items-center gap-2 self-end sm:self-auto">
+                            <h3 className="font-heading text-sm sm:text-base font-bold text-white truncate group-hover:text-[#DCB8FF] transition-colors">
+                              {ticket.eventTitle}
+                            </h3>
+
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-400">
+                              <span className="inline-flex items-center gap-1">
+                                <Calendar className="w-3 h-3 text-[#DCB8FF]" />
+                                {ticket.eventDate}{ticket.eventTime ? ` • ${ticket.eventTime}` : ''}
+                              </span>
+                              <span className="text-[11px] font-mono text-gray-500 hidden sm:inline">
+                                {ticket.qrCode}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Actions compactes : Voir mon Pass + icônes Calendrier & Transfert */}
+                        <div
+                          className="flex items-center justify-end gap-1.5 pt-2 sm:pt-0 border-t sm:border-t-0 border-white/5 flex-shrink-0"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <AddToCalendarButton
+                            eventData={{
+                              title: ticket.eventTitle,
+                              dateStr: ticket.eventDate,
+                              timeStr: ticket.eventTime,
+                              venue: ticket.eventVenue,
+                              city: 'Thiès / Petite Côte',
+                              tierName: ticket.tierName,
+                              qrCode: ticket.qrCode,
+                              holderName: ticket.holderName,
+                              ticketUrl:
+                                typeof window !== 'undefined'
+                                  ? window.location.href
+                                  : 'https://billetterie.thiesdn.site/',
+                            }}
+                            variant="compact"
+                            iconOnly
+                          />
+
+                          {ticket.assignmentStatus === 'pending' ? (
+                            <>
                               {ticket.claimToken && (
                                 <a
                                   href={`https://wa.me/${ticket.assignedToPhone?.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
                                     `Bonjour ${ticket.assignedToName} ! Voici votre lien officiel pour récupérer votre pass ${ticket.eventTitle} (${ticket.tierName}) : ${
-                                      typeof window !== 'undefined' ? window.location.origin : 'https://thiesdn-billetterie.vercel.app'
+                                      typeof window !== 'undefined'
+                                        ? window.location.origin
+                                        : 'https://billetterie.thiesdn.site'
                                     }/claim-ticket/${ticket.claimToken}`
                                   )}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-heading font-black text-[11px] uppercase tracking-wider flex items-center gap-1.5 shadow transition-all"
+                                  title="Renvoyer le lien WhatsApp"
+                                  aria-label="Renvoyer le lien WhatsApp"
+                                  className="w-9 h-9 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/40 border border-emerald-500/30 text-emerald-400 flex items-center justify-center transition-colors"
                                 >
-                                  <MessageSquare className="w-3.5 h-3.5 fill-current" />
-                                  <span>Renvoyer WhatsApp</span>
+                                  <MessageSquare className="w-4 h-4" />
                                 </a>
                               )}
-
                               <button
+                                type="button"
                                 onClick={(e) => handleCancelAssignment(ticket.id, e)}
                                 disabled={cancellingTicketId === ticket.id}
-                                className="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white text-[11px] font-bold transition-colors"
+                                title="Annuler l'assignation"
+                                aria-label="Annuler l'assignation"
+                                className="w-9 h-9 rounded-xl bg-white/5 hover:bg-rose-500/20 border border-white/10 text-gray-300 hover:text-rose-300 flex items-center justify-center transition-colors"
                               >
-                                {cancellingTicketId === ticket.id ? 'Annulation...' : 'Annuler'}
+                                <RotateCcw className="w-4 h-4" />
                               </button>
-                            </div>
-                          </div>
-                        ) : ticket.assignmentStatus === 'accepted' ? (
-                          <div className="flex items-center justify-between gap-2 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-3 w-full">
-                            <div className="flex items-center gap-2.5">
-                              {ticket.assignedToAvatar || ticket.holderAvatar ? (
-                                <SafeImage
-                                  src={getOptimizedImageUrl(ticket.assignedToAvatar || ticket.holderAvatar || '', 128)}
-                                  rawSrc={ticket.assignedToAvatar || ticket.holderAvatar}
-                                  alt={ticket.assignedToName || userName}
-                                  loading="lazy"
-                                  decoding="async"
-                                  className="w-9 h-9 rounded-xl object-cover border border-emerald-400"
-                                />
-                              ) : (
-                                <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center">
-                                  <UserCheck className="w-5 h-5 text-emerald-400" />
-                                </div>
-                              )}
-                              <div>
-                                <p className="text-xs font-bold text-emerald-200">
-                                  Pass accepté & transféré à <span className="text-white font-black">{ticket.assignedToName}</span>
-                                </p>
-                                <p className="text-[10px] text-gray-400">
-                                  Billet sécurisé et rattaché à son propre smartphone
-                                </p>
-                              </div>
-                            </div>
+                            </>
+                          ) : ticket.assignmentStatus === 'declined' ? (
+                            <button
+                              type="button"
+                              onClick={() => setSelectedTicketForAssign(ticket)}
+                              title="Réassigner ce billet"
+                              aria-label="Réassigner ce billet"
+                              className="w-9 h-9 rounded-xl bg-[#8A2BE2]/25 hover:bg-[#8A2BE2]/40 border border-[#8A2BE2]/40 text-[#DCB8FF] flex items-center justify-center transition-colors"
+                            >
+                              <UserPlus className="w-4 h-4" />
+                            </button>
+                          ) : ticket.assignmentStatus === 'accepted' ? (
+                            <span
+                              title={`Transféré à ${ticket.assignedToName || ''}`}
+                              className="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center"
+                            >
+                              <UserCheck className="w-4 h-4" />
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setSelectedTicketForAssign(ticket)}
+                              title="Transférer / Assigner à un ami"
+                              aria-label="Transférer à un ami"
+                              className="w-9 h-9 rounded-xl bg-[#E9C349]/10 hover:bg-[#E9C349]/20 border border-[#E9C349]/30 text-[#E9C349] flex items-center justify-center transition-colors"
+                            >
+                              <UserPlus className="w-4 h-4" />
+                            </button>
+                          )}
 
-                            <span className="text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full bg-emerald-500 text-black">
-                              Transféré
-                            </span>
-                          </div>
-                        ) : ticket.assignmentStatus === 'declined' ? (
-                          <div className="flex items-center justify-between gap-2 bg-rose-500/10 border border-rose-500/30 rounded-2xl p-3 w-full">
-                            <p className="text-xs text-rose-200">
-                              Ce pass a été décliné et est de nouveau disponible dans votre portefeuille.
-                            </p>
-                            <button
-                              onClick={() => setSelectedTicketForAssign(ticket)}
-                              className="px-3 py-1.5 rounded-xl bg-[#8A2BE2] hover:bg-[#7822c9] text-white text-[11px] font-heading font-black uppercase tracking-wider flex items-center gap-1.5 transition-all"
-                            >
-                              <UserPlus className="w-3.5 h-3.5" />
-                              <span>Réassigner</span>
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 w-full">
-                            <span className="text-[11px] text-gray-400">
-                              Vous venez à plusieurs ? Offrez ou transférez cette place à votre ami.
-                            </span>
-                            <button
-                              onClick={() => setSelectedTicketForAssign(ticket)}
-                              className="self-end sm:self-auto px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#8A2BE2]/20 to-[#E9C349]/20 hover:from-[#8A2BE2]/30 hover:to-[#E9C349]/30 text-white border border-[#E9C349]/40 hover:border-[#E9C349] text-xs font-heading font-black uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-md active:scale-95"
-                            >
-                              <UserPlus className="w-3.5 h-3.5 text-[#E9C349]" />
-                              <span>Assigner à un ami</span>
-                            </button>
-                          </div>
-                        )}
+                          <button
+                            type="button"
+                            onClick={() => onOpenPass(ticket)}
+                            className="btn-primary-glow px-3.5 py-2 rounded-xl text-xs font-heading font-bold flex items-center gap-1.5 whitespace-nowrap"
+                          >
+                            <QrCode className="w-3.5 h-3.5" />
+                            <span>Voir mon Pass</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {upcomingTickets.length > WALLET_PAGE_SIZE && (
+                    <div className="flex items-center justify-between pt-2 text-xs text-gray-400">
+                      <span>
+                        Page {safeUpcomingPage} / {upcomingTotalPages} ({upcomingTickets.length} billets)
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          disabled={safeUpcomingPage <= 1}
+                          onClick={() => setUpcomingPage((p) => Math.max(1, p - 1))}
+                          className="px-2.5 py-1 rounded-xl bg-white/5 hover:bg-white/10 disabled:opacity-40 border border-white/10 text-white inline-flex items-center gap-1"
+                        >
+                          <ChevronLeft className="w-3.5 h-3.5" />
+                          Précédent
+                        </button>
+                        <button
+                          type="button"
+                          disabled={safeUpcomingPage >= upcomingTotalPages}
+                          onClick={() => setUpcomingPage((p) => Math.min(upcomingTotalPages, p + 1))}
+                          className="px-2.5 py-1 rounded-xl bg-white/5 hover:bg-white/10 disabled:opacity-40 border border-white/10 text-white inline-flex items-center gap-1"
+                        >
+                          Suivant
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </div>
-                  ))}
+                  )}
                 </div>
               )}
             </>
@@ -493,79 +524,103 @@ export const TicketsWalletView: React.FC<TicketsWalletViewProps> = ({
                   </p>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  {pastTickets.map((ticket) => (
-                    <div
-                      key={ticket.id}
-                      onClick={() => onOpenPass(ticket)}
-                      className="glass-panel rounded-3xl p-5 hover:border-[#8A2BE2] transition-all cursor-pointer group relative overflow-hidden shadow-lg opacity-90 hover:opacity-100"
-                    >
-                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                        <div className="w-full sm:w-28 h-28 rounded-2xl overflow-hidden flex-shrink-0 relative grayscale group-hover:grayscale-0 transition-all bg-[#141414]">
-                          <SafeImage
-                            src={getOptimizedImageUrl(ticket.eventPoster, 400)}
-                            rawSrc={ticket.eventPoster}
-                            alt={ticket.eventTitle}
-                            loading="lazy"
-                            decoding="async"
-                            className="w-full h-full object-cover"
-                          />
-                          <div className="absolute top-1 left-1 bg-black/80 text-gray-300 text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded">
-                            Passé
-                          </div>
-                        </div>
+                <div className="space-y-2.5">
+                  {paginatedPastTickets.map((ticket) => {
+                    const statusMeta = getTicketStatusMeta(ticket);
 
-                        <div className="flex-1 min-w-0 space-y-1.5">
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-bold uppercase text-gray-400 tracking-wider">
-                              Événement Clôturé
-                            </span>
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                            <span className="text-[11px] text-[#DCB8FF] font-semibold">
-                              {ticket.tierName}
-                            </span>
+                    return (
+                      <div
+                        key={ticket.id}
+                        onClick={() => onOpenPass(ticket)}
+                        className="p-3 rounded-2xl bg-[#161616] border border-white/10 hover:border-[#8A2BE2] transition-all cursor-pointer group flex items-center justify-between gap-3 opacity-90 hover:opacity-100"
+                      >
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <div className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 grayscale group-hover:grayscale-0 transition-all bg-[#141414] border border-white/10">
+                            <SafeImage
+                              src={getOptimizedImageUrl(ticket.eventPoster, 200)}
+                              rawSrc={ticket.eventPoster}
+                              alt={ticket.eventTitle}
+                              loading="lazy"
+                              decoding="async"
+                              className="w-full h-full object-cover"
+                            />
                           </div>
 
-                          <h3 className="font-heading text-lg font-bold text-white truncate">
-                            {ticket.eventTitle}
-                          </h3>
-
-                          <div className="flex flex-wrap items-center gap-3 text-xs text-gray-400">
+                          <div className="min-w-0 flex-1 space-y-0.5">
                             <div className="flex items-center gap-1.5">
-                              <Calendar className="w-3.5 h-3.5 text-gray-400" />
-                              <span>{ticket.eventDate}</span>
+                              <span className="text-[10px] font-bold uppercase text-[#DCB8FF] truncate">
+                                {ticket.tierName}
+                              </span>
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusMeta.className}`}
+                              >
+                                {ticket.status === 'used' || ticket.status === 'scanned' ? 'Scanné' : 'Passé'}
+                              </span>
                             </div>
-                            <div className="flex items-center gap-1.5 truncate">
-                              <MapPin className="w-3.5 h-3.5 text-gray-400" />
-                              <span className="truncate">{ticket.eventVenue}</span>
-                            </div>
+                            <h3 className="font-heading text-sm font-bold text-white truncate">
+                              {ticket.eventTitle}
+                            </h3>
+                            <p className="text-xs text-gray-400 truncate">
+                              {ticket.eventDate} • {ticket.eventVenue}
+                            </p>
                           </div>
                         </div>
 
                         <div
-                          className="w-full sm:w-auto flex items-center justify-between sm:flex-col sm:items-end gap-2.5 pt-3 sm:pt-0 border-t sm:border-t-0 border-white/5 flex-shrink-0"
+                          className="flex items-center gap-1.5 flex-shrink-0"
                           onClick={(e) => e.stopPropagation()}
                         >
                           <a
                             href="https://youtube.com/@thiesdn"
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-600/20 text-red-400 hover:bg-red-600 hover:text-white border border-red-500/30 text-xs font-bold transition-all"
+                            title="Voir Aftermovie"
+                            aria-label="Voir Aftermovie"
+                            className="w-9 h-9 rounded-xl bg-red-600/20 text-red-400 hover:bg-red-600 hover:text-white border border-red-500/30 flex items-center justify-center transition-all"
                           >
-                            <Youtube className="w-3.5 h-3.5 fill-current" />
-                            <span>Voir Aftermovie</span>
+                            <Youtube className="w-4 h-4 fill-current" />
                           </a>
 
                           <button
+                            type="button"
                             onClick={() => onOpenPass(ticket)}
-                            className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 text-xs font-bold transition-all"
+                            className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-bold flex items-center gap-1.5 whitespace-nowrap transition-colors"
                           >
-                            Pass Archivé
+                            <QrCode className="w-3.5 h-3.5" />
+                            <span>Voir mon Pass</span>
                           </button>
                         </div>
                       </div>
+                    );
+                  })}
+
+                  {pastTickets.length > WALLET_PAGE_SIZE && (
+                    <div className="flex items-center justify-between pt-2 text-xs text-gray-400">
+                      <span>
+                        Page {safePastPage} / {pastTotalPages} ({pastTickets.length} billets)
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          disabled={safePastPage <= 1}
+                          onClick={() => setPastPage((p) => Math.max(1, p - 1))}
+                          className="px-2.5 py-1 rounded-xl bg-white/5 hover:bg-white/10 disabled:opacity-40 border border-white/10 text-white inline-flex items-center gap-1"
+                        >
+                          <ChevronLeft className="w-3.5 h-3.5" />
+                          Précédent
+                        </button>
+                        <button
+                          type="button"
+                          disabled={safePastPage >= pastTotalPages}
+                          onClick={() => setPastPage((p) => Math.min(pastTotalPages, p + 1))}
+                          className="px-2.5 py-1 rounded-xl bg-white/5 hover:bg-white/10 disabled:opacity-40 border border-white/10 text-white inline-flex items-center gap-1"
+                        >
+                          Suivant
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
-                  ))}
+                  )}
                 </div>
               )}
             </div>
