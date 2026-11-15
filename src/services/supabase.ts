@@ -626,6 +626,14 @@ export const fetchUserProfile = async (userId: string, authUser?: any): Promise<
     const emailPrefix = emailCandidate ? emailCandidate.split('@')[0] : '';
     const formattedPrefix = emailPrefix ? emailPrefix.charAt(0).toUpperCase() + emailPrefix.slice(1) : '';
     const cleanName = rawName && rawName.trim().toLowerCase() !== 'utilisateur' ? rawName.trim() : (formattedPrefix || 'Membre Thièsdn');
+    const normalizedEmail = String(emailCandidate).trim().toLowerCase();
+    const rawRole = String(data.role || 'user').trim().toLowerCase();
+    const resolvedRole: UserProfile['role'] =
+      rawRole === 'sales_agent' || normalizedEmail.endsWith('@pos.thiesdn.site')
+        ? 'sales_agent'
+        : rawRole === 'admin' || rawRole === 'promoter' || rawRole === 'artist'
+          ? rawRole
+          : 'user';
 
     return {
       id: data.id,
@@ -638,7 +646,7 @@ export const fetchUserProfile = async (userId: string, authUser?: any): Promise<
       quartier: data.quartier || data.address || '',
       avatar: data.avatar || '',
       isVip: Boolean(data.is_vip),
-      role: data.role || 'user',
+      role: resolvedRole,
       isEmailConfirmed,
       termsAccepted: Boolean(data.terms_accepted),
       termsAcceptedAt: data.terms_accepted_at || undefined,

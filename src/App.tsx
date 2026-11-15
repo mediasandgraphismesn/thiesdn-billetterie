@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { BottomNav } from './components/BottomNav';
@@ -63,12 +63,16 @@ import {
   INITIAL_NOTIFICATIONS,
 } from './data/mockEvents';
 import { EventItem, UserProfile, UserTicket, NotificationItem } from './types';
-import { useAuth } from './contexts/AuthContext';
+import {
+  useAuth,
+  isPosAccountIdentity,
+  resolveEffectiveUserRole,
+  type UserRole,
+} from './contexts/AuthContext';
 import {
   getSupabaseClient,
   fetchUserProfile,
   fetchLinkedSalesAgentForUser,
-  signOutWithSupabase,
   fetchEventsFromSupabase,
   updateEventStatusInSupabase,
   fetchUserTicketsFromSupabase,
@@ -117,6 +121,15 @@ const getInitialIsPosRoute = (): boolean => {
   );
 };
 
+const isStrictPosUrl = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  return (
+    window.location.pathname === '/pos' &&
+    !window.location.search &&
+    !window.location.hash
+  );
+};
+
 const getInitialTicketId = (): string | null => {
   if (typeof window === 'undefined') return null;
   const path = window.location.pathname;
@@ -159,6 +172,7 @@ export default function App() {
     user: contextUser,
     userRole,
     effectiveRole: contextEffectiveRole,
+    isPosAccount: contextIsPosAccount,
     isAdminPreview,
     setIsAdminPreview,
     signOut: contextSignOut,
@@ -221,8 +235,32 @@ export default function App() {
   const [selectedEventForDetail, setSelectedEventForDetail] = useState<EventItem | null>(null);
   const [selectedTicketForPass, setSelectedTicketForPass] = useState<UserTicket | null>(null);
 
-  // Rôle effectif dans l'interface (si l'admin active l'aperçu visiteur, il expérimente le site comme un client)
-  const effectiveRole: 'user' | 'promoter' | 'admin' | 'sales_agent' | 'artist' = contextEffectiveRole || ((isAdminPreview && currentRole === 'admin') ? 'user' : currentRole);
+  // Rôle effectif dans l'interface (verrouillage POS prioritaire, puis aperçu visiteur admin)
+  const baseRole: UserRole =
+    isAdminPreview && (userRole === 'admin' || currentRole === 'admin')
+      ? 'user'
+      : currentRole !== 'user'
+        ? currentRole
+        : contextEffectiveRole;
+  const effectiveRole: UserRole = isPosAccountIdentity(
+    contextUser?.email || user?.email,
+    baseRole
+  )
+    ? 'sales_agent'
+    : baseRole;
+
+  const isPosAccount = useMemo(
+    () =>
+      isAuthenticated &&
+      (contextIsPosAccount ||
+        isPosAccountIdentity(contextUser?.email || user?.email, effectiveRole || userRole || currentRole)),
+    [isAuthenticated, contextIsPosAccount, contextUser?.email, user?.email, effectiveRole, userRole, currentRole]
+  );
+
+  const isPosAccountRef = useRef<boolean>(isPosAccount);
+  useEffect(() => {
+    isPosAccountRef.current = isPosAccount;
+  }, [isPosAccount]);
 
   // Synchronisation continue de l'état local depuis le contexte Auth en temps réel
   useEffect(() => {
@@ -230,8 +268,18 @@ export default function App() {
     if (contextUser) {
       setUser(contextUser);
     }
-    setCurrentRole(userRole);
+    const nextRole = resolveEffectiveUserRole(userRole, contextUser?.email);
+    setCurrentRole(nextRole);
   }, [authIsAuthenticated, contextUser, userRole]);
+
+  // GUARD GLOBAL POS : Tout compte vendeur (sales_agent ou *@pos.thiesdn.site)
+  // est strictement confiné à /pos (redirection forcée sans historique arrière)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (isAuthenticated && isPosAccount && !isStrictPosUrl()) {
+      window.location.replace('/pos');
+    }
+  }, [isAuthLoading, isAuthenticated, isPosAccount]);
 
   // Détection des routes URL (/admin, redirection de l'ancien /baobab, ou ?preview=client)
   useEffect(() => {
@@ -285,8 +333,18 @@ export default function App() {
         setActiveTab('showcase');
       }
 
-      // 7. Routes Authentification & Inscription
-      if (path === '/inscription' || path === '/auth' || path === '/login' || path === '/register' || hash.includes('/auth') || hash.includes('/login') || search.includes('tab=auth')) {
+      // 7. Routes Authentification, Inscription & Profil
+      if (
+        path === '/inscription' ||
+        path === '/auth' ||
+        path === '/login' ||
+        path === '/register' ||
+        path === '/profil' ||
+        path === '/profile' ||
+        hash.includes('/auth') ||
+        hash.includes('/login') ||
+        search.includes('tab=auth')
+      ) {
         setActiveTab('profile');
       }
 
@@ -331,6 +389,11 @@ export default function App() {
 
       // Écouter la navigation arrière/avant du navigateur
       const handlePopState = () => {
+        if (isPosAccountRef.current && !isStrictPosUrl()) {
+          window.location.replace('/pos');
+          return;
+        }
+
         const scanCode = getInitialScanCode();
         if (scanCode) {
           setScanStationCode(scanCode);
@@ -355,7 +418,14 @@ export default function App() {
           setActiveTab('cgv');
         } else if (currentPath === '/showcase' || currentPath === '/presentation') {
           setActiveTab('showcase');
-        } else if (currentPath === '/inscription' || currentPath === '/auth' || currentPath === '/login' || currentPath === '/register') {
+        } else if (
+          currentPath === '/inscription' ||
+          currentPath === '/auth' ||
+          currentPath === '/login' ||
+          currentPath === '/register' ||
+          currentPath === '/profil' ||
+          currentPath === '/profile'
+        ) {
           setActiveTab('profile');
         } else if (currentPath === '/') {
           setActiveTab('home');
@@ -448,10 +518,11 @@ export default function App() {
       }
 
       // Aucun point de vente lié : appliquer la redirection habituelle selon le rôle
+      // Un compte POS (sales_agent ou *@pos.thiesdn.site) ne quitte jamais /pos
       setPosLinkedAgentId(null);
       setIsCheckingPosAccess(false);
 
-      if (effectiveRole === 'sales_agent') {
+      if (isPosAccountIdentity(user.email, effectiveRole)) {
         setIsPosRoute(true);
         setActiveTab('sales_agent');
       } else if (effectiveRole === 'promoter') {
@@ -479,7 +550,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated, isAuthLoading, effectiveRole, user?.id, isPosRoute]);
+  }, [isAuthenticated, isAuthLoading, effectiveRole, user?.id, user?.email, isPosRoute]);
 
   // Chargement et écoute Realtime des notifications utilisateur (user_notifications)
   useEffect(() => {
@@ -547,6 +618,11 @@ export default function App() {
 
   // Contrôle d'accès strict par rôle aux onglets (Route Guards)
   const isTabAllowedForRole = (tab: string, role: 'user' | 'promoter' | 'admin' | 'sales_agent' | 'artist', isAuth: boolean): boolean => {
+    // Verrouillage hermétique des comptes POS : aucun onglet client/profil/admin/CGV autorisé
+    if (isAuth && (role === 'sales_agent' || isPosAccount)) {
+      return tab === 'sales_agent';
+    }
+
     // Les Conditions Générales de Vente et la Vitrine Showcase sont d'ordre public et consultables par tous
     if (tab === 'cgv' || tab === 'showcase' || tab === 'presentation') {
       return true;
@@ -578,8 +654,8 @@ export default function App() {
     if (role === 'artist') {
       return ['home', 'explore', 'create', 'artist', 'profile', 'accreditations', 'cgv'].includes(tab);
     }
-    if (role === 'sales_agent' || isPosRoute) {
-      return ['sales_agent', 'profile', 'cgv'].includes(tab);
+    if (isPosRoute) {
+      return tab === 'sales_agent';
     }
     if (role === 'user') {
       return ['home', 'explore', 'tickets', 'profile', 'cgv'].includes(tab);
@@ -588,6 +664,14 @@ export default function App() {
   };
 
   const handleTabChange = (targetTab: string) => {
+    if (isPosAccount) {
+      setIsPosRoute(true);
+      setActiveTab('sales_agent');
+      if (typeof window !== 'undefined' && !isStrictPosUrl()) {
+        window.location.replace('/pos');
+      }
+      return;
+    }
     setIsPosRoute(false);
     // Si un admin sans aperçu visiteur clique sur home, le rediriger vers son dashboard back-office
     if (targetTab === 'home' && effectiveRole === 'admin') {
@@ -702,28 +786,31 @@ export default function App() {
       client.auth.getSession().then(({ data: { session } }) => {
         if (session?.user) {
           setIsAuthenticated(true);
-          const isConfirmed = Boolean(session.user.email_confirmed_at || (session.user as any).confirmed_at);
+          const isConfirmed = Boolean(session.user.email_confirmed_at || (session.user as { confirmed_at?: string }).confirmed_at);
           fetchUserProfile(session.user.id, session.user).then((profile) => {
             const onPosUrl = getInitialIsPosRoute();
             if (profile) {
-              setUser({ ...profile, isEmailConfirmed: isConfirmed });
-              setCurrentRole(profile.role);
+              const resolvedRole = resolveEffectiveUserRole(profile.role, profile.email || session.user.email);
+              setUser({ ...profile, role: resolvedRole, isEmailConfirmed: isConfirmed });
+              setCurrentRole(resolvedRole);
               if (!onPosUrl) {
-                if (profile.role === 'admin' && !isAdminPreview) {
+                if (resolvedRole === 'admin' && !isAdminPreview) {
                   setActiveTab('dashboard');
-                } else if (profile.role === 'sales_agent') {
+                } else if (resolvedRole === 'sales_agent') {
+                  setIsPosRoute(true);
                   setActiveTab('sales_agent');
-                } else if (profile.role === 'artist') {
+                } else if (resolvedRole === 'artist') {
                   setActiveTab('artist');
                 }
               }
             } else {
-              const role = (session.user.user_metadata?.role as any) || 'user';
+              const metaRole = typeof session.user.user_metadata?.role === 'string' ? session.user.user_metadata.role : undefined;
+              const role = resolveEffectiveUserRole(metaRole, session.user.email);
               setUser((prev) => ({
                 ...prev,
                 id: session.user.id,
                 email: session.user.email || prev.email,
-                name: session.user.user_metadata?.name || prev.name,
+                name: (typeof session.user.user_metadata?.name === 'string' ? session.user.user_metadata.name : undefined) || prev.name,
                 role,
                 isEmailConfirmed: isConfirmed,
               }));
@@ -732,6 +819,7 @@ export default function App() {
                 if (role === 'admin' && !isAdminPreview) {
                   setActiveTab('dashboard');
                 } else if (role === 'sales_agent') {
+                  setIsPosRoute(true);
                   setActiveTab('sales_agent');
                 } else if (role === 'artist') {
                   setActiveTab('artist');
@@ -751,28 +839,31 @@ export default function App() {
         async (event, session) => {
           if (session?.user) {
             setIsAuthenticated(true);
-            const isConfirmed = Boolean(session.user.email_confirmed_at || (session.user as any).confirmed_at);
+            const isConfirmed = Boolean(session.user.email_confirmed_at || (session.user as { confirmed_at?: string }).confirmed_at);
             const profile = await fetchUserProfile(session.user.id, session.user);
             const onPosUrl = getInitialIsPosRoute();
             if (profile) {
-              setUser({ ...profile, isEmailConfirmed: isConfirmed });
-              setCurrentRole(profile.role);
+              const resolvedRole = resolveEffectiveUserRole(profile.role, profile.email || session.user.email);
+              setUser({ ...profile, role: resolvedRole, isEmailConfirmed: isConfirmed });
+              setCurrentRole(resolvedRole);
               if (!onPosUrl) {
-                if (profile.role === 'admin' && !isAdminPreview) {
+                if (resolvedRole === 'admin' && !isAdminPreview) {
                   setActiveTab('dashboard');
-                } else if (profile.role === 'sales_agent') {
+                } else if (resolvedRole === 'sales_agent') {
+                  setIsPosRoute(true);
                   setActiveTab('sales_agent');
-                } else if (profile.role === 'artist') {
+                } else if (resolvedRole === 'artist') {
                   setActiveTab('artist');
                 }
               }
             } else {
-              const role = (session.user.user_metadata?.role as any) || 'user';
+              const metaRole = typeof session.user.user_metadata?.role === 'string' ? session.user.user_metadata.role : undefined;
+              const role = resolveEffectiveUserRole(metaRole, session.user.email);
               setUser((prev) => ({
                 ...prev,
                 id: session.user.id,
                 email: session.user.email || prev.email,
-                name: session.user.user_metadata?.name || prev.name,
+                name: (typeof session.user.user_metadata?.name === 'string' ? session.user.user_metadata.name : undefined) || prev.name,
                 role,
                 isEmailConfirmed: isConfirmed,
               }));
@@ -781,6 +872,7 @@ export default function App() {
                 if (role === 'admin' && !isAdminPreview) {
                   setActiveTab('dashboard');
                 } else if (role === 'sales_agent') {
+                  setIsPosRoute(true);
                   setActiveTab('sales_agent');
                 } else if (role === 'artist') {
                   setActiveTab('artist');
@@ -791,13 +883,19 @@ export default function App() {
               setTickets(dbTickets);
             });
           } else if (event === 'SIGNED_OUT') {
+            const stayingOnPos = getInitialIsPosRoute();
             setIsAuthenticated(false);
             setPosLinkedAgentId(null);
             setUser({ ...INITIAL_USER, role: 'user', isEmailConfirmed: false });
             setCurrentRole('user');
             setIsAdminPreview(false);
             setTickets([]);
-            setActiveTab('home');
+            if (stayingOnPos) {
+              setIsPosRoute(true);
+              setActiveTab('sales_agent');
+            } else {
+              setActiveTab('home');
+            }
           }
         }
       );
@@ -812,17 +910,24 @@ export default function App() {
   const pendingModerationCount = events.filter((e) => e.status === 'pending').length;
 
   const handleLoginSuccess = (role: 'user' | 'promoter' | 'admin' | 'sales_agent' | 'artist' = 'user') => {
+    const resolvedRole = resolveEffectiveUserRole(role, contextUser?.email || user?.email);
     setIsAuthenticated(true);
-    setCurrentRole(role);
+    setCurrentRole(resolvedRole);
     setUser((prev) => ({
       ...prev,
-      role,
+      role: resolvedRole,
     }));
-    if (role === 'admin') {
-      setActiveTab('dashboard');
-    } else if (role === 'sales_agent') {
+    if (resolvedRole === 'sales_agent') {
+      setIsPosRoute(true);
       setActiveTab('sales_agent');
-    } else if (role === 'artist') {
+      if (typeof window !== 'undefined' && !isStrictPosUrl()) {
+        window.location.replace('/pos');
+      }
+      return;
+    }
+    if (resolvedRole === 'admin') {
+      setActiveTab('dashboard');
+    } else if (resolvedRole === 'artist') {
       setActiveTab('artist');
     } else {
       setActiveTab('home');
@@ -830,13 +935,28 @@ export default function App() {
   };
 
   const handleSignOut = async () => {
-    await signOutWithSupabase();
+    await contextSignOut();
     setIsAuthenticated(false);
     setPosLinkedAgentId(null);
     setUser({ ...INITIAL_USER, role: 'user' });
     setCurrentRole('user');
     setIsAdminPreview(false);
     setTickets([]);
+  };
+
+  const handlePosSignOut = async () => {
+    await contextSignOut();
+    setIsAuthenticated(false);
+    setPosLinkedAgentId(null);
+    setUser({ ...INITIAL_USER, role: 'user', isEmailConfirmed: false });
+    setCurrentRole('user');
+    setIsAdminPreview(false);
+    setTickets([]);
+    setIsPosRoute(true);
+    setActiveTab('sales_agent');
+    if (typeof window !== 'undefined') {
+      window.location.replace('/pos');
+    }
   };
 
   const handleCreateEvent = (newEvent: EventItem) => {
@@ -962,6 +1082,22 @@ export default function App() {
   ].includes(activeTab) && !(hasGuestOrderToken && activeTab === 'tickets');
   const isTabPermitted = isTabAllowedForRole(activeTab, effectiveRole, isAuthenticated);
 
+  // GARDE HERMÉTIQUE POS : Tout compte vendeur (sales_agent ou *@pos.thiesdn.site)
+  // est strictement confiné à /pos et ne doit jamais voir aucune vue client, profil ou admin.
+  if (isAuthenticated && isPosAccount && !isStrictPosUrl()) {
+    return (
+      <div className="fixed inset-0 z-50 bg-[#0a0a0a] flex flex-col items-center justify-center p-6 text-center space-y-4 font-sans text-[#E5E2E1]">
+        <div className="bg-pattern" />
+        <div className="w-12 h-12 rounded-2xl bg-[#8A2BE2]/20 border border-[#8A2BE2]/40 flex items-center justify-center animate-pulse relative z-10">
+          <span className="w-6 h-6 border-2 border-[#E9C349] border-t-transparent rounded-full animate-spin" />
+        </div>
+        <p className="font-heading text-sm font-bold text-white tracking-wide relative z-10">
+          Accès restreint — Redirection vers votre guichet POS...
+        </p>
+      </div>
+    );
+  }
+
   // Sécurité hermétique : si un code de poste de scan est présent dans l'URL (/scan/:code),
   // on affiche immédiatement l'interface de scan mobile autonome (sans header, sans sidebar ni accès admin)
   if (scanStationCode) {
@@ -1013,11 +1149,15 @@ export default function App() {
     );
   }
 
-  // PRIORITÉ 2 : Isolation hermétique plein écran pour la route POS /pos ou /vendeur
-  if (isPosRoute) {
+  // PRIORITÉ 2 : Isolation hermétique plein écran pour la route POS /pos ou tout compte POS
+  if (isPosRoute || (isAuthenticated && isPosAccount)) {
     const showPosVerificationSpinner =
       isAuthLoading ||
-      (isAuthenticated && isCheckingPosAccess && effectiveRole !== 'sales_agent' && !posLinkedAgentId);
+      (isAuthenticated &&
+        isCheckingPosAccess &&
+        !isPosAccount &&
+        effectiveRole !== 'sales_agent' &&
+        !posLinkedAgentId);
 
     return (
       <div className="fixed inset-0 z-50 bg-[#0a0a0a] overflow-y-auto font-sans text-[#E5E2E1]">
@@ -1034,27 +1174,32 @@ export default function App() {
               Synchronisation avec votre point de vente Supabase.
             </p>
           </div>
-        ) : isAuthenticated && (effectiveRole === 'sales_agent' || Boolean(posLinkedAgentId)) ? (
+        ) : isAuthenticated && (isPosAccount || effectiveRole === 'sales_agent' || Boolean(posLinkedAgentId)) ? (
           <div className="p-3 sm:p-6">
             <React.Suspense fallback={<ViewSkeletonLoader />}>
               <SalesAgentDashboardView
                 user={user}
                 events={events}
                 currentAgentId={posLinkedAgentId ?? undefined}
-                onNavigateBack={() => {
-                  setIsPosRoute(false);
-                  setPosLinkedAgentId(null);
-                  if (typeof window !== 'undefined') {
-                    window.history.pushState(null, '', '/');
-                  }
-                  if (effectiveRole === 'promoter') {
-                    setActiveTab('finances');
-                  } else if (effectiveRole === 'admin') {
-                    setActiveTab('dashboard');
-                  } else {
-                    setActiveTab('home');
-                  }
-                }}
+                onSignOut={handlePosSignOut}
+                onNavigateBack={
+                  isPosAccount
+                    ? undefined
+                    : () => {
+                        setIsPosRoute(false);
+                        setPosLinkedAgentId(null);
+                        if (typeof window !== 'undefined') {
+                          window.history.pushState(null, '', '/');
+                        }
+                        if (effectiveRole === 'promoter') {
+                          setActiveTab('finances');
+                        } else if (effectiveRole === 'admin') {
+                          setActiveTab('dashboard');
+                        } else {
+                          setActiveTab('home');
+                        }
+                      }
+                }
               />
             </React.Suspense>
           </div>
@@ -1066,14 +1211,13 @@ export default function App() {
               currentRole={effectiveRole}
               onLoginSuccess={(role, options) => {
                 const linkedAgentId = options?.linkedAgentId ?? null;
+                const resolvedPosRole = resolveEffectiveUserRole(role, contextUser?.email || user?.email);
                 if (linkedAgentId) {
-                  const normalizedRole =
-                    (role as 'user' | 'promoter' | 'admin' | 'sales_agent' | 'artist') || 'sales_agent';
                   setIsAuthenticated(true);
-                  setCurrentRole(normalizedRole);
+                  setCurrentRole(resolvedPosRole);
                   setUser((prev) => ({
                     ...prev,
-                    role: normalizedRole,
+                    role: resolvedPosRole,
                     assignedAgentId: linkedAgentId,
                   }));
                   setPosLinkedAgentId(linkedAgentId);
@@ -1084,21 +1228,28 @@ export default function App() {
                 }
 
                 setPosLinkedAgentId(null);
-                handleLoginSuccess(role as 'user' | 'promoter' | 'admin' | 'sales_agent' | 'artist');
-                if (role === 'sales_agent') {
+                handleLoginSuccess(resolvedPosRole);
+                if (resolvedPosRole === 'sales_agent') {
                   setIsPosRoute(true);
                   setActiveTab('sales_agent');
                 } else {
                   setIsPosRoute(false);
                   if (typeof window !== 'undefined') {
-                    window.history.pushState(null, '', role === 'admin' ? '/admin' : '/');
+                    window.history.pushState(null, '', resolvedPosRole === 'admin' ? '/admin' : '/');
                   }
-                  if (role === 'admin') setActiveTab('dashboard');
-                  else if (role === 'promoter') setActiveTab('finances');
+                  if (resolvedPosRole === 'admin') setActiveTab('dashboard');
+                  else if (resolvedPosRole === 'promoter') setActiveTab('finances');
                   else setActiveTab('home');
                 }
               }}
               onNavigateHome={() => {
+                if (isPosAccount) {
+                  setIsPosRoute(true);
+                  if (typeof window !== 'undefined' && !isStrictPosUrl()) {
+                    window.location.replace('/pos');
+                  }
+                  return;
+                }
                 setIsPosRoute(false);
                 setPosLinkedAgentId(null);
                 if (typeof window !== 'undefined') {
@@ -1123,25 +1274,27 @@ export default function App() {
 
       {/* Main App Layout */}
       <div className="flex-1 flex flex-col relative z-10">
-        {/* Top Header Bar */}
-        <Header
-          user={{ ...user, role: effectiveRole }}
-          notifications={notifications}
-          onMarkNotificationRead={handleMarkNotificationRead}
-          onClearNotifications={handleClearNotifications}
-          currentRole={effectiveRole}
-          isAuthenticated={isAuthenticated}
-          onOpenAuth={() => setActiveTab('profile')}
-          ambientShader={ambientShader}
-          onToggleShader={() => setAmbientShader(!ambientShader)}
-          onOpenCreateModal={() => handleTabChange('create')}
-          pendingModerationCount={pendingModerationCount}
-          onNavigate={(tab) => handleTabChange(tab)}
-          isAdminPreview={isAdminPreview}
-        />
+        {/* Top Header Bar (Jamais affiché pour un compte POS) */}
+        {!isPosAccount && (
+          <Header
+            user={{ ...user, role: effectiveRole }}
+            notifications={notifications}
+            onMarkNotificationRead={handleMarkNotificationRead}
+            onClearNotifications={handleClearNotifications}
+            currentRole={effectiveRole}
+            isAuthenticated={isAuthenticated}
+            onOpenAuth={() => setActiveTab('profile')}
+            ambientShader={ambientShader}
+            onToggleShader={() => setAmbientShader(!ambientShader)}
+            onOpenCreateModal={() => handleTabChange('create')}
+            pendingModerationCount={pendingModerationCount}
+            onNavigate={(tab) => handleTabChange(tab)}
+            isAdminPreview={isAdminPreview}
+          />
+        )}
 
         {/* Bannière Mode Aperçu Visiteur pour l'Administrateur */}
-        {isAdminPreview && (
+        {isAdminPreview && !isPosAccount && (
           <div className="bg-[#E9C349] text-[#241A00] px-4 py-2 text-xs font-bold flex items-center justify-between sticky top-16 z-40 shadow-lg">
             <span className="flex items-center gap-2">
               <Eye className="w-4 h-4" />
@@ -1156,8 +1309,8 @@ export default function App() {
           </div>
         )}
 
-        {/* Sidebar on Desktop / Tablet : VISIBLE UNIQUEMENT POUR UTILISATEURS CONNECTÉS */}
-        {isAuthenticated && (
+        {/* Sidebar on Desktop / Tablet : VISIBLE UNIQUEMENT POUR UTILISATEURS CONNECTÉS NON-POS */}
+        {isAuthenticated && !isPosAccount && (
           effectiveRole === 'admin' ? (
             <AdminSidebar
               user={{ ...user, role: 'admin' }}
@@ -1526,11 +1679,12 @@ export default function App() {
                 />
               )}
 
-              {/* ESPACE COLLABORATEUR / POINT DE VENTE MOBILE (NAVIGATION STANDARD) */}
+              {/* ESPACE COLLABORATEUR / POINT DE VENTE MOBILE */}
               {(activeTab === 'sales_agent' || (effectiveRole === 'sales_agent' && activeTab === 'home')) && (
                 <SalesAgentDashboardView
                   user={user}
-                  onNavigateBack={() => handleTabChange('profile')}
+                  onSignOut={handlePosSignOut}
+                  onNavigateBack={isPosAccount ? undefined : () => handleTabChange('home')}
                 />
               )}
 
@@ -1587,7 +1741,7 @@ export default function App() {
                 />
               )}
 
-              {activeTab === 'profile' && (
+              {activeTab === 'profile' && !isPosAccount && (
                 <ProfileView
                   user={{ ...user, role: effectiveRole }}
                   tickets={tickets}
@@ -1616,7 +1770,7 @@ export default function App() {
           )}
 
           {/* Pied de page Officiel (Footer) complet et responsive */}
-          {activeTab !== 'showcase' && activeTab !== 'presentation' && (
+          {activeTab !== 'showcase' && activeTab !== 'presentation' && !isPosAccount && (
             <Footer
               onNavigateCGV={() => handleTabChange('cgv')}
             />
@@ -1624,16 +1778,18 @@ export default function App() {
         </main>
       </div>
 
-      {/* Floating Bottom Nav for Mobile Screens */}
-      <BottomNav
-        activeTab={activeTab}
-        onTabChange={handleTabChange}
-        pendingCount={pendingModerationCount}
-        ticketsCount={tickets.length}
-        userRole={effectiveRole}
-        isAuthenticated={isAuthenticated}
-        isAdminPreview={isAdminPreview}
-      />
+      {/* Floating Bottom Nav for Mobile Screens (Jamais affiché pour un compte POS) */}
+      {!isPosAccount && (
+        <BottomNav
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
+          pendingCount={pendingModerationCount}
+          ticketsCount={tickets.length}
+          userRole={effectiveRole}
+          isAuthenticated={isAuthenticated}
+          isAdminPreview={isAdminPreview}
+        />
+      )}
 
       {/* Event Details & VIP Booking Modal */}
       <EventDetailModal

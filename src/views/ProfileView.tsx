@@ -47,6 +47,7 @@ import {
 } from '../services/supabase';
 import { TurnstileGate, type TurnstileGateHandle } from '../components/TurnstileGate';
 import { THIES_33_QUARTIERS, THIES_QUARTIERS_BY_ZONE } from '../data/thiesQuartiers';
+import { isPosAccountIdentity } from '../contexts/AuthContext';
 
 interface ProfileViewProps {
   user: UserProfile;
@@ -85,6 +86,13 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const isIos = typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
   const isStandalone = typeof window !== 'undefined' && (window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true);
   const isIosNeedsInstall = isIos && !isStandalone;
+  const isPosAccount = isPosAccountIdentity(user.email, user.role);
+
+  useEffect(() => {
+    if (isPosAccount && typeof window !== 'undefined') {
+      window.location.replace('/pos');
+    }
+  }, [isPosAccount]);
 
   useEffect(() => {
     if (user.id) {
@@ -306,6 +314,19 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       }, 500);
     }
   };
+
+  if (isPosAccount) {
+    return (
+      <div className="fixed inset-0 z-50 bg-[#0a0a0a] flex flex-col items-center justify-center p-6 text-center space-y-4">
+        <div className="w-12 h-12 rounded-2xl bg-[#8A2BE2]/20 border border-[#8A2BE2]/40 flex items-center justify-center animate-pulse">
+          <span className="w-6 h-6 border-2 border-[#E9C349] border-t-transparent rounded-full animate-spin" />
+        </div>
+        <p className="font-heading text-sm font-bold text-white tracking-wide">
+          Accès Profil non autorisé — Redirection vers votre guichet POS...
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-20 animate-in fade-in duration-300">

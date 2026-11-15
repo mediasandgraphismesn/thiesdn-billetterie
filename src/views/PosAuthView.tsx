@@ -9,6 +9,7 @@ import {
   isSupabaseConfigured,
 } from '../services/supabase';
 import { TurnstileGate, type TurnstileGateHandle } from '../components/TurnstileGate';
+import { isPosAccountIdentity, resolveEffectiveUserRole } from '../contexts/AuthContext';
 
 export interface PosAuthSuccessOptions {
   linkedAgentId?: string | null;
@@ -71,9 +72,15 @@ export const PosAuthView: React.FC<PosAuthViewProps> = ({
 
         if (cancelled) return;
 
+        const authEmail =
+          profile?.email ||
+          (authUser && typeof authUser.email === 'string' ? authUser.email : undefined);
+        const resolvedRole = resolveEffectiveUserRole(currentRole || profile?.role, authEmail);
+
         if (linkedRes.agent) {
-          const resolvedRole = currentRole || profile?.role || 'sales_agent';
           onLoginSuccess(resolvedRole, { linkedAgentId: linkedRes.agent.id });
+        } else if (isPosAccountIdentity(authEmail, resolvedRole)) {
+          onLoginSuccess('sales_agent', { linkedAgentId: null });
         }
       } finally {
         if (!cancelled) {
@@ -114,9 +121,13 @@ export const PosAuthView: React.FC<PosAuthViewProps> = ({
             fetchUserProfile(res.user.id, res.user),
             fetchLinkedSalesAgentForUser(res.user.id),
           ]);
-          const role = profile?.role || res.user.user_metadata?.role || 'user';
+          const rawRole =
+            profile?.role ||
+            (typeof res.user.user_metadata?.role === 'string' ? res.user.user_metadata.role : undefined) ||
+            'user';
+          const role = resolveEffectiveUserRole(rawRole, res.user.email || cleanEmail);
 
-          // Priorité absolue au contexte /pos : si user_id existe dans sales_agents, ouvrir la caisse immédiatement
+          // Priorité absolue au contexte /pos : si user_id existe dans sales_agents ou compte POS, ouvrir la caisse immédiatement
           if (linkedRes.agent) {
             onLoginSuccess(role, { linkedAgentId: linkedRes.agent.id });
           } else if (role === 'sales_agent' || role === 'admin' || role === 'promoter') {

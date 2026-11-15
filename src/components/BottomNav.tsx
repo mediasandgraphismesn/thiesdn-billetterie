@@ -84,7 +84,6 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     if (userRole === 'sales_agent') {
       return [
         { id: 'sales_agent', label: 'Mon Guichet', icon: Store },
-        { id: 'profile', label: 'Mon Profil', icon: User },
       ];
     }
 

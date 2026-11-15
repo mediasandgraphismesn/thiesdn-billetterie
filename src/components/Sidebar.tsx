@@ -132,7 +132,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     if (user.role === 'sales_agent') {
       return [
         { id: 'sales_agent', label: 'Mon Guichet Vendeur', icon: Store, badge: 'Point de Vente', badgeStyle: 'bg-emerald-500/20 text-emerald-400' },
-        { id: 'profile', label: 'Mon Profil', icon: Settings },
       ];
     }
 

@@ -9,11 +9,36 @@ import {
 
 export type UserRole = 'user' | 'promoter' | 'admin' | 'sales_agent' | 'artist';
 
+export const POS_EMAIL_DOMAIN = '@pos.thiesdn.site';
+
+export const isPosAccountIdentity = (email?: string | null, role?: string | null): boolean => {
+  const normalizedRole = String(role || '').trim().toLowerCase();
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  return normalizedRole === 'sales_agent' || normalizedEmail.endsWith(POS_EMAIL_DOMAIN);
+};
+
+export const resolveEffectiveUserRole = (role?: string | null, email?: string | null): UserRole => {
+  if (isPosAccountIdentity(email, role)) {
+    return 'sales_agent';
+  }
+  const normalizedRole = String(role || '').trim().toLowerCase();
+  if (
+    normalizedRole === 'admin' ||
+    normalizedRole === 'promoter' ||
+    normalizedRole === 'artist' ||
+    normalizedRole === 'sales_agent'
+  ) {
+    return normalizedRole;
+  }
+  return 'user';
+};
+
 interface AuthContextType {
   isAuthenticated: boolean;
   user: UserProfile | null;
   userRole: UserRole;
   effectiveRole: UserRole;
+  isPosAccount: boolean;
   isLoading: boolean;
   isAdminPreview: boolean;
   setIsAdminPreview: (val: boolean) => void;
@@ -35,11 +60,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return false;
   });
 
-  // Rôle effectif pour l'UI (si un admin teste la vue visiteur)
+  const isPosAccount = useMemo(
+    () => isAuthenticated && isPosAccountIdentity(user?.email, userRole),
+    [isAuthenticated, user?.email, userRole]
+  );
+
+  // Rôle effectif pour l'UI (verrouillage POS prioritaire, sinon aperçu visiteur pour admin)
   const effectiveRole: UserRole = useMemo(() => {
+    if (isPosAccountIdentity(user?.email, userRole)) return 'sales_agent';
     if (isAdminPreview && userRole === 'admin') return 'user';
     return userRole;
-  }, [isAdminPreview, userRole]);
+  }, [isAdminPreview, userRole, user?.email]);
 
   // Récupération en temps réel du profil depuis la table 'profiles' (pas le JWT)
   const loadProfile = async (userId: string, authUser?: any) => {
@@ -74,11 +105,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const isEmailConfirmed = Boolean(
           authUser?.email_confirmed_at || authUser?.confirmed_at || profile.email
         );
-        const mappedRole = (profile.role as UserRole) || 'user';
+        const mappedRole = resolveEffectiveUserRole(profile.role, emailCandidate);
 
         const jwtRole = authUser?.user_metadata?.role || authUser?.app_metadata?.role;
         if (jwtRole && jwtRole !== mappedRole) {
           console.info(`Rôle mis à jour en base (${jwtRole} -> ${mappedRole}). Synchronisation session.`);
+        }
+
+        if (isPosAccountIdentity(emailCandidate, mappedRole)) {
+          setIsAdminPreview(false);
         }
 
         const updatedProfile: UserProfile = {
@@ -106,7 +141,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsAuthenticated(true);
       } else if (authUser) {
         // Fallback métadonnées si la ligne profiles n'existe pas encore
-        const role = (authUser?.user_metadata?.role as UserRole) || 'user';
+        const role = resolveEffectiveUserRole(
+          typeof authUser?.user_metadata?.role === 'string' ? authUser.user_metadata.role : undefined,
+          emailCandidate
+        );
+        if (isPosAccountIdentity(emailCandidate, role)) {
+          setIsAdminPreview(false);
+        }
         const fallbackProfile: UserProfile = {
           id: authUser.id,
           name: cleanName,
@@ -240,6 +281,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         userRole,
         effectiveRole,
+        isPosAccount,
         isLoading,
         isAdminPreview,
         setIsAdminPreview,

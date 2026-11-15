@@ -29,6 +29,7 @@ import {
   Wifi,
   WifiOff,
   CloudUpload,
+  LogOut,
 } from 'lucide-react';
 import { SalesAgent, UserTicket, EventItem, UserProfile } from '../types';
 import {
@@ -111,6 +112,7 @@ interface SalesAgentDashboardViewProps {
   onOpenScanner?: () => void;
   user?: UserProfile;
   onNavigateBack?: () => void;
+  onSignOut?: () => Promise<void> | void;
 }
 
 export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = ({
@@ -120,7 +122,9 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
   onOpenScanner,
   user,
   onNavigateBack,
+  onSignOut,
 }) => {
+  const [isSigningOut, setIsSigningOut] = useState(false);
   const isConnected = isSupabaseConfigured();
   const initialOfflineSnapshot = useMemo(
     () => loadPosAgentSnapshot(currentAgentId || user?.assignedAgentId),
@@ -199,6 +203,17 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
     setTorchSupported(false);
     setIsTorchOn(false);
   }, []);
+
+  const handlePosLogout = useCallback(async () => {
+    if (!onSignOut || isSigningOut) return;
+    setIsSigningOut(true);
+    try {
+      await stopCameraScanner();
+      await onSignOut();
+    } finally {
+      setIsSigningOut(false);
+    }
+  }, [onSignOut, isSigningOut, stopCameraScanner]);
 
   const toggleTorch = useCallback(async () => {
     const handle = scannerHandleRef.current;
@@ -881,7 +896,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
     }
 
     return (
-      <div className="max-w-2xl mx-auto p-8 text-center space-y-4 glass-panel rounded-3xl animate-in fade-in">
+      <div className="max-w-2xl mx-auto p-8 text-center space-y-5 glass-panel rounded-3xl animate-in fade-in">
         <Store className="w-12 h-12 text-[#E9C349] mx-auto" />
         <h2 className="font-heading text-lg font-bold text-white">
           Aucun point de vente affilié trouvé
@@ -889,6 +904,21 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
         <p className="text-xs text-gray-400">
           Votre compte n'est pas encore associé à un réseau de vente physique. Contactez votre promoteur Thièsdn pour recevoir votre lot de billets.
         </p>
+        {onSignOut && (
+          <div className="pt-2 flex justify-center">
+            <button
+              type="button"
+              onClick={() => {
+                void handlePosLogout();
+              }}
+              disabled={isSigningOut}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-rose-950/50 hover:bg-rose-950/80 border border-rose-500/40 text-rose-200 hover:text-white text-xs font-heading font-bold uppercase tracking-wider transition-all cursor-pointer disabled:opacity-50"
+            >
+              <LogOut className="w-4 h-4 text-rose-400" />
+              <span>{isSigningOut ? 'Déconnexion...' : 'Se déconnecter'}</span>
+            </button>
+          </div>
+        )}
       </div>
     );
   }
@@ -988,7 +1018,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
           </div>
         </div>
 
-        <div className="flex items-center gap-2 relative z-10 self-start sm:self-auto">
+        <div className="flex flex-wrap items-center gap-2 relative z-10 self-start sm:self-auto">
           {agents.length > 1 && (
             <select
               value={selectedAgentId}
@@ -1008,15 +1038,31 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
           )}
 
           <button
+            type="button"
             onClick={() => {
               void handleRefresh();
             }}
             disabled={isRefreshing}
-            className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 transition-colors disabled:opacity-60"
+            className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 transition-colors disabled:opacity-60 cursor-pointer"
             title="Actualiser les stocks et ventes"
           >
             <RefreshCw className={`w-4 h-4 text-[#8A2BE2] ${isRefreshing ? 'animate-spin' : ''}`} />
           </button>
+
+          {onSignOut && (
+            <button
+              type="button"
+              onClick={() => {
+                void handlePosLogout();
+              }}
+              disabled={isSigningOut}
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-rose-950/45 hover:bg-rose-950/80 border border-rose-500/40 text-rose-200 hover:text-white text-xs font-heading font-bold uppercase tracking-wider transition-all cursor-pointer disabled:opacity-50"
+              title="Se déconnecter du guichet POS"
+            >
+              <LogOut className="w-4 h-4 text-rose-400 shrink-0" />
+              <span>{isSigningOut ? 'Déconnexion...' : 'Se déconnecter'}</span>
+            </button>
+          )}
         </div>
       </div>
 
