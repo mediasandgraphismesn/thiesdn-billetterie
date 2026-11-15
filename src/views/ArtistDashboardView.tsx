@@ -37,8 +37,22 @@ import {
   getStoredTickets,
   getStoredOrders,
   fetchOrdersFromSupabase,
+  fetchAllSoldTicketsFromSupabase,
+  isSupabaseConfigured,
+  clearLocalTicketReserveCache,
 } from '../services/supabase';
 import { AccreditationsView } from './AccreditationsView';
+
+const SOLD_TICKET_STATUSES: ReadonlyArray<UserTicket['status']> = [
+  'sold_valid',
+  'physical_sold',
+  'scanned',
+  'used',
+  'valid',
+];
+
+const isSoldTicketStatus = (status: UserTicket['status']): boolean =>
+  SOLD_TICKET_STATUSES.includes(status);
 
 interface ArtistDashboardViewProps {
   user: UserProfile;
@@ -53,10 +67,11 @@ export const ArtistDashboardView: React.FC<ArtistDashboardViewProps> = ({
   currentCoproducer: initialCoproducer,
   onNavigateBack,
 }) => {
+  const isConnected = isSupabaseConfigured();
   const [coproducers, setCoproducers] = useState<EventCoproducer[]>(getStoredCoproducers());
   const [guestTickets, setGuestTickets] = useState<GuestTicket[]>(getStoredGuestTickets());
-  const [tickets, setTickets] = useState<UserTicket[]>(getStoredTickets());
-  const [orders, setOrders] = useState<OrderRecord[]>(getStoredOrders());
+  const [tickets, setTickets] = useState<UserTicket[]>(() => (isConnected ? [] : getStoredTickets()));
+  const [orders, setOrders] = useState<OrderRecord[]>(() => (isConnected ? [] : getStoredOrders()));
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [artistTab, setArtistTab] = useState<'cockpit' | 'accreditations'>('cockpit');
 
@@ -90,24 +105,38 @@ export const ArtistDashboardView: React.FC<ArtistDashboardViewProps> = ({
   const [isSigningDecompte, setIsSigningDecompte] = useState(false);
   const [decompteSuccess, setDecompteSuccess] = useState<string | null>(null);
 
-  // Recharger les commandes réelles
+  // Recharger les commandes et billets réels depuis Supabase
   const handleRefresh = async () => {
     setIsRefreshing(true);
+    clearLocalTicketReserveCache();
     setCoproducers(getStoredCoproducers());
     setGuestTickets(getStoredGuestTickets());
-    setTickets(getStoredTickets());
-    const res = await fetchOrdersFromSupabase();
-    if (res.orders && res.orders.length > 0) {
-      setOrders(res.orders);
+
+    if (isConnected) {
+      const [ordersRes, ticketsRes] = await Promise.all([
+        fetchOrdersFromSupabase(),
+        fetchAllSoldTicketsFromSupabase(
+          activeEvent?.id ? { eventId: activeEvent.id } : undefined
+        ),
+      ]);
+
+      if (!ordersRes.error) {
+        setOrders(ordersRes.orders);
+      }
+      if (!ticketsRes.error) {
+        setTickets(ticketsRes.tickets);
+      }
     } else {
+      setTickets(getStoredTickets());
       setOrders(getStoredOrders());
     }
+
     setIsRefreshing(false);
   };
 
   useEffect(() => {
     handleRefresh();
-  }, []);
+  }, [activeEvent?.id]);
 
   // Billets et commandes filtrés pour cet événement
   const eventOrders = useMemo(() => {
@@ -120,43 +149,74 @@ export const ArtistDashboardView: React.FC<ArtistDashboardViewProps> = ({
     return tickets.filter((t) => t.eventId === activeEvent.id);
   }, [tickets, activeEvent]);
 
-  // 1. Chiffre d'Affaires Brut Total (Wave + OM + Billets physiques)
+  const soldEventTickets = useMemo(
+    () => eventTickets.filter((t) => isSoldTicketStatus(t.status)),
+    [eventTickets]
+  );
+
+  const physicalSoldTickets = useMemo(
+    () => soldEventTickets.filter((t) => Boolean(t.isPhysical)),
+    [soldEventTickets]
+  );
+
+  const digitalSoldTickets = useMemo(
+    () => soldEventTickets.filter((t) => !t.isPhysical),
+    [soldEventTickets]
+  );
+
+  // 1. Chiffre d'Affaires Brut Total (Wave + OM + Billets physiques) sans double comptage
   const totalGrossCA = useMemo(() => {
     const ordersTotal = eventOrders.reduce((sum, o) => sum + o.totalAmount, 0);
-    const physicalSold = eventTickets.filter(
-      (t) => t.isPhysical && (t.status === 'physical_sold' || t.status === 'used')
-    );
-    const physicalTotal = physicalSold.reduce((sum, t) => sum + t.price, 0);
-    return Math.max(ordersTotal, physicalTotal + ordersTotal);
-  }, [eventOrders, eventTickets]);
+    const digitalFallbackTotal = digitalSoldTickets.reduce((sum, t) => sum + (t.price || 0), 0);
+    const webTotal = ordersTotal > 0 ? ordersTotal : digitalFallbackTotal;
+    const physicalTotal = physicalSoldTickets.reduce((sum, t) => sum + (t.price || 0), 0);
+    return webTotal + physicalTotal;
+  }, [eventOrders, digitalSoldTickets, physicalSoldTickets]);
 
   // 2. Part de l'Artiste / Ayant-Droit selon son revenueShare
   const artistSharePercent = activeCoproducer?.revenueShare || 0;
   const artistNetEarnings = Math.round((totalGrossCA * artistSharePercent) / 100);
 
-  // 3. Billets vendus et ventilation par catégorie
+  // 3. Billets vendus et ventilation réelle par catégorie (sans jamais baisser après scan)
   const totalSoldTicketsCount = useMemo(() => {
-    const digitalCount = eventOrders.reduce((sum, o) => sum + o.quantity, 0);
-    const physicalCount = eventTickets.filter(
-      (t) => t.isPhysical && (t.status === 'physical_sold' || t.status === 'used')
-    ).length;
-    return digitalCount + physicalCount;
-  }, [eventOrders, eventTickets]);
+    const ordersQuantity = eventOrders.reduce((sum, o) => sum + (o.quantity || 0), 0);
+    const digitalCount = Math.max(digitalSoldTickets.length, ordersQuantity);
+    return physicalSoldTickets.length + digitalCount;
+  }, [eventOrders, digitalSoldTickets, physicalSoldTickets]);
 
   const statsByCategory = useMemo(() => {
-    const prevente = eventTickets.filter((t) => t.tierName.toLowerCase().includes('prévente') || t.tierName.toLowerCase().includes('prevente'));
-    const jourJ = eventTickets.filter((t) => t.tierName.toLowerCase().includes('jour'));
-    const vip = eventTickets.filter((t) => t.tierName.toLowerCase().includes('vip'));
-    return {
-      preventeCount: prevente.length || Math.round(totalSoldTicketsCount * 0.45),
-      jourJCount: jourJ.length || Math.round(totalSoldTicketsCount * 0.40),
-      vipCount: vip.length || Math.round(totalSoldTicketsCount * 0.15),
-    };
-  }, [eventTickets, totalSoldTicketsCount]);
+    let preventeCount = soldEventTickets.filter((t) => {
+      const name = t.tierName.toLowerCase();
+      return name.includes('prévente') || name.includes('prevente');
+    }).length;
+    let jourJCount = soldEventTickets.filter((t) =>
+      t.tierName.toLowerCase().includes('jour')
+    ).length;
+    let vipCount = soldEventTickets.filter((t) =>
+      t.tierName.toLowerCase().includes('vip')
+    ).length;
 
-  // 4. Scans réels aux portes d'accès
+    // Fallback uniquement si aucun billet digital n'est encore remonté dans `tickets`
+    if (digitalSoldTickets.length === 0 && eventOrders.length > 0) {
+      for (const order of eventOrders) {
+        const name = (order.tierName || '').toLowerCase();
+        const qty = order.quantity || 0;
+        if (name.includes('prévente') || name.includes('prevente')) {
+          preventeCount += qty;
+        } else if (name.includes('jour')) {
+          jourJCount += qty;
+        } else if (name.includes('vip')) {
+          vipCount += qty;
+        }
+      }
+    }
+
+    return { preventeCount, jourJCount, vipCount };
+  }, [soldEventTickets, digitalSoldTickets.length, eventOrders]);
+
+  // 4. Scans réels aux portes d'accès (physiques + digitaux)
   const totalScannedCount = useMemo(() => {
-    return eventTickets.filter((t) => t.status === 'used').length;
+    return eventTickets.filter((t) => t.status === 'scanned' || t.status === 'used').length;
   }, [eventTickets]);
 
   // 5. Guest List liée à ce co-producteur

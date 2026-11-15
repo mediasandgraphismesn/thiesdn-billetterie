@@ -39,6 +39,9 @@ import {
   lookupPhysicalTicketForSale,
   confirmSinglePhysicalTicketSale,
   fetchSalesAgentsFromSupabase,
+  fetchAllSoldTicketsFromSupabase,
+  isSupabaseConfigured,
+  clearLocalTicketReserveCache,
   getSupabaseClient,
 } from '../services/supabase';
 
@@ -59,12 +62,14 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
   user,
   onNavigateBack,
 }) => {
-  const [agents, setAgents] = useState<SalesAgent[]>(getStoredSalesAgents());
-  const [tickets, setTickets] = useState<UserTicket[]>(getStoredTickets());
+  const isConnected = isSupabaseConfigured();
+  const [agents, setAgents] = useState<SalesAgent[]>(() => (isConnected ? [] : getStoredSalesAgents()));
+  const [tickets, setTickets] = useState<UserTicket[]>(() => (isConnected ? [] : getStoredTickets()));
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(isConnected);
   const [selectedAgentId, setSelectedAgentId] = useState<string>(() => {
     if (currentAgentId) return currentAgentId;
     if (user?.assignedAgentId) return user.assignedAgentId;
-    const initialAgents = getStoredSalesAgents();
+    const initialAgents = isConnected ? [] : getStoredSalesAgents();
     const byUserId = initialAgents.find((a) => a.userId === user?.id || (user?.phone && a.telephone.includes(user.phone)));
     if (byUserId) return byUserId.id;
     return initialAgents[0]?.id || '';
@@ -184,8 +189,15 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
 
   const remainingTickets = useMemo(() => {
     if (!activeAgent) return 0;
+    const unsoldInStock = agentTickets.filter(
+      (t) =>
+        t.status === 'printed_not_sold' ||
+        t.status === 'physical_allocated' ||
+        t.status === 'physical_printed'
+    ).length;
+    if (agentTickets.length > 0) return unsoldInStock;
     return Math.max(0, activeAgent.allocatedCount - activeAgent.soldCount);
-  }, [activeAgent]);
+  }, [activeAgent, agentTickets]);
 
   const estimatedTotalCash = activeAgent ? activeAgent.cashCollected : 0;
   const agentCommissionEarned = activeAgent
@@ -193,10 +205,58 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
     : 0;
   const netDueToPromoter = activeAgent ? activeAgent.amountDue : 0;
 
-  const handleRefresh = () => {
-    setAgents(getStoredSalesAgents());
-    setTickets(getStoredTickets());
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    clearLocalTicketReserveCache();
+
+    if (isConnected) {
+      const agentsRes = await fetchSalesAgentsFromSupabase();
+      const loadedAgents = !agentsRes.error ? agentsRes.agents : getStoredSalesAgents();
+      if (!agentsRes.error) {
+        setAgents(agentsRes.agents);
+        saveSalesAgents(agentsRes.agents);
+      } else {
+        setAgents(getStoredSalesAgents());
+      }
+
+      const normalizedUserPhone = (user?.phone || '').replace(/[^0-9]/g, '');
+      const targetAgent =
+        loadedAgents.find((a) => currentAgentId && a.id === currentAgentId) ||
+        loadedAgents.find((a) => selectedAgentId && a.id === selectedAgentId) ||
+        loadedAgents.find((a) => user?.assignedAgentId && a.id === user.assignedAgentId) ||
+        loadedAgents.find((a) => user?.id && a.userId === user.id) ||
+        loadedAgents.find(
+          (a) =>
+            (normalizedUserPhone &&
+              a.telephone.replace(/[^0-9]/g, '') === normalizedUserPhone) ||
+            (user?.email && a.email && a.email.toLowerCase() === user.email.toLowerCase())
+        ) ||
+        loadedAgents[0];
+
+      if (targetAgent && !selectedAgentId) {
+        setSelectedAgentId(targetAgent.id);
+      }
+
+      const ticketsRes = await fetchAllSoldTicketsFromSupabase(
+        targetAgent?.eventId ? { eventId: targetAgent.eventId } : undefined
+      );
+      if (!ticketsRes.error) {
+        setTickets(ticketsRes.tickets);
+        saveStoredTickets(ticketsRes.tickets);
+      } else {
+        setTickets(getStoredTickets());
+      }
+    } else {
+      setAgents(getStoredSalesAgents());
+      setTickets(getStoredTickets());
+    }
+
+    setIsRefreshing(false);
   };
+
+  useEffect(() => {
+    void handleRefresh();
+  }, [user?.id, currentAgentId]);
 
   // Méthode A : Scan préalable et vérification du billet
   const handleCheckTicketForSale = (code: string) => {
@@ -382,6 +442,20 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
   };
 
   if (!activeAgent) {
+    if (isRefreshing) {
+      return (
+        <div className="max-w-2xl mx-auto p-8 text-center space-y-4 glass-panel rounded-3xl animate-in fade-in">
+          <RefreshCw className="w-10 h-10 text-[#E9C349] mx-auto animate-spin" />
+          <h2 className="font-heading text-lg font-bold text-white">
+            Chargement de votre caisse POS...
+          </h2>
+          <p className="text-xs text-gray-400">
+            Synchronisation de vos stocks physiques et ventes depuis Supabase.
+          </p>
+        </div>
+      );
+    }
+
     return (
       <div className="max-w-2xl mx-auto p-8 text-center space-y-4 glass-panel rounded-3xl animate-in fade-in">
         <Store className="w-12 h-12 text-[#E9C349] mx-auto" />
@@ -458,11 +532,14 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
           )}
 
           <button
-            onClick={handleRefresh}
-            className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 transition-colors"
+            onClick={() => {
+              void handleRefresh();
+            }}
+            disabled={isRefreshing}
+            className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 transition-colors disabled:opacity-60"
             title="Actualiser les stocks et ventes"
           >
-            <RefreshCw className="w-4 h-4 text-[#8A2BE2]" />
+            <RefreshCw className={`w-4 h-4 text-[#8A2BE2] ${isRefreshing ? 'animate-spin' : ''}`} />
           </button>
         </div>
       </div>

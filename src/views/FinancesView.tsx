@@ -46,6 +46,7 @@ import {
   SlidersHorizontal,
   Trash2,
   MoreVertical,
+  MessageCircle,
 } from 'lucide-react';
 import {
   getStoredTransactions,
@@ -63,6 +64,8 @@ import {
   getStoredSalesAgents,
   fetchSalesAgentsFromSupabase,
   createSalesAgent,
+  buildFallbackPosEmail,
+  provisionSalesAgentAuthAccount,
   TicketAllocation,
   generatePhysicalTicketBatch,
   assignTicketsToAgent,
@@ -73,6 +76,7 @@ import {
   getStoredCoproducers,
   createCoproducer,
   clearTestPhysicalTickets,
+  clearLocalTicketReserveCache,
 } from '../services/supabase';
 import {
   PlatformPaymentSettings,
@@ -90,6 +94,7 @@ import { SalesAgentDashboardView } from './SalesAgentDashboardView';
 import { ArtistDashboardView } from './ArtistDashboardView';
 import { AccreditationsView } from './AccreditationsView';
 import { ScanStationsView } from './ScanStationsView';
+import { AssignPhysicalTicketsModal } from '../components/AssignPhysicalTicketsModal';
 
 interface FinancesViewProps {
   currentRole: 'user' | 'promoter' | 'admin';
@@ -104,9 +109,16 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
   promoterName,
   initialTab,
 }) => {
-  const [transactions, setTransactions] = useState<TransactionRecord[]>(getStoredTransactions());
-  const [orders, setOrders] = useState<OrderRecord[]>(getStoredOrders());
-  const [tickets, setTickets] = useState<UserTicket[]>(getStoredTickets());
+  const isConnected = isSupabaseConfigured();
+  const [transactions, setTransactions] = useState<TransactionRecord[]>(() =>
+    isConnected ? [] : getStoredTransactions()
+  );
+  const [orders, setOrders] = useState<OrderRecord[]>(() =>
+    isConnected ? [] : getStoredOrders()
+  );
+  const [tickets, setTickets] = useState<UserTicket[]>(() =>
+    isConnected ? [] : getStoredTickets()
+  );
   const [copiedSql, setCopiedSql] = useState(false);
   const [customUrl, setCustomUrl] = useState(
     localStorage.getItem('VITE_SUPABASE_URL') || ''
@@ -144,9 +156,13 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
   // ====================================================================
   // ÉTATS GESTION DU RÉSEAU & BILLETS PHYSIQUES
   // ====================================================================
-  const [agents, setAgents] = useState<SalesAgent[]>(getStoredSalesAgents());
+  const [agents, setAgents] = useState<SalesAgent[]>(() =>
+    isConnected ? [] : getStoredSalesAgents()
+  );
   const [coproducers, setCoproducers] = useState<EventCoproducer[]>(getStoredCoproducers());
-  const [allocations, setAllocations] = useState<TicketAllocation[]>(getStoredTicketAllocations());
+  const [allocations, setAllocations] = useState<TicketAllocation[]>(() =>
+    isConnected ? [] : getStoredTicketAllocations()
+  );
   const [previewCoproducer, setPreviewCoproducer] = useState<EventCoproducer | null>(null);
 
   // Formulaire d'ajout rapide co-producteur dans Cockpit
@@ -169,14 +185,22 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
   const [newAgentShop, setNewAgentShop] = useState('');
   const [newAgentManager, setNewAgentManager] = useState('');
   const [newAgentPhone, setNewAgentPhone] = useState('');
+  const [newAgentEmail, setNewAgentEmail] = useState('');
   const [newAgentQuartier, setNewAgentQuartier] = useState('Escale Sud (Centre-Ville)');
   const [newAgentCommission, setNewAgentCommission] = useState(10);
   const [isSavingAgent, setIsSavingAgent] = useState(false);
+  const [provisioningAgentId, setProvisioningAgentId] = useState<string | null>(null);
+  const [agentAccessBanner, setAgentAccessBanner] = useState<{
+    agent: SalesAgent;
+    email: string;
+    tempPassword?: string;
+    waUrl: string;
+    warning?: string;
+  } | null>(null);
 
   // Modale d'attribution de billets physiques
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [selectedAgentForAssign, setSelectedAgentForAssign] = useState<SalesAgent | null>(null);
-  const [assignCountInput, setAssignCountInput] = useState<number>(50);
   const [assignTierName, setAssignTierName] = useState<string>('');
   const [isAssigning, setIsAssigning] = useState<boolean>(false);
   const [assignNotification, setAssignNotification] = useState<{ message: string; waUrl?: string } | null>(null);
@@ -211,8 +235,6 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
   // Menu MoreVertical actif pour les points de vente (Règle 2 boutons max)
   const [activeAgentMenuId, setActiveAgentMenuId] = useState<string | null>(null);
 
-  const isConnected = isSupabaseConfigured();
-
   // ====================================================================
   // CALCULS DU COCKPIT PROMOTEUR (Déclarés avant les hooks de chargement pour éviter tout TDZ)
   // ====================================================================
@@ -233,31 +255,60 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
     return promoterEvents.find((e) => e.id === selectedEventId) || promoterEvents[0] || null;
   }, [promoterEvents, selectedEventId]);
 
+  const loadCockpitData = async (targetEventId?: string): Promise<void> => {
+    if (!isConnected) {
+      setTransactions(getStoredTransactions());
+      setAgents(getStoredSalesAgents());
+      setCoproducers(getStoredCoproducers());
+      setOrders(getStoredOrders());
+      setTickets(getStoredTickets());
+      setAllocations(getStoredTicketAllocations());
+      return;
+    }
+
+    const [agentsRes, allocRes, ordersRes, ticketsRes] = await Promise.all([
+      fetchSalesAgentsFromSupabase(),
+      fetchTicketAllocationsFromSupabase(targetEventId),
+      fetchOrdersFromSupabase(),
+      fetchAllSoldTicketsFromSupabase({ eventId: targetEventId }),
+    ]);
+
+    if (!agentsRes.error) {
+      setAgents(agentsRes.agents);
+    }
+    if (!allocRes.error) {
+      setAllocations(allocRes.allocations);
+    }
+    if (!ordersRes.error) {
+      setOrders(ordersRes.orders);
+    }
+    if (!ticketsRes.error) {
+      setTickets(ticketsRes.tickets);
+    }
+  };
+
   useEffect(() => {
     const targetEventId = selectedEventId === 'all' ? (activeEvent?.id || undefined) : selectedEventId;
-
-    setAgents(getStoredSalesAgents());
     setCoproducers(getStoredCoproducers());
 
-    // Chargement parallélisé React 19 via Promise.all() pour un affichage instantané
     let isMounted = true;
     Promise.all([
       fetchSalesAgentsFromSupabase(),
       fetchTicketAllocationsFromSupabase(targetEventId),
       fetchOrdersFromSupabase(),
-      fetchAllSoldTicketsFromSupabase({ eventId: targetEventId, isPhysical: true }),
+      fetchAllSoldTicketsFromSupabase({ eventId: targetEventId }),
     ]).then(([agentsRes, allocRes, ordersRes, ticketsRes]) => {
       if (!isMounted) return;
-      if (agentsRes.agents && agentsRes.agents.length > 0) {
+      if (!agentsRes.error) {
         setAgents(agentsRes.agents);
       }
-      if (allocRes.allocations) {
+      if (!allocRes.error) {
         setAllocations(allocRes.allocations);
       }
-      if (ordersRes.orders && ordersRes.orders.length > 0) {
+      if (!ordersRes.error) {
         setOrders(ordersRes.orders);
       }
-      if (ticketsRes.tickets) {
+      if (!ticketsRes.error) {
         setTickets(ticketsRes.tickets);
       }
     });
@@ -268,33 +319,9 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
   }, [selectedEventId, activeEvent?.id]);
 
   const handleRefresh = async () => {
-    setTransactions(getStoredTransactions());
-    setAgents(getStoredSalesAgents());
-    setCoproducers(getStoredCoproducers());
-
     const targetEventId = selectedEventId === 'all' ? (activeEvent?.id || undefined) : selectedEventId;
-
-    const [ordersRes, agentsRes, ticketsRes, allocRes] = await Promise.all([
-      fetchOrdersFromSupabase(),
-      fetchSalesAgentsFromSupabase(),
-      fetchAllSoldTicketsFromSupabase({ eventId: targetEventId, isPhysical: true }),
-      fetchTicketAllocationsFromSupabase(targetEventId),
-    ]);
-
-    if (ordersRes.orders && ordersRes.orders.length > 0) {
-      setOrders(ordersRes.orders);
-    } else {
-      setOrders(getStoredOrders());
-    }
-    if (agentsRes.agents && agentsRes.agents.length > 0) {
-      setAgents(agentsRes.agents);
-    }
-    if (ticketsRes.tickets) {
-      setTickets(ticketsRes.tickets);
-    }
-    if (allocRes.allocations) {
-      setAllocations(allocRes.allocations);
-    }
+    setCoproducers(getStoredCoproducers());
+    await loadCockpitData(targetEventId);
   };
 
   const handleSavePaymentSettings = (e: React.FormEvent) => {
@@ -367,21 +394,24 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
 
 
 
-  // Commandes filtrées pour le promoteur
+  // ID de l'événement actif à cibler strictement
+  const currentEventId = selectedEventId !== 'all' ? selectedEventId : activeEvent?.id;
+
+  // Commandes filtrées strictement pour l'événement actif
   const filteredOrders = useMemo(() => {
-    if (selectedEventId === 'all') return orders;
-    return orders.filter((o) => o.eventId === selectedEventId);
-  }, [orders, selectedEventId]);
+    if (!currentEventId) return orders;
+    return orders.filter((o) => o.eventId === currentEventId);
+  }, [orders, currentEventId]);
 
   const confirmedOrders = useMemo(() => {
     return filteredOrders.filter((o) => o.status === 'confirmed');
   }, [filteredOrders]);
 
-  // Billets correspondants
+  // Billets correspondants (strictement bornés à l'événement actif)
   const filteredTickets = useMemo(() => {
-    if (selectedEventId === 'all') return tickets;
-    return tickets.filter((t) => t.eventId === selectedEventId);
-  }, [tickets, selectedEventId]);
+    if (!currentEventId) return tickets;
+    return tickets.filter((t) => t.eventId === currentEventId);
+  }, [tickets, currentEventId]);
 
   // ====================================================================
   // CALCULS DU RÉSEAU DE VENTE & BILLETS PHYSIQUES
@@ -391,16 +421,22 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
     return agents.filter((a) => !a.eventId || a.eventId === activeEvent.id);
   }, [agents, activeEvent]);
 
-  // ID de l'événement actif à cibler strictement
-  const currentEventId = selectedEventId !== 'all' ? selectedEventId : activeEvent?.id;
-
   // Billets physiques de l'événement actif UNIQUEMENT
   const eventPhysicalTickets = useMemo(() => {
-    return tickets.filter((t) => {
-      const matchEvt = !currentEventId || t.eventId === currentEventId;
-      return t.isPhysical && matchEvt;
-    });
-  }, [tickets, currentEventId]);
+    return filteredTickets.filter((t) => Boolean(t.isPhysical));
+  }, [filteredTickets]);
+
+  const isSoldTicketStatus = (status: UserTicket['status']): boolean =>
+    status === 'sold_valid' ||
+    status === 'physical_sold' ||
+    status === 'scanned' ||
+    status === 'used' ||
+    status === 'valid';
+
+  // Billets digitaux vendus ou scannés de l'événement actif UNIQUEMENT
+  const digitalSoldTickets = useMemo(() => {
+    return filteredTickets.filter((t) => !t.isPhysical && isSoldTicketStatus(t.status));
+  }, [filteredTickets]);
 
   // Billets imprimés en stock promoteur non encore alloués
   const unassignedPhysicalTickets = useMemo(() => {
@@ -416,32 +452,24 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
     );
   }, [eventPhysicalTickets]);
 
-  // Billets physiques vendus ou scannés
+  // Billets physiques vendus ou scannés (ne diminue jamais lors du scan à l'entrée)
   const soldPhysicalTickets = useMemo(() => {
-    return eventPhysicalTickets.filter(
-      (t) =>
-        t.status === 'sold_valid' ||
-        t.status === 'physical_sold' ||
-        t.status === 'scanned' ||
-        t.status === 'used'
-    );
+    return eventPhysicalTickets.filter((t) => isSoldTicketStatus(t.status));
   }, [eventPhysicalTickets]);
 
-  // Total consolidé des billets distribués au réseau (billets physiques alloués + déclarés vendus)
+  // Total consolidé des billets distribués au réseau (source réelle = tickets Supabase)
   const totalPhysicalDistributed = useMemo(() => {
     const fromTickets = allocatedPhysicalTickets.length + soldPhysicalTickets.length;
-    const fromAgents = networkAgents.reduce((sum, a) => sum + (a.allocatedCount || 0), 0);
-    if (fromTickets > 0) return fromTickets;
-    return fromAgents;
-  }, [allocatedPhysicalTickets, soldPhysicalTickets, networkAgents]);
+    if (isConnected || eventPhysicalTickets.length > 0) return fromTickets;
+    return networkAgents.reduce((sum, a) => sum + (a.allocatedCount || 0), 0);
+  }, [allocatedPhysicalTickets, soldPhysicalTickets, networkAgents, isConnected, eventPhysicalTickets.length]);
 
-  // Total consolidé des billets vendus et déclarés par les points de vente
+  // Total consolidé des billets physiques vendus et déclarés
   const totalPhysicalSold = useMemo(() => {
     const fromTickets = soldPhysicalTickets.length;
-    const fromAgents = networkAgents.reduce((sum, a) => sum + (a.soldCount || 0), 0);
-    if (fromTickets > 0) return fromTickets;
-    return fromAgents;
-  }, [soldPhysicalTickets, networkAgents]);
+    if (isConnected || eventPhysicalTickets.length > 0) return fromTickets;
+    return networkAgents.reduce((sum, a) => sum + (a.soldCount || 0), 0);
+  }, [soldPhysicalTickets, networkAgents, isConnected, eventPhysicalTickets.length]);
 
   // Billets physiques non vendus (réserve promoteur + en circulation non vendus)
   const totalUnsoldTickets = useMemo(() => {
@@ -451,37 +479,41 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
   // Statistiques détaillées des Billets Physiques Non Vendus par Collaborateur
   const physicalTicketsByAgent = useMemo(() => {
     return networkAgents.map((ag) => {
-      const allocated = tickets.filter((t) => t.isPhysical && t.agentId === ag.id);
-      const printedCount = allocated.length > 0 ? allocated.length : ag.allocatedCount;
-      const soldCount = allocated.filter(
-        (t) =>
-          t.status === 'sold_valid' ||
-          t.status === 'physical_sold' ||
-          t.status === 'scanned' ||
-          t.status === 'used'
-      ).length;
-      const unsoldCount = allocated.filter(
-        (t) =>
-          t.status === 'printed_not_sold' ||
-          t.status === 'physical_allocated' ||
-          t.status === 'physical_printed'
-      ).length;
+      const allocated = eventPhysicalTickets.filter((t) => t.agentId === ag.id);
+      const useRealTickets = isConnected || allocated.length > 0;
+      const printedCount = useRealTickets
+        ? allocated.filter((t) => t.status !== 'cancelled').length
+        : ag.allocatedCount;
+      const soldCount = useRealTickets
+        ? allocated.filter((t) => isSoldTicketStatus(t.status)).length
+        : ag.soldCount;
+      const unsoldCount = useRealTickets
+        ? allocated.filter(
+            (t) =>
+              t.status === 'printed_not_sold' ||
+              t.status === 'physical_allocated' ||
+              t.status === 'physical_printed'
+          ).length
+        : Math.max(0, printedCount - ag.soldCount);
       const cancelledCount = allocated.filter((t) => t.status === 'cancelled').length;
 
       return {
         agent: ag,
         printedCount,
-        soldCount: soldCount > 0 ? soldCount : ag.soldCount,
-        unsoldCount: unsoldCount > 0 ? unsoldCount : Math.max(0, printedCount - ag.soldCount),
+        soldCount,
+        unsoldCount,
         cancelledCount,
       };
     });
-  }, [networkAgents, tickets]);
+  }, [networkAgents, eventPhysicalTickets, isConnected]);
 
   // Totaux financiers du réseau physique
   const networkTotalGrossCollected = useMemo(() => {
+    if (isConnected) {
+      return soldPhysicalTickets.reduce((sum, t) => sum + (Number(t.price) || 0), 0);
+    }
     return networkAgents.reduce((sum, a) => sum + (a.cashCollected || 0), 0);
-  }, [networkAgents]);
+  }, [networkAgents, soldPhysicalTickets, isConnected]);
 
   const networkTotalAmountDue = useMemo(() => {
     return networkAgents.reduce((sum, a) => sum + (a.amountDue || 0), 0);
@@ -499,27 +531,33 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
   }, [networkAgents]);
 
   // ====================================================================
-  // MISSION 3 : CALCULS OFFICIELS CONSOLIDÉS (CORRECTION CRITIQUE DU BUG 804)
+  // CALCULS OFFICIELS CONSOLIDÉS (Source réelle Supabase uniquement)
   // ====================================================================
-  // 1. Billets vendus en ligne (Web)
+  // 1. Billets vendus en ligne (Web) : priorité aux billets digitaux (valid, used, scanned), repli commandes confirmées
   const webTicketsSold = useMemo(() => {
+    if (digitalSoldTickets.length > 0) {
+      return digitalSoldTickets.length;
+    }
     return confirmedOrders.reduce((acc, o) => acc + o.quantity, 0);
-  }, [confirmedOrders]);
+  }, [digitalSoldTickets, confirmedOrders]);
 
   const webGrossCA = useMemo(() => {
-    return confirmedOrders.reduce((acc, o) => acc + o.totalAmount, 0);
-  }, [confirmedOrders]);
+    if (confirmedOrders.length > 0) {
+      return confirmedOrders.reduce((acc, o) => acc + o.totalAmount, 0);
+    }
+    return digitalSoldTickets.reduce((acc, t) => acc + (Number(t.price) || 0), 0);
+  }, [confirmedOrders, digitalSoldTickets]);
 
   // 2. Billets physiques vendus
   const physicalTicketsSold = totalPhysicalSold;
   const physicalGrossCA = networkTotalGrossCollected;
 
-  // 3. Billets scannés à l'entrée
+  // 3. Billets scannés à l'entrée (physiques + digitaux)
   const scannedTicketsCount = useMemo(() => {
     return filteredTickets.filter((t) => t.status === 'used' || t.status === 'scanned').length;
   }, [filteredTickets]);
 
-  // 4. TOTAL BILLETS VENDUS : ZÉRO fallback sur filteredTickets.length !
+  // 4. TOTAL BILLETS VENDUS : sold_valid + physical_sold + scanned + used + valid (physique et digital)
   const totalTicketsSold = useMemo(() => {
     return webTicketsSold + physicalTicketsSold;
   }, [webTicketsSold, physicalTicketsSold]);
@@ -532,60 +570,51 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
   const promoterNetShare = Math.round(totalGrossCA * 0.9);
   const platformFeeShare = Math.round(totalGrossCA * 0.1);
 
-  // Ventilation par Catégories (Prévente, Jour J, VIP)
+  // Ventilation par Catégories (Prévente, Jour J, VIP) — 100% Web + Physique réels
   const statsByCategory = useMemo(() => {
-    // 1. Prévente (Web + Physique)
-    const preventeOrders = confirmedOrders.filter(
-      (o) =>
-        o.tierName.toLowerCase().includes('prévente') ||
-        o.tierName.toLowerCase().includes('prevente')
-    );
-    const preventeWebSold = preventeOrders.reduce((acc, o) => acc + o.quantity, 0);
-    const preventeWebCA = preventeOrders.reduce((acc, o) => acc + o.totalAmount, 0);
+    const matchCategory = (tierName: string, cat: 'prevente' | 'jourJ' | 'vip'): boolean => {
+      const n = (tierName || '').toLowerCase();
+      if (cat === 'prevente') return n.includes('prévente') || n.includes('prevente');
+      if (cat === 'jourJ') return n.includes('jour') || n.includes('standard');
+      return n.includes('vip');
+    };
 
-    const preventePhysicalSold = soldPhysicalTickets.filter((t) =>
-      t.tierName.toLowerCase().includes('prévente') ||
-      t.tierName.toLowerCase().includes('prevente')
-    ).length;
-    const preventePhysicalPrice = activeEvent?.tiers?.find((t) =>
-      t.name.toLowerCase().includes('prévente') || t.name.toLowerCase().includes('prevente')
-    )?.price || 3000;
+    const computeCategoryStats = (cat: 'prevente' | 'jourJ' | 'vip') => {
+      const physMatched = soldPhysicalTickets.filter((t) => matchCategory(t.tierName, cat));
+      const physSold = physMatched.length;
+      const physCA = physMatched.reduce((sum, t) => sum + (Number(t.price) || 0), 0);
 
-    const preventeSold = preventeWebSold + preventePhysicalSold;
-    const preventeCA = preventeWebCA + (preventePhysicalSold * preventePhysicalPrice);
-    const preventeQuota =
-      activeEvent?.tiers?.find(
-        (t) => t.id === 't-prev' || t.name.toLowerCase().includes('prévente')
-      )?.available || 150;
+      let webSold = 0;
+      let webCA = 0;
+      if (digitalSoldTickets.length > 0) {
+        const webMatched = digitalSoldTickets.filter((t) => matchCategory(t.tierName, cat));
+        webSold = webMatched.length;
+        webCA = webMatched.reduce((sum, t) => sum + (Number(t.price) || 0), 0);
+      } else {
+        const ordMatched = confirmedOrders.filter((o) => matchCategory(o.tierName, cat));
+        webSold = ordMatched.reduce((acc, o) => acc + o.quantity, 0);
+        webCA = ordMatched.reduce((acc, o) => acc + o.totalAmount, 0);
+      }
 
-    // 2. Jour J
-    const jourJOrders = confirmedOrders.filter((o) =>
-      o.tierName.toLowerCase().includes('jour')
-    );
-    const jourJSold = jourJOrders.reduce((acc, o) => acc + o.quantity, 0);
-    const jourJCA = jourJOrders.reduce((acc, o) => acc + o.totalAmount, 0);
-    const jourJQuota =
-      activeEvent?.tiers?.find(
-        (t) => t.id === 't-jour' || t.name.toLowerCase().includes('jour')
-      )?.available || 200;
+      const tierConfig = activeEvent?.tiers?.find((t) => {
+        if (cat === 'prevente') return t.id === 't-prev' || matchCategory(t.name, 'prevente');
+        if (cat === 'jourJ') return t.id === 't-jour' || matchCategory(t.name, 'jourJ');
+        return t.id === 't-vip' || matchCategory(t.name, 'vip');
+      });
 
-    // 3. VIP Prestige
-    const vipOrders = confirmedOrders.filter((o) =>
-      o.tierName.toLowerCase().includes('vip')
-    );
-    const vipSold = vipOrders.reduce((acc, o) => acc + o.quantity, 0);
-    const vipCA = vipOrders.reduce((acc, o) => acc + o.totalAmount, 0);
-    const vipQuota =
-      activeEvent?.tiers?.find(
-        (t) => t.id === 't-vip' || t.name.toLowerCase().includes('vip')
-      )?.available || 50;
+      return {
+        sold: webSold + physSold,
+        quota: tierConfig?.available ?? 0,
+        ca: webCA + physCA,
+      };
+    };
 
     return {
-      prevente: { sold: preventeSold, quota: preventeQuota, ca: preventeCA },
-      jourJ: { sold: jourJSold, quota: jourJQuota, ca: jourJCA },
-      vip: { sold: vipSold, quota: vipQuota, ca: vipCA },
+      prevente: computeCategoryStats('prevente'),
+      jourJ: computeCategoryStats('jourJ'),
+      vip: computeCategoryStats('vip'),
     };
-  }, [confirmedOrders, soldPhysicalTickets, activeEvent]);
+  }, [confirmedOrders, digitalSoldTickets, soldPhysicalTickets, activeEvent]);
 
   // Message WhatsApp global pour contacter tous les clients de l'événement
   const generateBroadcastWhatsAppUrl = () => {
@@ -650,7 +679,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
     }
   };
 
-  // Action : Purger les billets de test locaux (Mission 1)
+  // Action : Purger les billets de test locaux
   const handleClearLocalTestTickets = () => {
     const eventTitle = activeEvent ? activeEvent.title : 'cet événement';
     const msg = `⚠️ NETTOYAGE DU CACHE LOCAL (BILLETS DE TEST)\n\n` +
@@ -662,69 +691,10 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
     if (!window.confirm(msg)) return;
 
     const res = clearTestPhysicalTickets(activeEvent?.id);
-    setTickets(getStoredTickets());
-    setAgents(getStoredSalesAgents());
-    setAllocations(getStoredTicketAllocations());
+    clearLocalTicketReserveCache();
+    void handleRefresh();
     setShowOptionsMenu(false);
     alert(`✅ Cache local nettoyé avec succès : ${res.count} billets de test purgés.`);
-  };
-
-  // Action : Génération Rapide 300 Billets Physiques en Réserve (Mission 4)
-  const handleQuickGenerate300 = async () => {
-    if (!activeEvent) return;
-    const tier = activeEvent.tiers?.find((t) =>
-      t.name.toLowerCase().includes('prévente') ||
-      t.name.toLowerCase().includes('prevente') ||
-      t.price === 3000
-    ) || activeEvent.tiers?.[0];
-
-    if (!tier) {
-      alert("Aucune formule de billet trouvée pour cet événement.");
-      return;
-    }
-
-    setBatchTierId(tier.id);
-    setBatchAgentFilter('all');
-    setBatchCount(300);
-    setIsGeneratingPdf(true);
-    setPdfProgress({ current: 0, total: 300 });
-    setBatchSuccessMessage(null);
-
-    try {
-      const res = await generatePhysicalTicketBatch(
-        activeEvent,
-        tier,
-        300,
-        activeEvent.promoter?.id || 'usr-promoter-1'
-      );
-
-      const pdfBlob = await generatePhysicalTicketsPdf(activeEvent, tier, res.tickets, {
-        batchName: res.tickets[0]?.batchNumber,
-        onProgress: (current, total) => setPdfProgress({ current, total }),
-      });
-
-      const blobUrl = URL.createObjectURL(pdfBlob);
-      const downloadLink = document.createElement('a');
-      downloadLink.href = blobUrl;
-      const cleanTitle = activeEvent.title.replace(/[^a-zA-Z0-9]/g, '_');
-      const cleanTier = tier.name.replace(/[^a-zA-Z0-9]/g, '_');
-      downloadLink.download = `Billets_A4_${cleanTitle}_${cleanTier}_300pcs_StockGlobal.pdf`;
-      document.body.appendChild(downloadLink);
-      downloadLink.click();
-      document.body.removeChild(downloadLink);
-      URL.revokeObjectURL(blobUrl);
-
-      setTickets(getStoredTickets());
-      setBatchSuccessMessage(
-        `🎉 Lot officiel de 300 billets en stock global ("${tier.name}") généré avec succès ! Le PDF A4 prêt pour impression a été téléchargé.`
-      );
-    } catch (err: any) {
-      console.error('Erreur génération rapide 300 billets:', err);
-      alert("Erreur lors de la génération du PDF d'impression.");
-    } finally {
-      setIsGeneratingPdf(false);
-      setPdfProgress(null);
-    }
   };
 
   // Action : Impression nominative des billets d'un vendeur (Source de vérité : Supabase)
@@ -855,27 +825,90 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
     }
   };
 
-  // Action : Attribution Rapide 100 Billets à DJ CRAZY (Mission 4)
-  const handleQuickAssignDjCrazy = () => {
-    let djCrazy = networkAgents.find((a) =>
-      a.pointDeVente.toUpperCase().includes('DJ CRAZY') ||
-      a.gerantName.toUpperCase().includes('DJ CRAZY')
-    ) || agents.find((a) => a.pointDeVente.toUpperCase().includes('DJ CRAZY'));
+  // Génération du message WhatsApp officiel avec les accès guichet /pos
+  const buildAgentAccessWhatsAppUrl = (
+    agent: SalesAgent,
+    email: string,
+    tempPassword?: string
+  ): string => {
+    const digitsOnly = agent.telephone.replace(/[^0-9]/g, '');
+    const waPhone =
+      digitsOnly.length === 9 ? `221${digitsOnly}` : digitsOnly;
+    const eventTitle = activeEvent ? activeEvent.title : agent.eventTitle || 'Événement Thièsdn';
 
-    if (!djCrazy) {
-      djCrazy = networkAgents[0] || agents[0];
+    const lines = [
+      `🎟️ *ACCÈS GUICHET VENDEUR OFFICIEL — THIÈSDN* 🇸🇳`,
+      `━━━━━━━━━━━━━━━━━━━━`,
+      `Bonjour *${agent.gerantName}* (*${agent.pointDeVente}*) !`,
+      ``,
+      `Votre terminal de vente physique pour *${eventTitle}* est prêt. Connectez-vous pour scanner et activer nominativement vos billets :`,
+      ``,
+      `🔗 *Lien du Guichet Mobile :*`,
+      `https://billetterie.thiesdn.site/pos`,
+      ``,
+      `🔐 *Vos Identifiants de Connexion :*`,
+      `• *E-mail :* ${email}`,
+      tempPassword
+        ? `• *Mot de passe temporaire :* ${tempPassword}`
+        : `• *Mot de passe :* utilisez votre mot de passe guichet habituel`,
+      ``,
+      `⚠️ *Consigne anti-fraude :* chaque billet papier doit être activé avec le *nom complet + téléphone* de l'acheteur avant l'entrée.`,
+      ``,
+      `Bonnes ventes ! — Équipe Thièsdn`,
+    ];
+
+    const message = lines.join('\n');
+    return waPhone.length >= 9
+      ? `https://wa.me/${waPhone}?text=${encodeURIComponent(message)}`
+      : `https://wa.me/?text=${encodeURIComponent(message)}`;
+  };
+
+  // Provisioning / réinitialisation Auth du vendeur + ouverture WhatsApp
+  const handleSendAgentAccessWhatsApp = async (agent: SalesAgent) => {
+    setActiveAgentMenuId(null);
+    setProvisioningAgentId(agent.id);
+
+    const fallbackEmail = agent.email?.trim() || buildFallbackPosEmail(agent.telephone, agent.id);
+    const provisionRes = await provisionSalesAgentAuthAccount({
+      agentId: agent.id,
+      email: fallbackEmail,
+      pointDeVente: agent.pointDeVente,
+      gerantName: agent.gerantName,
+      telephone: agent.telephone,
+      eventId: agent.eventId || activeEvent?.id,
+      regeneratePassword: true,
+    });
+
+    setProvisioningAgentId(null);
+
+    if (provisionRes.success) {
+      const resolvedEmail = provisionRes.email || fallbackEmail;
+      const waUrl = buildAgentAccessWhatsAppUrl(agent, resolvedEmail, provisionRes.tempPassword);
+      setAgents((prev) =>
+        prev.map((a) =>
+          a.id === agent.id
+            ? { ...a, userId: provisionRes.userId || a.userId, email: resolvedEmail }
+            : a
+        )
+      );
+      setAgentAccessBanner({
+        agent: { ...agent, userId: provisionRes.userId || agent.userId, email: resolvedEmail },
+        email: resolvedEmail,
+        tempPassword: provisionRes.tempPassword,
+        waUrl,
+      });
+      window.open(waUrl, '_blank', 'noopener,noreferrer');
+    } else {
+      const waUrl = buildAgentAccessWhatsAppUrl(agent, fallbackEmail);
+      setAgentAccessBanner({
+        agent,
+        email: fallbackEmail,
+        waUrl,
+        warning:
+          `${provisionRes.error || 'Edge Function indisponible.'} ` +
+          `Déployez l'Edge Function create-sales-agent-account pour générer un mot de passe automatiquement.`,
+      });
     }
-
-    const preventeTier = activeEvent?.tiers?.find((t) =>
-      t.name.toLowerCase().includes('prévente') ||
-      t.name.toLowerCase().includes('prevente') ||
-      t.price === 3000
-    ) || activeEvent?.tiers?.[0];
-
-    setSelectedAgentForAssign(djCrazy);
-    setAssignTierName(preventeTier?.name || 'Pass Prévente Thiès');
-    setAssignCountInput(100);
-    setShowAssignModal(true);
   };
 
   // Action : Génération du lot de billets physiques + Téléchargement PDF A4
@@ -925,8 +958,8 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
       document.body.removeChild(downloadLink);
       URL.revokeObjectURL(blobUrl);
 
-      // 4. Mettre à jour l'interface
-      setTickets(getStoredTickets());
+      // 4. Mettre à jour l'interface depuis la base
+      await loadCockpitData(activeEvent.id);
       setBatchSuccessMessage(
         `🎉 Lot de ${res.tickets.length} billets en stock global généré avec succès ! Le PDF A4 prêt pour impression a été téléchargé.`
       );
@@ -939,7 +972,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
     }
   };
 
-  // Action : Création d'un collaborateur
+  // Action : Création d'un collaborateur + compte Auth /pos automatique
   const handleCreateSalesAgentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newAgentShop.trim() || !newAgentManager.trim() || !newAgentPhone.trim()) {
@@ -950,23 +983,43 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
     setIsSavingAgent(true);
     try {
       const res = await createSalesAgent({
-        eventId: activeEvent?.id || 'evt-thies-01',
+        eventId: activeEvent?.id || '',
         eventTitle: activeEvent?.title || 'Événement Thièsdn',
-        promoterId: activeEvent?.promoter.id || 'usr-promoter-1',
+        promoterId: activeEvent?.promoter.id || '',
         pointDeVente: newAgentShop.trim(),
         gerantName: newAgentManager.trim(),
         telephone: newAgentPhone.trim(),
+        email: newAgentEmail.trim() || undefined,
         quartier: newAgentQuartier,
         commissionPercent: Number(newAgentCommission) || 10,
       });
 
       if (res.success && res.agent) {
-        setAgents(getStoredSalesAgents());
+        await loadCockpitData(activeEvent?.id);
+        const accessEmail =
+          res.credentials?.email ||
+          res.agent.email ||
+          buildFallbackPosEmail(res.agent.telephone, res.agent.id);
+        const waUrl = buildAgentAccessWhatsAppUrl(
+          res.agent,
+          accessEmail,
+          res.credentials?.tempPassword
+        );
+        setAgentAccessBanner({
+          agent: res.agent,
+          email: accessEmail,
+          tempPassword: res.credentials?.tempPassword,
+          waUrl,
+          warning: res.provisioningError,
+        });
         setShowAddAgentModal(false);
         setNewAgentShop('');
         setNewAgentManager('');
         setNewAgentPhone('');
+        setNewAgentEmail('');
         setNewAgentCommission(10);
+      } else if (res.error) {
+        alert(`Impossible de créer le point de vente : ${res.error}`);
       }
     } catch (err) {
       console.error('Erreur création collaborateur:', err);
@@ -979,18 +1032,20 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
   const handleOpenAssignModal = (agent?: SalesAgent | null) => {
     const targetAgent = agent || networkAgents[0] || agents[0] || null;
     setSelectedAgentForAssign(targetAgent);
-    const initialTier = activeEvent?.tiers?.[0]?.name || 'Standard';
+    const tierWithStock = activeEvent?.tiers?.find((t) =>
+      unassignedPhysicalTickets.some((tk) => (tk.tierName || '').trim().toLowerCase() === t.name.trim().toLowerCase())
+    );
+    const firstReserveTier = unassignedPhysicalTickets[0]?.tierName;
+    const initialTier = tierWithStock?.name || firstReserveTier || activeEvent?.tiers?.[0]?.name || 'Pass Prévente Thiès';
     setAssignTierName(initialTier);
-    setAssignCountInput(50);
     setShowAssignModal(true);
   };
 
   // Action : Attribution de billets
-  const handleAssignTicketsSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAssignTicketsSubmit = async (quantity: number) => {
     if (!selectedAgentForAssign) return;
 
-    const count = Number(assignCountInput);
+    const count = Number(quantity);
     if (isNaN(count) || count <= 0) {
       alert('Veuillez saisir un nombre valide de billets.');
       return;
@@ -1014,13 +1069,13 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
         const targetEventId = selectedEventId === 'all' ? (activeEvent?.id || undefined) : selectedEventId;
         const [agentsRes, ticketsRes, allocRes] = await Promise.all([
           fetchSalesAgentsFromSupabase(),
-          fetchAllSoldTicketsFromSupabase({ eventId: targetEventId, isPhysical: true }),
+          fetchAllSoldTicketsFromSupabase({ eventId: targetEventId }),
           fetchTicketAllocationsFromSupabase(targetEventId),
         ]);
 
-        if (agentsRes.agents && agentsRes.agents.length > 0) setAgents(agentsRes.agents);
-        if (ticketsRes.tickets && ticketsRes.tickets.length > 0) setTickets(ticketsRes.tickets);
-        if (allocRes.allocations) setAllocations(allocRes.allocations);
+        if (!agentsRes.error) setAgents(agentsRes.agents);
+        if (!ticketsRes.error) setTickets(ticketsRes.tickets);
+        if (!allocRes.error) setAllocations(allocRes.allocations);
 
         // 3. Lien WhatsApp de notification commerçant
         const cleanPhone = selectedAgentForAssign.telephone.replace(/[^0-9]/g, '');
@@ -1169,6 +1224,88 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
   const signaledVolume = useMemo(() => {
     return signaledOrders.reduce((acc, o) => acc + o.totalAmount, 0);
   }, [signaledOrders]);
+
+  const agentLiveStatsById = useMemo(() => {
+    const statsMap = new Map<string, { printedCount: number; soldCount: number; unsoldCount: number }>();
+    physicalTicketsByAgent.forEach((entry) => {
+      statsMap.set(entry.agent.id, {
+        printedCount: entry.printedCount,
+        soldCount: entry.soldCount,
+        unsoldCount: entry.unsoldCount,
+      });
+    });
+    return statsMap;
+  }, [physicalTicketsByAgent]);
+
+  const renderAgentMoreMenu = (agent: SalesAgent, placement: 'up' | 'down') => {
+    const positionClasses =
+      placement === 'up'
+        ? 'right-0 bottom-full mb-2'
+        : 'right-0 top-full mt-1 text-left';
+    const isProvisioningThis = provisioningAgentId === agent.id;
+
+    return (
+      <div
+        className={`absolute ${positionClasses} w-64 rounded-2xl bg-[#121118] border border-white/15 p-2 shadow-2xl z-30 space-y-1 animate-in fade-in zoom-in-95`}
+      >
+        <button
+          type="button"
+          disabled={isProvisioningThis}
+          onClick={() => void handleSendAgentAccessWhatsApp(agent)}
+          className="w-full text-left px-3 py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 text-xs text-emerald-300 font-bold flex items-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
+        >
+          <MessageCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>
+            {isProvisioningThis ? 'Préparation des accès...' : 'Envoyer les accès WhatsApp'}
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setActiveAgentMenuId(null);
+            setSelectedAgentForSettlement(agent);
+            setSettlementAmountInput(agent.amountDue);
+            setShowSettlementModal(true);
+          }}
+          className="w-full text-left px-3 py-2 rounded-xl hover:bg-white/10 text-xs text-gray-200 flex items-center gap-2 transition-colors cursor-pointer"
+        >
+          <DollarSign className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>Encaisser versement</span>
+        </button>
+        <a
+          href={`https://wa.me/${agent.telephone.replace(/[^0-9]/g, '')}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => setActiveAgentMenuId(null)}
+          className="w-full text-left px-3 py-2 rounded-xl hover:bg-white/10 text-xs text-gray-200 flex items-center gap-2 transition-colors cursor-pointer"
+        >
+          <Phone className="w-4 h-4 text-[#E9C349] shrink-0" />
+          <span>Contacter sur WhatsApp</span>
+        </a>
+        <a
+          href={generateAgentWhatsAppReportUrl(agent)}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => setActiveAgentMenuId(null)}
+          className="w-full text-left px-3 py-2 rounded-xl hover:bg-white/10 text-xs text-gray-200 flex items-center gap-2 transition-colors cursor-pointer"
+        >
+          <Send className="w-4 h-4 text-sky-400 shrink-0" />
+          <span>Envoyer bilan WhatsApp</span>
+        </a>
+        <button
+          type="button"
+          onClick={() => {
+            setActiveAgentMenuId(null);
+            setPreviewAgent(agent);
+          }}
+          className="w-full text-left px-3 py-2 rounded-xl hover:bg-white/10 text-xs text-gray-200 flex items-center gap-2 transition-colors cursor-pointer"
+        >
+          <Store className="w-4 h-4 text-[#DCB8FF] shrink-0" />
+          <span>Tester Guichet Mobile</span>
+        </button>
+      </div>
+    );
+  };
 
   // ====================================================================
   // 1. VUE PROMOTEUR & GESTION RÉSEAU / BILLETS PHYSIQUES (ADMIN & PROMOTEUR)
@@ -1885,49 +2022,6 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
               </div>
             )}
 
-            {/* BANNIÈRE D'ACTIONS RAPIDES : MISSION 4 (1-CLIC) */}
-            <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-r from-[#241A00]/70 via-[#1C1B1B] to-[#1F1728]/50 border border-[#E9C349]/40 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-2xl bg-[#E9C349]/20 text-[#E9C349] flex items-center justify-center shrink-0 border border-[#E9C349]/30">
-                  <Ticket className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h4 className="font-heading font-black text-sm sm:text-base text-white">
-                      Actions Rapides Impression & Distribution
-                    </h4>
-                    <span className="text-[10px] bg-[#E9C349] text-[#241A00] font-black px-2 py-0.5 rounded-full uppercase">
-                      1-Clic
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-300 mt-0.5">
-                    Générez la planche officielle de 300 pass et attribuez 100 billets directement au point de vente DJ CRAZY.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-                <button
-                  type="button"
-                  onClick={handleQuickGenerate300}
-                  disabled={isGeneratingPdf || !activeEvent}
-                  className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#8A2BE2] to-[#A855F7] text-white font-heading font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-[#8A2BE2]/30 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer"
-                >
-                  <Printer className="w-4 h-4 text-[#E9C349]" />
-                  <span>Générer le Stock Global (sans vendeur)</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleQuickAssignDjCrazy}
-                  className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#E9C349] to-amber-500 text-[#241A00] font-heading font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-[#E9C349]/30 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center gap-2 cursor-pointer"
-                >
-                  <Truck className="w-4 h-4" />
-                  <span>Attribuer 100 billets à DJ CRAZY</span>
-                </button>
-              </div>
-            </div>
-
             {/* SECTION 1 : GÉNÉRATEUR DE LOTS DE BILLETS PHYSIQUES (A4 IMPRIMABLE) */}
             <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-white/10 relative overflow-hidden bg-gradient-to-br from-[#1C1B1B] via-[#141414] to-[#1F1728]/40 space-y-6">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-5">
@@ -2186,6 +2280,73 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                 </div>
               </div>
 
+              {agentAccessBanner && (
+                <div className="p-4 sm:p-5 rounded-2xl bg-emerald-950/40 border border-emerald-500/40 space-y-3 animate-in fade-in">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <MessageCircle className="w-5 h-5 text-emerald-400 shrink-0" />
+                      <div>
+                        <h4 className="font-heading font-extrabold text-sm text-white">
+                          Accès Guichet /pos — {agentAccessBanner.agent.pointDeVente}
+                        </h4>
+                        <p className="text-xs text-gray-300 mt-0.5">
+                          URL : <span className="font-mono text-[#E9C349]">https://billetterie.thiesdn.site/pos</span> • E-mail :{' '}
+                          <span className="font-mono text-white">{agentAccessBanner.email}</span>
+                          {agentAccessBanner.tempPassword && (
+                            <>
+                              {' '}• Mot de passe temporaire :{' '}
+                              <span className="font-mono font-bold text-emerald-300">{agentAccessBanner.tempPassword}</span>
+                            </>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setAgentAccessBanner(null)}
+                      className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {agentAccessBanner.warning && (
+                    <p className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-2">
+                      ⚠️ {agentAccessBanner.warning}
+                    </p>
+                  )}
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <a
+                      href={agentAccessBanner.waUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-heading font-extrabold flex items-center gap-2 transition-colors shadow-md"
+                    >
+                      <MessageCircle className="w-4 h-4" />
+                      <span>Envoyer les accès sur WhatsApp</span>
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const txt = [
+                          `Lien Guichet : https://billetterie.thiesdn.site/pos`,
+                          `E-mail : ${agentAccessBanner.email}`,
+                          agentAccessBanner.tempPassword ? `Mot de passe : ${agentAccessBanner.tempPassword}` : '',
+                        ]
+                          .filter(Boolean)
+                          .join('\n');
+                        void navigator.clipboard.writeText(txt);
+                      }}
+                      className="px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-gray-200 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      <Copy className="w-3.5 h-3.5 text-[#E9C349]" />
+                      <span>Copier</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {networkAgents.length === 0 ? (
                 <div className="p-12 text-center rounded-2xl bg-[#141414] border border-white/5 space-y-3">
                   <Store className="w-10 h-10 text-gray-500 mx-auto" />
@@ -2201,7 +2362,12 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                   {/* VUE MOBILE / CARTES DES POINTS DE VENTE (Liquid Glass & Règle des 2 Boutons Max) */}
                   <div className="block md:hidden space-y-4">
                     {networkAgents.map((agent) => {
-                      const remaining = Math.max(0, agent.allocatedCount - agent.soldCount);
+                      const liveStats = agentLiveStatsById.get(agent.id);
+                      const allocatedDisplay = liveStats ? liveStats.printedCount : agent.allocatedCount;
+                      const soldDisplay = liveStats ? liveStats.soldCount : agent.soldCount;
+                      const remaining = liveStats
+                        ? liveStats.unsoldCount
+                        : Math.max(0, agent.allocatedCount - agent.soldCount);
                       const isMenuOpen = activeAgentMenuId === agent.id;
                       return (
                         <div
@@ -2223,14 +2389,14 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                               </p>
                             </div>
                             <span className="font-mono text-xs px-2.5 py-1 rounded-lg bg-[#8A2BE2]/20 text-[#DCB8FF] border border-[#8A2BE2]/30 font-bold">
-                              {agent.allocatedCount} confiés
+                              {allocatedDisplay} confiés
                             </span>
                           </div>
 
                           <div className="grid grid-cols-2 gap-3 text-xs pt-1 border-t border-white/5">
                             <div className="p-3 rounded-xl bg-black/40 border border-white/5">
                               <span className="text-gray-400 text-[10px] uppercase font-bold">Vendus :</span>
-                              <p className="font-mono font-bold text-emerald-400 text-sm mt-0.5">{agent.soldCount} billets</p>
+                              <p className="font-mono font-bold text-emerald-400 text-sm mt-0.5">{soldDisplay} billets</p>
                             </div>
                             <div className="p-3 rounded-xl bg-black/40 border border-white/5">
                               <span className="text-gray-400 text-[10px] uppercase font-bold">En stock boutique :</span>
@@ -2254,16 +2420,16 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                             <button
                               type="button"
                               onClick={() => handlePrintAgentTickets(agent)}
-                              disabled={isGeneratingPdf || agent.allocatedCount === 0}
+                              disabled={isGeneratingPdf || allocatedDisplay === 0}
                               className="flex-1 py-2.5 px-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white disabled:opacity-40 disabled:cursor-not-allowed text-xs font-heading font-extrabold flex items-center justify-center gap-1.5 transition-all cursor-pointer hover:border-[#E9C349]/50"
                               title={
-                                agent.allocatedCount === 0
+                                allocatedDisplay === 0
                                   ? 'Aucun billet attribué à ce vendeur'
-                                  : `Imprimer les ${agent.allocatedCount} billets de ${agent.pointDeVente}`
+                                  : `Imprimer les ${allocatedDisplay} billets de ${agent.pointDeVente}`
                               }
                             >
                               <Printer className="w-4 h-4 text-[#E9C349]" />
-                              <span>🖨️ Imprimer ({agent.allocatedCount})</span>
+                              <span>🖨️ Imprimer ({allocatedDisplay})</span>
                             </button>
 
                             {/* Menu MoreVertical : Actions secondaires cachées */}
@@ -2277,54 +2443,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                                 <MoreVertical className="w-4 h-4" />
                               </button>
 
-                              {isMenuOpen && (
-                                <div className="absolute right-0 bottom-full mb-2 w-56 rounded-2xl bg-[#121118] border border-white/15 p-2 shadow-2xl z-30 space-y-1 animate-in fade-in zoom-in-95">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setActiveAgentMenuId(null);
-                                      setSelectedAgentForSettlement(agent);
-                                      setSettlementAmountInput(agent.amountDue);
-                                      setShowSettlementModal(true);
-                                    }}
-                                    className="w-full text-left px-3 py-2 rounded-xl hover:bg-white/10 text-xs text-gray-200 flex items-center gap-2 transition-colors cursor-pointer"
-                                  >
-                                    <DollarSign className="w-4 h-4 text-emerald-400" />
-                                    <span>Encaisser versement</span>
-                                  </button>
-                                  <a
-                                    href={`https://wa.me/${agent.telephone.replace(/[^0-9]/g, '')}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    onClick={() => setActiveAgentMenuId(null)}
-                                    className="w-full text-left px-3 py-2 rounded-xl hover:bg-white/10 text-xs text-gray-200 flex items-center gap-2 transition-colors cursor-pointer"
-                                  >
-                                    <Phone className="w-4 h-4 text-[#E9C349]" />
-                                    <span>Contacter sur WhatsApp</span>
-                                  </a>
-                                  <a
-                                    href={generateAgentWhatsAppReportUrl(agent)}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    onClick={() => setActiveAgentMenuId(null)}
-                                    className="w-full text-left px-3 py-2 rounded-xl hover:bg-white/10 text-xs text-gray-200 flex items-center gap-2 transition-colors cursor-pointer"
-                                  >
-                                    <Send className="w-4 h-4 text-sky-400" />
-                                    <span>Envoyer bilan WhatsApp</span>
-                                  </a>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setActiveAgentMenuId(null);
-                                      setPreviewAgent(agent);
-                                    }}
-                                    className="w-full text-left px-3 py-2 rounded-xl hover:bg-white/10 text-xs text-gray-200 flex items-center gap-2 transition-colors cursor-pointer"
-                                  >
-                                    <Store className="w-4 h-4 text-[#DCB8FF]" />
-                                    <span>Tester Guichet Mobile</span>
-                                  </button>
-                                </div>
-                              )}
+                              {isMenuOpen && renderAgentMoreMenu(agent, 'up')}
                             </div>
                           </div>
                         </div>
@@ -2348,9 +2467,14 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                       </thead>
                       <tbody className="divide-y divide-white/5">
                         {networkAgents.map((agent) => {
-                          const remaining = Math.max(0, agent.allocatedCount - agent.soldCount);
-                          const progressPercent = agent.allocatedCount > 0
-                            ? Math.round((agent.soldCount / agent.allocatedCount) * 100)
+                          const liveStats = agentLiveStatsById.get(agent.id);
+                          const allocatedDisplay = liveStats ? liveStats.printedCount : agent.allocatedCount;
+                          const soldDisplay = liveStats ? liveStats.soldCount : agent.soldCount;
+                          const remaining = liveStats
+                            ? liveStats.unsoldCount
+                            : Math.max(0, agent.allocatedCount - agent.soldCount);
+                          const progressPercent = allocatedDisplay > 0
+                            ? Math.round((soldDisplay / allocatedDisplay) * 100)
                             : 0;
 
                           return (
@@ -2373,16 +2497,16 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                                   <button
                                     type="button"
                                     onClick={() => handlePrintAgentTickets(agent)}
-                                    disabled={isGeneratingPdf || agent.allocatedCount === 0}
+                                    disabled={isGeneratingPdf || allocatedDisplay === 0}
                                     className="px-2.5 py-1 rounded-lg bg-[#8A2BE2]/25 hover:bg-[#8A2BE2]/40 text-[#DCB8FF] border border-[#8A2BE2]/50 disabled:opacity-40 disabled:cursor-not-allowed text-[11px] font-bold flex items-center gap-1.5 transition-all shadow-sm hover:scale-[1.02] active:scale-95 cursor-pointer"
                                     title={
-                                      agent.allocatedCount === 0
+                                      allocatedDisplay === 0
                                         ? 'Aucun billet attribué à ce vendeur'
-                                        : `Imprimer les ${agent.allocatedCount} billets de ${agent.pointDeVente}`
+                                        : `Imprimer les ${allocatedDisplay} billets de ${agent.pointDeVente}`
                                     }
                                   >
                                     <Printer className="w-3.5 h-3.5 text-[#E9C349]" />
-                                    <span>🖨️ Imprimer ({agent.allocatedCount})</span>
+                                    <span>🖨️ Imprimer ({allocatedDisplay})</span>
                                   </button>
 
                                   <span className="inline-block bg-white/10 text-gray-300 text-[10px] font-semibold px-2 py-0.5 rounded-full border border-white/10">
@@ -2406,8 +2530,8 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
 
                               <td className="py-4 px-3">
                                 <div className="flex items-center justify-between text-[11px] font-bold mb-1">
-                                  <span className="text-emerald-400">{agent.soldCount} vendus</span>
-                                  <span className="text-gray-400">/ {agent.allocatedCount}</span>
+                                  <span className="text-emerald-400">{soldDisplay} vendus</span>
+                                  <span className="text-gray-400">/ {allocatedDisplay}</span>
                                 </div>
                                 <div className="w-28 bg-[#1F1F1F] rounded-full h-1.5 overflow-hidden">
                                   <div
@@ -2472,16 +2596,16 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                                   <button
                                     type="button"
                                     onClick={() => handlePrintAgentTickets(agent)}
-                                    disabled={isGeneratingPdf || agent.allocatedCount === 0}
+                                    disabled={isGeneratingPdf || allocatedDisplay === 0}
                                     className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white disabled:opacity-40 disabled:cursor-not-allowed text-xs font-heading font-extrabold flex items-center gap-1.5 transition-all cursor-pointer hover:border-[#E9C349]/50"
                                     title={
-                                      agent.allocatedCount === 0
+                                      allocatedDisplay === 0
                                         ? 'Aucun billet attribué à imprimer'
-                                        : `Imprimer les ${agent.allocatedCount} billets de ${agent.pointDeVente}`
+                                        : `Imprimer les ${allocatedDisplay} billets de ${agent.pointDeVente}`
                                     }
                                   >
                                     <Printer className="w-3.5 h-3.5 text-[#E9C349]" />
-                                    <span>🖨️ Imprimer ({agent.allocatedCount})</span>
+                                    <span>🖨️ Imprimer ({allocatedDisplay})</span>
                                   </button>
 
                                   {/* Menu MoreVertical : Actions secondaires cachées */}
@@ -2495,54 +2619,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                                       <MoreVertical className="w-4 h-4" />
                                     </button>
 
-                                    {activeAgentMenuId === agent.id && (
-                                      <div className="absolute right-0 top-full mt-1 w-56 rounded-2xl bg-[#121118] border border-white/15 p-2 shadow-2xl z-30 space-y-1 text-left animate-in fade-in zoom-in-95">
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            setActiveAgentMenuId(null);
-                                            setSelectedAgentForSettlement(agent);
-                                            setSettlementAmountInput(agent.amountDue);
-                                            setShowSettlementModal(true);
-                                          }}
-                                          className="w-full text-left px-3 py-2 rounded-xl hover:bg-white/10 text-xs text-gray-200 flex items-center gap-2 transition-colors cursor-pointer"
-                                        >
-                                          <DollarSign className="w-4 h-4 text-emerald-400" />
-                                          <span>Encaisser versement</span>
-                                        </button>
-                                        <a
-                                          href={`https://wa.me/${agent.telephone.replace(/[^0-9]/g, '')}`}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          onClick={() => setActiveAgentMenuId(null)}
-                                          className="w-full text-left px-3 py-2 rounded-xl hover:bg-white/10 text-xs text-gray-200 flex items-center gap-2 transition-colors cursor-pointer"
-                                        >
-                                          <Phone className="w-4 h-4 text-[#E9C349]" />
-                                          <span>WhatsApp Direct</span>
-                                        </a>
-                                        <a
-                                          href={generateAgentWhatsAppReportUrl(agent)}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          onClick={() => setActiveAgentMenuId(null)}
-                                          className="w-full text-left px-3 py-2 rounded-xl hover:bg-white/10 text-xs text-gray-200 flex items-center gap-2 transition-colors cursor-pointer"
-                                        >
-                                          <Send className="w-4 h-4 text-sky-400" />
-                                          <span>Bilan WhatsApp</span>
-                                        </a>
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            setActiveAgentMenuId(null);
-                                            setPreviewAgent(agent);
-                                          }}
-                                          className="w-full text-left px-3 py-2 rounded-xl hover:bg-white/10 text-xs text-gray-200 flex items-center gap-2 transition-colors cursor-pointer"
-                                        >
-                                          <Store className="w-4 h-4 text-[#DCB8FF]" />
-                                          <span>Tester Guichet Mobile</span>
-                                        </button>
-                                      </div>
-                                    )}
+                                    {activeAgentMenuId === agent.id && renderAgentMoreMenu(agent, 'down')}
                                   </div>
                                 </div>
                               </td>
@@ -2620,6 +2697,19 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                       </div>
                     </div>
 
+                    <div>
+                      <label className="text-xs font-bold uppercase tracking-wider text-gray-300">
+                        E-mail de connexion /pos (optionnel)
+                      </label>
+                      <input
+                        type="email"
+                        value={newAgentEmail}
+                        onChange={(e) => setNewAgentEmail(e.target.value)}
+                        placeholder="Sinon généré auto : <téléphone>@pos.thiesdn.site"
+                        className="input-glass w-full rounded-2xl px-4 py-3 text-sm text-white mt-1 outline-none focus:border-[#E9C349]"
+                      />
+                    </div>
+
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <label className="text-xs font-bold uppercase tracking-wider text-gray-300">
@@ -2675,209 +2765,22 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
             )}
 
             {/* MODALE : ATTRIBUER DES BILLETS PHYSIQUES */}
-            {showAssignModal && (() => {
-              const availableReserveForTier = unassignedPhysicalTickets.filter(
-                (t) => !assignTierName || t.tierName === assignTierName
-              ).length;
-
-              return (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
-                  <div className="glass-panel w-full max-w-md p-6 sm:p-8 rounded-3xl border border-white/20 shadow-2xl space-y-5">
-                    <div className="flex items-center justify-between border-b border-white/10 pb-4">
-                      <div className="flex items-center gap-2">
-                        <Truck className="w-5 h-5 text-sky-400" />
-                        <h3 className="font-heading font-extrabold text-lg text-white">
-                          Attribuer des Billets Physiques
-                        </h3>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setShowAssignModal(false)}
-                        className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white cursor-pointer"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-
-                    <div className="space-y-4">
-                      {/* Choix de l'Agent / Point de Vente */}
-                      {agents.length === 0 ? (
-                        <div className="p-4 rounded-2xl bg-amber-950/30 border border-amber-500/30 text-amber-200 text-xs">
-                          Aucun point de vente n'est encore enregistré. Veuillez d'abord cliquer sur "Ajouter un Point de Vente".
-                        </div>
-                      ) : (
-                        <div>
-                          <label className="text-xs font-bold uppercase tracking-wider text-gray-300 block mb-1">
-                            Point de Vente Destinataire
-                          </label>
-                          <select
-                            value={selectedAgentForAssign?.id || ''}
-                            onChange={(e) => {
-                              const ag = agents.find((a) => a.id === e.target.value) || null;
-                              setSelectedAgentForAssign(ag);
-                            }}
-                            className="w-full bg-[#1A1A1A] border border-white/15 rounded-2xl px-4 py-3 text-sm font-bold text-white outline-none focus:border-[#E9C349] cursor-pointer"
-                          >
-                            <option value="" disabled>-- Choisir le point de vente --</option>
-                            {agents.map((ag) => (
-                              <option key={ag.id} value={ag.id} className="bg-[#1C1B1B] text-white">
-                                🏪 {ag.pointDeVente} ({ag.gerantName} - {ag.quartier})
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
-
-                      {/* Choix du Type de Billet (Palier) */}
-                      <div>
-                        <label className="text-xs font-bold uppercase tracking-wider text-gray-300 flex justify-between mb-1">
-                          <span>Type de Billet à Distribuer</span>
-                          <span className="text-sky-400 font-mono text-[11px] font-bold">
-                            {availableReserveForTier} en réserve
-                          </span>
-                        </label>
-                        <select
-                          value={assignTierName}
-                          onChange={(e) => setAssignTierName(e.target.value)}
-                          className="w-full bg-[#1A1A1A] border border-white/15 rounded-2xl px-4 py-2.5 text-xs font-bold text-white outline-none focus:border-[#E9C349] cursor-pointer"
-                        >
-                          {activeEvent?.tiers && activeEvent.tiers.length > 0 ? (
-                            activeEvent.tiers.map((t) => {
-                              const inStock = unassignedPhysicalTickets.filter((tk) => tk.tierName === t.name).length;
-                              return (
-                                <option key={t.id || t.name} value={t.name} className="bg-[#1C1B1B] text-white">
-                                  🎫 {t.name} — {t.price.toLocaleString('fr-FR')} FCFA ({inStock} en réserve)
-                                </option>
-                              );
-                            })
-                          ) : (
-                            <option value="Pass Prévente Thiès">🎫 Pass Prévente Thiès (Standard)</option>
-                          )}
-                        </select>
-                      </div>
-
-                      {/* Choix de l'Événement */}
-                      <div>
-                        <label className="text-xs font-bold uppercase tracking-wider text-gray-300 block mb-1">
-                          Événement Concerné
-                        </label>
-                        <select
-                          value={selectedEventId}
-                          onChange={(e) => setSelectedEventId(e.target.value)}
-                          className="w-full bg-[#1A1A1A] border border-white/15 rounded-2xl px-4 py-2 text-xs font-medium text-white outline-none focus:border-[#E9C349] cursor-pointer"
-                        >
-                          {safeEvents.map((evt) => (
-                            <option key={evt.id} value={evt.id} className="bg-[#1C1B1B] text-white">
-                              🎟️ {evt.title} ({evt.city})
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <form onSubmit={handleAssignTicketsSubmit} className="space-y-4">
-                        <div>
-                          <label className="text-xs font-bold uppercase tracking-wider text-gray-300 flex justify-between">
-                            <span>Quantité à attribuer</span>
-                            <span className="text-[#E9C349] font-mono font-bold text-sm">{assignCountInput} billets</span>
-                          </label>
-                          <input
-                            type="number"
-                            min="1"
-                            max={Math.max(1, availableReserveForTier)}
-                            value={assignCountInput}
-                            onChange={(e) => setAssignCountInput(Math.max(1, Number(e.target.value) || 1))}
-                            className="input-glass w-full rounded-2xl px-4 py-3 text-lg font-mono font-bold text-white mt-1 outline-none focus:border-[#E9C349]"
-                          />
-
-                          <div className="flex gap-2 mt-2">
-                            {[25, 50, 100].map((n) => (
-                              <button
-                                key={n}
-                                type="button"
-                                onClick={() => setAssignCountInput(n)}
-                                className={`flex-1 py-1.5 rounded-xl border text-xs font-mono transition-colors cursor-pointer ${
-                                  assignCountInput === n
-                                    ? 'bg-[#E9C349]/20 border-[#E9C349] text-[#E9C349] font-bold'
-                                    : 'bg-white/5 border-white/5 text-gray-300 hover:bg-white/10'
-                                }`}
-                              >
-                                {n}
-                              </button>
-                            ))}
-                            {availableReserveForTier > 0 && (
-                              <button
-                                type="button"
-                                onClick={() => setAssignCountInput(availableReserveForTier)}
-                                className={`flex-1 py-1.5 rounded-xl border text-xs font-mono transition-colors cursor-pointer ${
-                                  assignCountInput === availableReserveForTier
-                                    ? 'bg-sky-500/25 border-sky-400 text-sky-200 font-bold'
-                                    : 'bg-white/5 border-white/5 text-sky-300 hover:bg-white/10'
-                                }`}
-                              >
-                                Tout ({availableReserveForTier})
-                              </button>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* ENCART RÉCAPITULATIF AVANT VALIDATION */}
-                        <div className="p-3.5 rounded-2xl bg-[#121212] border border-white/10 space-y-2 text-xs">
-                          <div className="flex items-center justify-between text-gray-400">
-                            <span>Vendeur partenaire :</span>
-                            <span className="font-bold text-white">🏪 {selectedAgentForAssign?.pointDeVente || 'Non sélectionné'}</span>
-                          </div>
-                          <div className="flex items-center justify-between text-gray-400">
-                            <span>Type de billet :</span>
-                            <span className="font-bold text-[#E9C349]">🎫 {assignTierName || 'Standard'}</span>
-                          </div>
-                          <div className="flex items-center justify-between text-gray-400 border-t border-white/5 pt-1.5">
-                            <span>Stock actuel en réserve :</span>
-                            <span className="font-mono text-white">{availableReserveForTier} billets</span>
-                          </div>
-                          <div className="flex items-center justify-between text-sky-400 font-bold">
-                            <span>Quantité à transférer :</span>
-                            <span className="font-mono">-{assignCountInput} billets</span>
-                          </div>
-                          <div className="flex items-center justify-between text-gray-300 border-t border-white/5 pt-1.5">
-                            <span>Nouveau solde en réserve :</span>
-                            <span className="font-mono font-bold text-emerald-400">
-                              {Math.max(0, availableReserveForTier - assignCountInput)} billets
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between text-gray-300">
-                            <span>Nouveau total boutique {selectedAgentForAssign?.pointDeVente} :</span>
-                            <span className="font-mono font-bold text-amber-300">
-                              {(selectedAgentForAssign?.allocatedCount || 0) + assignCountInput} billets
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="pt-1 flex gap-3">
-                          <button
-                            type="button"
-                            onClick={() => setShowAssignModal(false)}
-                            className="flex-1 py-3 rounded-2xl bg-white/5 hover:bg-white/10 text-white font-bold text-xs uppercase cursor-pointer"
-                          >
-                            Annuler
-                          </button>
-                          <button
-                            type="submit"
-                            disabled={!selectedAgentForAssign || assignCountInput <= 0 || isAssigning}
-                            className="flex-1 py-3 rounded-2xl bg-gradient-to-r from-sky-600 to-[#8A2BE2] hover:from-sky-500 hover:to-[#9B3BF2] text-white font-heading font-extrabold text-xs uppercase tracking-wider shadow-lg disabled:opacity-40 cursor-pointer flex items-center justify-center gap-2"
-                          >
-                            {isAssigning ? (
-                              <span>Attribution en cours...</span>
-                            ) : (
-                              <span>Confirmer ({assignCountInput})</span>
-                            )}
-                          </button>
-                        </div>
-                      </form>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
+            <AssignPhysicalTicketsModal
+              isOpen={showAssignModal}
+              onClose={() => setShowAssignModal(false)}
+              agents={networkAgents.length > 0 ? networkAgents : agents}
+              selectedAgent={selectedAgentForAssign}
+              onSelectAgent={setSelectedAgentForAssign}
+              events={safeEvents}
+              selectedEventId={selectedEventId}
+              onSelectEventId={setSelectedEventId}
+              activeEvent={activeEvent}
+              assignTierName={assignTierName}
+              onChangeTierName={setAssignTierName}
+              unassignedPhysicalTickets={unassignedPhysicalTickets}
+              onSubmit={handleAssignTicketsSubmit}
+              isAssigning={isAssigning}
+            />
 
             {/* MODALE : ENCAISSER UN VERSEMENT D'ESPÈCES */}
             {showSettlementModal && selectedAgentForSettlement && (

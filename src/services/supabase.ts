@@ -105,104 +105,18 @@ const STORAGE_ORDERS_KEY = 'thiesdn_orders_v2';
 const STORAGE_TRANSACTIONS_KEY = 'thiesdn_transactions_v2';
 const STORAGE_SETTINGS_KEY = 'thiesdn_platform_settings_v1';
 const STORAGE_AGENTS_KEY = 'thiesdn_sales_agents_v1';
+const STORAGE_TICKETS_PURGED_FLAG = 'thiesdn_tickets_v2_purged_sample_v1';
+const STORAGE_AGENTS_PURGED_FLAG = 'thiesdn_sales_agents_v1_purged_sample_v1';
 
-export const INITIAL_SALES_AGENTS: SalesAgent[] = [
-  {
-    id: 'd1c7a230-0000-4000-8000-000000000001',
-    eventId: 'e8f9e7a8-713c-4aa1-9fc3-6fc24e5eddd5',
-    eventTitle: 'BIRTHDAY KMOU JANGO',
-    promoterId: '86109a57-1802-4255-b917-1a293f31af51',
-    pointDeVente: 'DJ CRAZY',
-    gerantName: 'DJ Crazy Officiel',
-    telephone: '+221 77 654 32 10',
-    email: 'djcrazy.thies@gmail.com',
-    quartier: 'Escale Sud (Centre-Ville)',
-    allocatedCount: 0,
-    soldCount: 0,
-    commissionPercent: 10,
-    cashCollected: 0,
-    amountDue: 0,
-    amountPaidToPromoter: 0,
-    status: 'active',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'c9a8b710-0000-4000-8000-000000000002',
-    eventId: 'e8f9e7a8-713c-4aa1-9fc3-6fc24e5eddd5',
-    eventTitle: 'BIRTHDAY KMOU JANGO',
-    promoterId: '86109a57-1802-4255-b917-1a293f31af51',
-    pointDeVente: 'Chambre Neuf',
-    gerantName: 'Babacar',
-    telephone: '+221 77 226 69 16',
-    email: 'chambreneuf.thies@gmail.com',
-    quartier: 'Escale Sud (Centre-Ville)',
-    allocatedCount: 0,
-    soldCount: 0,
-    commissionPercent: 10,
-    cashCollected: 0,
-    amountDue: 0,
-    amountPaidToPromoter: 0,
-    status: 'active',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'agent-fatou-1',
-    eventId: 'evt-soiree-prestige',
-    eventTitle: 'Nuit du Baobab Prestige',
-    promoterId: 'prom-thiesdn',
-    pointDeVente: 'Boutique Chez Fatou',
-    gerantName: 'Fatou Kiné Diop',
-    telephone: '+221 77 123 45 67',
-    email: 'chezfatou.thies@gmail.com',
-    quartier: 'Grand Standing',
-    allocatedCount: 50,
-    soldCount: 38,
-    commissionPercent: 10,
-    cashCollected: 133000,
-    amountDue: 119700,
-    amountPaidToPromoter: 70000,
-    status: 'active',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'agent-escale-2',
-    eventId: 'evt-soiree-prestige',
-    eventTitle: 'Nuit du Baobab Prestige',
-    promoterId: 'prom-thiesdn',
-    pointDeVente: 'Kiosque Escale Centre',
-    gerantName: 'Moussa Ndiaye',
-    telephone: '+221 78 456 78 90',
-    email: 'kiosque.escale@gmail.com',
-    quartier: 'Escale Sud (Centre-Ville)',
-    allocatedCount: 100,
-    soldCount: 65,
-    commissionPercent: 8,
-    cashCollected: 227500,
-    amountDue: 209300,
-    amountPaidToPromoter: 150000,
-    status: 'active',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'agent-saly-3',
-    eventId: 'evt-festival-rail',
-    eventTitle: 'Festival des Rails de Thiès 2026',
-    promoterId: 'prom-thiesdn',
-    pointDeVente: 'Multi-Services Médina Fall',
-    gerantName: 'Ousmane Cissé',
-    telephone: '+221 76 789 01 23',
-    email: 'cisse.services@yahoo.fr',
-    quartier: 'Médina Fall',
-    allocatedCount: 30,
-    soldCount: 12,
-    commissionPercent: 10,
-    cashCollected: 42000,
-    amountDue: 37800,
-    amountPaidToPromoter: 0,
-    status: 'active',
-    createdAt: new Date().toISOString(),
-  },
-];
+const LEGACY_SAMPLE_AGENT_IDS = new Set([
+  'd1c7a230-0000-4000-8000-000000000001',
+  'c9a8b710-0000-4000-8000-000000000002',
+  'agent-fatou-1',
+  'agent-escale-2',
+  'agent-saly-3',
+]);
+
+export const INITIAL_SALES_AGENTS: SalesAgent[] = [];
 
 export const STORAGE_COPRODUCERS_KEY = 'thiesdn_coproducers_v1';
 export const STORAGE_GUEST_TICKETS_KEY = 'thiesdn_guest_tickets_v1';
@@ -1486,102 +1400,60 @@ export const saveTransaction = (tx: TransactionRecord): TransactionRecord[] => {
   return updated;
 };
 
-// Échantillons de billets physiques témoins pour valider la règle de validation par vente
-const INITIAL_PHYSICAL_SAMPLE_TICKETS: UserTicket[] = [
-  {
-    id: 'tkt-phy-demo-unsold',
-    eventId: 'evt-soiree-prestige',
-    eventTitle: 'Nuit du Baobab Prestige',
-    eventPoster: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=600',
-    eventDate: '25 Décembre 2026',
-    eventTime: '22:00',
-    eventVenue: 'Hôtel Baobab Lounge, Thiès',
-    tierName: 'Prévente Porteur',
-    price: 3500,
-    qrCode: 'BPT-PHY-THS-UNSOLD',
-    seatNumber: 'PHY-0042',
-    holderName: 'Porteur Non Vendu',
-    purchasedAt: '2026-10-22T10:00:00Z',
-    status: 'printed_not_sold',
-    isPhysical: true,
-    agentId: 'agent-fatou-1',
-    agentName: 'Boutique Chez Fatou',
-    batchNumber: 'BATCH-20261022-777',
-    serialNumber: 42,
-  },
-  {
-    id: 'tkt-phy-demo-sold',
-    eventId: 'evt-soiree-prestige',
-    eventTitle: 'Nuit du Baobab Prestige',
-    eventPoster: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=600',
-    eventDate: '25 Décembre 2026',
-    eventTime: '22:00',
-    eventVenue: 'Hôtel Baobab Lounge, Thiès',
-    tierName: 'Prévente Porteur',
-    price: 3500,
-    qrCode: 'BPT-PHY-THS-SOLDOK',
-    seatNumber: 'PHY-0015',
-    holderName: 'Porteur Vendu Activé',
-    purchasedAt: '2026-10-22T14:30:00Z',
-    status: 'sold_valid',
-    isPhysical: true,
-    agentId: 'agent-fatou-1',
-    agentName: 'Boutique Chez Fatou',
-    batchNumber: 'BATCH-20261022-777',
-    serialNumber: 15,
-  },
-  {
-    id: 'tkt-phy-demo-scanned',
-    eventId: 'evt-soiree-prestige',
-    eventTitle: 'Nuit du Baobab Prestige',
-    eventPoster: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=600',
-    eventDate: '25 Décembre 2026',
-    eventTime: '22:00',
-    eventVenue: 'Hôtel Baobab Lounge, Thiès',
-    tierName: 'Prévente Porteur',
-    price: 3500,
-    qrCode: 'BPT-PHY-THS-SCANNED',
-    seatNumber: 'PHY-0001',
-    holderName: 'Porteur Déjà Scanné',
-    purchasedAt: '2026-10-22T09:00:00Z',
-    status: 'scanned',
-    isPhysical: true,
-    agentId: 'agent-fatou-1',
-    agentName: 'Boutique Chez Fatou',
-    batchNumber: 'BATCH-20261022-777',
-    serialNumber: 1,
-    usedAt: '2026-10-22T17:45:00Z',
-  },
-];
+const isLegacySampleTicket = (ticket: UserTicket): boolean => {
+  const id = String(ticket.id || '');
+  return id.startsWith('tkt-res-') || id.startsWith('tkt-phy-demo-');
+};
 
-// Helper to manage tickets in storage
+/**
+ * Purge définitivement la clé localStorage des billets témoins/réserve hérités.
+ */
+export const clearLocalTicketReserveCache = (): void => {
+  inMemoryTickets = [];
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem(STORAGE_TICKETS_KEY);
+    localStorage.setItem(STORAGE_TICKETS_PURGED_FLAG, '1');
+  }
+};
+
+// Helper to manage tickets in storage (sans aucune génération de faux stock témoin)
 export const getStoredTickets = (): UserTicket[] => {
-  if (typeof window === 'undefined') return [...INITIAL_PHYSICAL_SAMPLE_TICKETS, ...inMemoryTickets];
+  if (typeof window === 'undefined') {
+    return inMemoryTickets.filter((t) => !isLegacySampleTicket(t));
+  }
+
+  if (localStorage.getItem(STORAGE_TICKETS_PURGED_FLAG) !== '1') {
+    localStorage.removeItem(STORAGE_TICKETS_KEY);
+    localStorage.setItem(STORAGE_TICKETS_PURGED_FLAG, '1');
+    inMemoryTickets = [];
+    return [];
+  }
+
   const stored = localStorage.getItem(STORAGE_TICKETS_KEY);
   if (stored) {
     try {
       const parsed: UserTicket[] = JSON.parse(stored);
-      // S'assurer qu'au moins les billets physiques témoins existent
-      const hasPhysical = parsed.some((t) => t.isPhysical);
-      if (!hasPhysical) {
-        const enriched = [...parsed, ...INITIAL_PHYSICAL_SAMPLE_TICKETS];
-        localStorage.setItem(STORAGE_TICKETS_KEY, JSON.stringify(enriched));
-        return enriched;
+      const cleaned = Array.isArray(parsed)
+        ? parsed.filter((t) => !isLegacySampleTicket(t))
+        : [];
+      if (cleaned.length !== parsed.length) {
+        localStorage.setItem(STORAGE_TICKETS_KEY, JSON.stringify(cleaned));
       }
-      return parsed;
+      return cleaned;
     } catch {
-      return [...INITIAL_PHYSICAL_SAMPLE_TICKETS, ...inMemoryTickets];
+      localStorage.removeItem(STORAGE_TICKETS_KEY);
+      return [];
     }
   }
-  const defaultTickets = [...INITIAL_TICKETS, ...INITIAL_PHYSICAL_SAMPLE_TICKETS];
-  localStorage.setItem(STORAGE_TICKETS_KEY, JSON.stringify(defaultTickets));
-  return defaultTickets;
+  return [];
 };
 
 export const saveStoredTickets = (tickets: UserTicket[]): void => {
-  inMemoryTickets = tickets;
+  const cleaned = tickets.filter((t) => !isLegacySampleTicket(t));
+  inMemoryTickets = cleaned;
   if (typeof window !== 'undefined') {
-    localStorage.setItem(STORAGE_TICKETS_KEY, JSON.stringify(tickets));
+    localStorage.setItem(STORAGE_TICKETS_KEY, JSON.stringify(cleaned));
+    localStorage.setItem(STORAGE_TICKETS_PURGED_FLAG, '1');
   }
 };
 
@@ -1631,23 +1503,40 @@ export const clearTestPhysicalTickets = (eventId?: string): { count: number } =>
 // ====================================================================
 
 export const getStoredSalesAgents = (): SalesAgent[] => {
-  if (typeof window === 'undefined') return inMemoryAgents;
+  if (typeof window === 'undefined') {
+    return inMemoryAgents.filter((a) => !LEGACY_SAMPLE_AGENT_IDS.has(a.id));
+  }
+  if (localStorage.getItem(STORAGE_AGENTS_PURGED_FLAG) !== '1') {
+    localStorage.removeItem(STORAGE_AGENTS_KEY);
+    localStorage.setItem(STORAGE_AGENTS_PURGED_FLAG, '1');
+    inMemoryAgents = [];
+    return [];
+  }
   const stored = localStorage.getItem(STORAGE_AGENTS_KEY);
   if (stored) {
     try {
-      return JSON.parse(stored);
+      const parsed: SalesAgent[] = JSON.parse(stored);
+      const cleaned = Array.isArray(parsed)
+        ? parsed.filter((a) => !LEGACY_SAMPLE_AGENT_IDS.has(a.id))
+        : [];
+      if (cleaned.length !== parsed.length) {
+        localStorage.setItem(STORAGE_AGENTS_KEY, JSON.stringify(cleaned));
+      }
+      return cleaned;
     } catch {
-      return inMemoryAgents;
+      localStorage.removeItem(STORAGE_AGENTS_KEY);
+      return [];
     }
   }
-  localStorage.setItem(STORAGE_AGENTS_KEY, JSON.stringify(INITIAL_SALES_AGENTS));
-  return INITIAL_SALES_AGENTS;
+  return [];
 };
 
 export const saveSalesAgents = (agents: SalesAgent[]): void => {
-  inMemoryAgents = agents;
+  const cleaned = agents.filter((a) => !LEGACY_SAMPLE_AGENT_IDS.has(a.id));
+  inMemoryAgents = cleaned;
   if (typeof window !== 'undefined') {
-    localStorage.setItem(STORAGE_AGENTS_KEY, JSON.stringify(agents));
+    localStorage.setItem(STORAGE_AGENTS_KEY, JSON.stringify(cleaned));
+    localStorage.setItem(STORAGE_AGENTS_PURGED_FLAG, '1');
   }
 };
 
@@ -1668,37 +1557,35 @@ export const fetchSalesAgentsFromSupabase = async (): Promise<{
 
     if (error) {
       console.warn('Fallback local pour sales_agents:', error.message);
-      return { agents: getStoredSalesAgents(), error: null };
+      return { agents: getStoredSalesAgents(), error: error.message };
     }
 
-    if (data && data.length > 0) {
-      const mapped: SalesAgent[] = data.map((d: any) => ({
-        id: d.id,
-        userId: d.user_id,
-        eventId: d.event_id,
-        eventTitle: d.event_title || 'Événement',
-        promoterId: d.promoter_id,
-        pointDeVente: d.point_de_vente,
-        gerantName: d.gerant_name,
-        telephone: d.telephone,
-        email: d.email,
-        quartier: d.quartier,
-        allocatedCount: d.allocated_count || 0,
-        soldCount: d.sold_count || 0,
-        commissionPercent: Number(d.commission_percent) || 0,
-        cashCollected: Number(d.cash_collected) || 0,
-        amountDue: Number(d.amount_due) || 0,
-        amountPaidToPromoter: Number(d.amount_paid_to_promoter) || 0,
-        status: d.status || 'active',
-        createdAt: d.created_at,
-      }));
-      saveSalesAgents(mapped);
-      return { agents: mapped, error: null };
-    }
+    const mapped: SalesAgent[] = (data || []).map((d: Record<string, unknown>) => ({
+      id: String(d.id || ''),
+      userId: d.user_id ? String(d.user_id) : undefined,
+      eventId: String(d.event_id || ''),
+      eventTitle: d.event_title ? String(d.event_title) : 'Événement',
+      promoterId: String(d.promoter_id || ''),
+      pointDeVente: String(d.point_de_vente || ''),
+      gerantName: String(d.gerant_name || ''),
+      telephone: String(d.telephone || ''),
+      email: d.email ? String(d.email) : undefined,
+      quartier: d.quartier ? String(d.quartier) : undefined,
+      allocatedCount: Number(d.allocated_count) || 0,
+      soldCount: Number(d.sold_count) || 0,
+      commissionPercent: Number(d.commission_percent) || 0,
+      cashCollected: Number(d.cash_collected) || 0,
+      amountDue: Number(d.amount_due) || 0,
+      amountPaidToPromoter: Number(d.amount_paid_to_promoter) || 0,
+      status: (d.status as SalesAgent['status']) || 'active',
+      createdAt: String(d.created_at || new Date().toISOString()),
+    }));
 
-    return { agents: getStoredSalesAgents(), error: null };
-  } catch (err: any) {
-    return { agents: getStoredSalesAgents(), error: err.message };
+    saveSalesAgents(mapped);
+    return { agents: mapped, error: null };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Erreur réseau sales_agents';
+    return { agents: getStoredSalesAgents(), error: message };
   }
 };
 
@@ -1713,6 +1600,96 @@ export const generateStandardUuid = (): string => {
   });
 };
 
+export const buildFallbackPosEmail = (phone?: string, fallbackSeed?: string): string => {
+  let digits = (phone || '').replace(/[^0-9]/g, '');
+  if (digits.startsWith('00221')) {
+    digits = digits.slice(2);
+  }
+  if (
+    digits.length === 9 &&
+    (digits.startsWith('70') ||
+      digits.startsWith('75') ||
+      digits.startsWith('76') ||
+      digits.startsWith('77') ||
+      digits.startsWith('78'))
+  ) {
+    digits = `221${digits}`;
+  }
+  if (digits.length >= 7) {
+    return `${digits}@pos.thiesdn.site`;
+  }
+  const cleanSeed = (fallbackSeed || 'vendeur').replace(/[^a-zA-Z0-9]/g, '').toLowerCase() || 'vendeur';
+  return `${cleanSeed}@pos.thiesdn.site`;
+};
+
+export interface SalesAgentAuthProvisionResult {
+  success: boolean;
+  userId?: string;
+  email?: string;
+  tempPassword?: string;
+  created?: boolean;
+  passwordReset?: boolean;
+  error?: string;
+}
+
+/**
+ * Appelle la Supabase Edge Function `create-sales-agent-account` pour créer ou lier
+ * un compte Auth (`auth.users` + `profiles.role = 'sales_agent'`) au point de vente.
+ */
+export const provisionSalesAgentAuthAccount = async (params: {
+  agentId: string;
+  email?: string;
+  pointDeVente?: string;
+  gerantName?: string;
+  telephone?: string;
+  eventId?: string;
+  regeneratePassword?: boolean;
+}): Promise<SalesAgentAuthProvisionResult> => {
+  const client = getSupabaseClient();
+  if (!client) {
+    return { success: false, error: 'Supabase non connecté.' };
+  }
+
+  try {
+    const { data, error } = await client.functions.invoke<SalesAgentAuthProvisionResult>(
+      'create-sales-agent-account',
+      { body: params }
+    );
+
+    if (error) {
+      return {
+        success: false,
+        error: error.message || "Erreur lors de l'appel à l'Edge Function vendeur.",
+      };
+    }
+
+    if (!data?.success) {
+      return {
+        success: false,
+        error: data?.error || 'Impossible de provisionner le compte Auth vendeur.',
+      };
+    }
+
+    // Mettre à jour le cache local de l'agent avec son userId & email liés
+    const currentAgents = getStoredSalesAgents();
+    const updatedAgents = currentAgents.map((a) =>
+      a.id === params.agentId
+        ? {
+            ...a,
+            userId: data.userId || a.userId,
+            email: data.email || a.email,
+          }
+        : a
+    );
+    saveSalesAgents(updatedAgents);
+
+    return data;
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Erreur réseau Edge Function.';
+    return { success: false, error: message };
+  }
+};
+
 export const createSalesAgent = async (agentData: {
   eventId: string;
   eventTitle?: string;
@@ -1723,8 +1700,18 @@ export const createSalesAgent = async (agentData: {
   email?: string;
   quartier?: string;
   commissionPercent?: number;
-}): Promise<{ success: boolean; agent?: SalesAgent; error?: string }> => {
+}): Promise<{
+  success: boolean;
+  agent?: SalesAgent;
+  credentials?: { email: string; tempPassword: string };
+  provisioningError?: string;
+  error?: string;
+}> => {
   const agentUuid = generateStandardUuid();
+  const normalizedEmail =
+    agentData.email?.trim().toLowerCase() ||
+    buildFallbackPosEmail(agentData.telephone, agentUuid);
+
   const newAgent: SalesAgent = {
     id: agentUuid,
     eventId: agentData.eventId,
@@ -1733,7 +1720,7 @@ export const createSalesAgent = async (agentData: {
     pointDeVente: agentData.pointDeVente.trim(),
     gerantName: agentData.gerantName.trim(),
     telephone: agentData.telephone.trim(),
-    email: agentData.email?.trim(),
+    email: normalizedEmail,
     quartier: agentData.quartier?.trim() || 'Thiès',
     allocatedCount: 0,
     soldCount: 0,
@@ -1745,21 +1732,17 @@ export const createSalesAgent = async (agentData: {
     createdAt: new Date().toISOString(),
   };
 
-  const agents = getStoredSalesAgents();
-  const updated = [newAgent, ...agents];
-  saveSalesAgents(updated);
-
   const client = getSupabaseClient();
+  let credentials: { email: string; tempPassword: string } | undefined;
+  let provisioningError: string | undefined;
+
   if (client) {
     try {
-      const isValidUuid = (id?: string) =>
-        Boolean(id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
-
       const { data, error } = await client
         .from('sales_agents')
         .insert({
           id: agentUuid,
-          event_id: isValidUuid(newAgent.eventId) ? newAgent.eventId : undefined,
+          event_id: isValidUUID(newAgent.eventId) ? newAgent.eventId : undefined,
           promoter_id: newAgent.promoterId,
           point_de_vente: newAgent.pointDeVente,
           gerant_name: newAgent.gerantName,
@@ -1777,19 +1760,47 @@ export const createSalesAgent = async (agentData: {
         .select()
         .single();
 
-      if (data && data.id) {
-        newAgent.id = data.id;
-        saveSalesAgents([newAgent, ...agents.filter((a) => a.id !== agentUuid)]);
-      }
       if (error) {
-        console.warn('Sync Supabase createSalesAgent error:', error.message);
+        return { success: false, error: error.message };
       }
-    } catch (e: any) {
-      console.warn('Sync Supabase createSalesAgent:', e.message);
+
+      if (data && data.id) {
+        newAgent.id = String(data.id);
+      }
+
+      const provisionRes = await provisionSalesAgentAuthAccount({
+        agentId: newAgent.id,
+        email: normalizedEmail,
+        pointDeVente: newAgent.pointDeVente,
+        gerantName: newAgent.gerantName,
+        telephone: newAgent.telephone,
+        eventId: newAgent.eventId,
+        regeneratePassword: true,
+      });
+
+      if (provisionRes.success && provisionRes.userId) {
+        newAgent.userId = provisionRes.userId;
+        newAgent.email = provisionRes.email || normalizedEmail;
+        if (provisionRes.tempPassword) {
+          credentials = {
+            email: newAgent.email,
+            tempPassword: provisionRes.tempPassword,
+          };
+        }
+      } else if (provisionRes.error) {
+        provisioningError = provisionRes.error;
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Erreur création sales_agent';
+      return { success: false, error: msg };
     }
   }
 
-  return { success: true, agent: newAgent };
+  const agents = getStoredSalesAgents();
+  const updated = [newAgent, ...agents.filter((a) => a.id !== newAgent.id)];
+  saveSalesAgents(updated);
+
+  return { success: true, agent: newAgent, credentials, provisioningError };
 };
 
 export const generatePhysicalTicketBatch = async (
@@ -2123,13 +2134,14 @@ export const assignTicketsToAgent = async (
 
   // Si Supabase n'avait pas encore ces billets ou était hors-ligne, puiser dans la réserve locale
   if (assignedTicketIds.length === 0) {
+    const cleanTicketType = (ticketType || '').trim().toLowerCase();
     const localUnassigned = allTickets.filter(
       (t) =>
         (t.eventId === targetEventId || t.eventId === agent!.eventId) &&
         t.isPhysical &&
         (t.status === 'printed_not_sold' || t.status === 'physical_printed') &&
         !t.agentId &&
-        (!ticketType || t.tierName === ticketType)
+        (!cleanTicketType || (t.tierName || '').trim().toLowerCase() === cleanTicketType)
     );
 
     const localToAssign = localUnassigned.slice(0, safeCount);
@@ -2137,6 +2149,52 @@ export const assignTicketsToAgent = async (
       assignedSet.add(t.id);
     }
     actuallyAssignedCount = localToAssign.length;
+
+    // Si la réserve locale n'a pas encore assez de billets pour ce palier, générer les billets manquants
+    if (actuallyAssignedCount < safeCount) {
+      const neededCount = safeCount - actuallyAssignedCount;
+      const eventTitle = metadata?.event?.title || agent.eventTitle || 'Événement Thièsdn';
+      const eventDate = metadata?.event?.date || 'Date à confirmer';
+      const eventTime = metadata?.event?.time || '20:00';
+      const eventVenue = metadata?.event?.venue || 'Thiès, Sénégal';
+      const eventPoster = metadata?.event?.posterUrl || 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=600';
+      const resolvedPrice = metadata?.event?.tiers?.find((t) => (t.name || '').trim().toLowerCase() === cleanTicketType)?.price || 5000;
+      const batchId = `BATCH-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.floor(100 + Math.random() * 900)}`;
+
+      for (let i = 1; i <= neededCount; i++) {
+        const serial = allTickets.length + i;
+        const serialPad = String(serial).padStart(4, '0');
+        const ticketId = `tkt-phy-${Date.now()}-${serialPad}`;
+        const newTicket: UserTicket = {
+          id: ticketId,
+          eventId: targetEventId || agent.eventId || 'evt-default',
+          eventTitle,
+          eventPoster,
+          eventDate,
+          eventTime,
+          eventVenue,
+          tierName: ticketType || 'Standard',
+          price: resolvedPrice,
+          qrCode: `THS-${serialPad}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
+          seatNumber: `PHY-${serialPad}`,
+          holderName: 'Porteur Non Vendu',
+          purchasedAt: new Date().toISOString(),
+          status: 'printed_not_sold',
+          isPhysical: true,
+          agentId: agent.id,
+          agentName: agent.pointDeVente,
+          batchNumber: batchId,
+          serialNumber: serial,
+          sales_agents: {
+            point_de_vente: agent.pointDeVente,
+            gerant_name: agent.gerantName,
+          },
+        };
+        allTickets.push(newTicket);
+        assignedSet.add(ticketId);
+      }
+      actuallyAssignedCount = safeCount;
+    }
   }
 
   if (actuallyAssignedCount === 0) {
@@ -6539,6 +6597,43 @@ export const scanTicketWithSupabase = async (
 /**
  * Récupération de TOUS les billets de la table tickets pour l'administration
  */
+interface SupabaseTicketRow {
+  id: string;
+  event_id: string;
+  event_title?: string | null;
+  event_poster?: string | null;
+  event_date?: string | null;
+  event_time?: string | null;
+  event_venue?: string | null;
+  tier_name?: string | null;
+  price?: number | string | null;
+  qr_code: string;
+  seat_number?: string | null;
+  holder_name?: string | null;
+  holder_phone?: string | null;
+  holder_email?: string | null;
+  created_at?: string | null;
+  sold_at?: string | null;
+  used_at?: string | null;
+  status?: UserTicket['status'] | null;
+  is_physical?: boolean | null;
+  agent_id?: string | null;
+  agent_name?: string | null;
+  sales_agents?: { point_de_vente?: string | null; gerant_name?: string | null } | null;
+  batch_number?: string | null;
+  serial_number?: number | null;
+  user_id?: string | null;
+  assigned_to_profile_id?: string | null;
+  assigned_to_name?: string | null;
+  assigned_to_phone?: string | null;
+  assigned_to_email?: string | null;
+  assigned_to_avatar?: string | null;
+  assignment_status?: UserTicket['assignmentStatus'] | null;
+  assigned_at?: string | null;
+  claimed_at?: string | null;
+  claim_token?: string | null;
+}
+
 export const fetchAllSoldTicketsFromSupabase = async (
   options?: {
     eventId?: string;
@@ -6560,7 +6655,14 @@ export const fetchAllSoldTicketsFromSupabase = async (
   }
 
   try {
-    const buildQuery = (selectClause: string) => {
+    const PAGE_SIZE = 1000;
+    let useAgentJoin = true;
+    const allRows: SupabaseTicketRow[] = [];
+    let from = 0;
+
+    while (true) {
+      const to = from + PAGE_SIZE - 1;
+      const selectClause = useAgentJoin ? TICKET_SELECT_WITH_AGENT : '*';
       let query = client.from('tickets').select(selectClause);
       if (eventId) {
         query = query.eq('event_id', eventId);
@@ -6571,26 +6673,37 @@ export const fetchAllSoldTicketsFromSupabase = async (
       if (status) {
         query = query.eq('status', status);
       }
-      return query.order('created_at', { ascending: false });
-    };
 
-    // Jointure LEFT sur sales_agents (billets web : sales_agents = null).
-    // Si la relation est indisponible (ancien schéma), repli sur select('*').
-    let { data, error } = await buildQuery(TICKET_SELECT_WITH_AGENT);
-    if (error) {
-      console.warn('Jointure sales_agents indisponible, repli select(*):', error.message);
-      ({ data, error } = await buildQuery('*'));
+      let { data, error } = await query.order('created_at', { ascending: false }).range(from, to);
+
+      if (error && useAgentJoin) {
+        console.warn('Jointure sales_agents indisponible, repli select(*):', error.message);
+        useAgentJoin = false;
+        let fallbackQuery = client.from('tickets').select('*');
+        if (eventId) fallbackQuery = fallbackQuery.eq('event_id', eventId);
+        if (isPhysical !== undefined) fallbackQuery = fallbackQuery.eq('is_physical', isPhysical);
+        if (status) fallbackQuery = fallbackQuery.eq('status', status);
+        ({ data, error } = await fallbackQuery.order('created_at', { ascending: false }).range(from, to));
+      }
+
+      if (error) {
+        console.warn('Erreur fetchAllSoldTicketsFromSupabase:', error.message);
+        let fallback = getStoredTickets();
+        if (eventId) fallback = fallback.filter((t) => t.eventId === eventId);
+        if (isPhysical !== undefined) fallback = fallback.filter((t) => t.isPhysical === isPhysical);
+        if (status) fallback = fallback.filter((t) => t.status === status);
+        return { tickets: fallback, error: error.message };
+      }
+
+      const batch = (data as unknown as SupabaseTicketRow[] | null) || [];
+      allRows.push(...batch);
+      if (batch.length < PAGE_SIZE) {
+        break;
+      }
+      from += PAGE_SIZE;
     }
 
-    if (error) {
-      console.warn('Erreur fetchAllSoldTicketsFromSupabase:', error.message);
-      let fallback = getStoredTickets();
-      if (eventId) fallback = fallback.filter((t) => t.eventId === eventId);
-      if (isPhysical !== undefined) fallback = fallback.filter((t) => t.isPhysical === isPhysical);
-      return { tickets: fallback, error: error.message };
-    }
-
-    const mapped: UserTicket[] = (data || []).map((t: any) => ({
+    const mapped: UserTicket[] = allRows.map((t) => ({
       id: t.id,
       eventId: t.event_id,
       eventTitle: t.event_title || 'Événement Thièsdn',
@@ -6601,20 +6714,22 @@ export const fetchAllSoldTicketsFromSupabase = async (
       tierName: t.tier_name || 'Standard',
       price: Number(t.price) || 0,
       qrCode: t.qr_code,
-      seatNumber: t.seat_number,
+      seatNumber: t.seat_number || undefined,
       holderName: t.holder_name || 'Nom non renseigné',
       holderPhone: t.holder_phone || undefined,
       holderEmail: t.holder_email || undefined,
       holderAvatar: t.assigned_to_avatar || undefined,
       purchasedAt: t.created_at || new Date().toISOString(),
+      soldAt: t.sold_at || undefined,
+      usedAt: t.used_at || undefined,
       status: t.status || 'valid',
       isPhysical: Boolean(t.is_physical),
       agentId: t.agent_id || undefined,
       agentName: t.sales_agents?.point_de_vente || t.agent_name || undefined,
       sales_agents: t.sales_agents ?? null,
       batchNumber: t.batch_number || undefined,
-      serialNumber: t.serial_number || undefined,
-      userId: t.user_id,
+      serialNumber: t.serial_number ?? undefined,
+      userId: t.user_id || undefined,
       assignedToProfileId: t.assigned_to_profile_id || undefined,
       assignedToName: t.assigned_to_name || undefined,
       assignedToPhone: t.assigned_to_phone || undefined,
@@ -6626,18 +6741,24 @@ export const fetchAllSoldTicketsFromSupabase = async (
       claimToken: t.claim_token || undefined,
     }));
 
-    if (mapped.length > 0) {
-      const local = getStoredTickets();
-      const remoteMap = new Map(mapped.map((m) => [m.id, m]));
-      const merged = [...mapped, ...local.filter((l) => !remoteMap.has(l.id))];
-      saveStoredTickets(merged);
-      return { tickets: merged, error: null };
+    // Synchroniser le cache local strictement avec la vérité Supabase (sans réinjecter de faux billets)
+    if (!eventId && isPhysical === undefined && !status) {
+      saveStoredTickets(mapped);
+    } else {
+      const outsideScope = getStoredTickets().filter((localTicket) => {
+        const matchesEvent = !eventId || localTicket.eventId === eventId;
+        const matchesPhysical = isPhysical === undefined || Boolean(localTicket.isPhysical) === isPhysical;
+        const matchesStatus = !status || localTicket.status === status;
+        return !(matchesEvent && matchesPhysical && matchesStatus);
+      });
+      saveStoredTickets([...mapped, ...outsideScope]);
     }
 
     return { tickets: mapped, error: null };
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Exception fetchAllSoldTicketsFromSupabase';
     console.warn('Exception fetchAllSoldTicketsFromSupabase:', err);
-    return { tickets: getStoredTickets(), error: err.message };
+    return { tickets: getStoredTickets(), error: message };
   }
 };
 

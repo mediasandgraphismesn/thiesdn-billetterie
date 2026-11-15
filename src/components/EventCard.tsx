@@ -11,13 +11,29 @@ interface EventCardProps {
   event: EventItem;
   variant?: 'featured' | 'list' | 'grid';
   onSelect: (event: EventItem) => void;
+  currentUserId?: string;
+  currentRole?: string;
+  isOwnerPromoter?: boolean;
+  onManageEvent?: (event: EventItem) => void;
 }
 
 export const EventCard: React.FC<EventCardProps> = ({
   event,
   variant = 'grid',
   onSelect,
+  currentUserId,
+  currentRole,
+  isOwnerPromoter,
+  onManageEvent,
 }) => {
+  const canManageAsPromoter =
+    currentRole !== 'user' &&
+    Boolean(
+      isOwnerPromoter ||
+        (currentUserId &&
+          event.promoter?.id &&
+          event.promoter.id.toLowerCase() === currentUserId.toLowerCase())
+    );
   const now = Date.now();
   const startMs = event.datetimeIso ? new Date(event.datetimeIso).getTime() : NaN;
   const endMs = getEventEndDatetime(event).getTime();
@@ -167,16 +183,36 @@ export const EventCard: React.FC<EventCardProps> = ({
             {event.price.toLocaleString('fr-FR')} FCFA
           </span>
           <button
+            type="button"
+            onClick={
+              canManageAsPromoter
+                ? (e) => {
+                    e.stopPropagation();
+                    if (onManageEvent) {
+                      onManageEvent(event);
+                    } else {
+                      onSelect(event);
+                    }
+                  }
+                : undefined
+            }
             className={
               'min-h-[44px] flex items-center justify-center ' +
-              (isOngoing
+              (canManageAsPromoter
+                ? 'px-3.5 py-2 rounded-xl font-heading font-bold text-xs tracking-wider uppercase bg-[#8A2BE2] hover:bg-[#7A1FD2] text-white border border-[#DCB8FF]/30 shadow-md shadow-[#8A2BE2]/30 transition-all gap-1.5 whitespace-nowrap cursor-pointer'
+                : isOngoing
                 ? 'px-3 py-2 rounded-xl font-heading font-black text-xs tracking-wider uppercase bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-600/30 transition-all gap-1.5'
                 : isSalesUpcoming
                 ? 'px-3 py-2 rounded-xl font-heading font-bold text-xs tracking-wider uppercase bg-[#8A2BE2]/20 text-[#DCB8FF] border border-[#8A2BE2]/40 hover:bg-[#8A2BE2]/40 transition-all gap-1.5'
                 : 'btn-gold-glow px-3.5 py-2 rounded-xl font-heading font-bold text-xs tracking-wider uppercase')
             }
           >
-            {isOngoing ? (
+            {canManageAsPromoter ? (
+              <>
+                <ShieldCheck className="w-3.5 h-3.5 text-[#E9C349]" />
+                <span>Gérer l'événement</span>
+              </>
+            ) : isOngoing ? (
               <>
                 <Radio className="w-3.5 h-3.5 animate-pulse" />
                 <span>Rejoindre</span>
@@ -288,16 +324,36 @@ export const EventCard: React.FC<EventCardProps> = ({
 
           {/* Bouton Réserver : Pleine largeur h-12 (48px) sur mobile, taille normale sur sm */}
           <button
+            type="button"
+            onClick={
+              canManageAsPromoter
+                ? (e) => {
+                    e.stopPropagation();
+                    if (onManageEvent) {
+                      onManageEvent(event);
+                    } else {
+                      onSelect(event);
+                    }
+                  }
+                : undefined
+            }
             className={
               `w-full sm:w-auto h-12 sm:h-10 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold font-heading flex items-center justify-center gap-1.5 cursor-pointer transition-all active:scale-95 ` +
-              (isOngoing
+              (canManageAsPromoter
+                ? 'bg-[#8A2BE2] hover:bg-[#7A1FD2] text-white border border-[#DCB8FF]/30 shadow-md shadow-[#8A2BE2]/30 whitespace-nowrap'
+                : isOngoing
                 ? 'bg-red-600 hover:bg-red-500 text-white shadow-md shadow-red-600/30'
                 : isSalesUpcoming
                 ? 'bg-[#8A2BE2]/20 text-[#DCB8FF] border border-[#8A2BE2]/40 hover:bg-[#8A2BE2]/40'
                 : 'btn-primary-glow')
             }
           >
-            {isOngoing ? (
+            {canManageAsPromoter ? (
+              <>
+                <ShieldCheck className="w-3.5 h-3.5 text-[#E9C349]" />
+                <span>Gérer l'événement</span>
+              </>
+            ) : isOngoing ? (
               <>
                 <Radio className="w-3.5 h-3.5 animate-pulse" />
                 <span>En Direct</span>

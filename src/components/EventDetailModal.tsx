@@ -68,6 +68,9 @@ interface EventDetailModalProps {
   isEmailConfirmed?: boolean;
   isAuthenticated?: boolean;
   onRequireAuth?: () => void;
+  currentUserId?: string;
+  currentRole?: string;
+  onManageEvent?: (event: EventItem) => void;
 }
 
 export const EventDetailModal: React.FC<EventDetailModalProps> = ({
@@ -82,8 +85,19 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
   isEmailConfirmed = true,
   isAuthenticated = true,
   onRequireAuth,
+  currentUserId,
+  currentRole,
+  onManageEvent,
 }) => {
   if (!isOpen || !event) return null;
+
+  const isOwnerPromoter =
+    currentRole !== 'user' &&
+    Boolean(
+      currentUserId &&
+        event.promoter?.id &&
+        event.promoter.id.toLowerCase() === currentUserId.toLowerCase()
+    );
 
   const defaultTier: TicketTier = event.tiers?.[0] || {
     id: 't-default',
@@ -1360,22 +1374,44 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
           {/* ============================================================== */}
           {/* FOOTER BAR CONTEXTUELLE SELON L'ÉTAPE DU WIZARD                */}
           {/* ============================================================== */}
-          {flow === 'details' && !isSalesUpcoming && (
+          {flow === 'details' && (!isSalesUpcoming || isOwnerPromoter) && (
             <div className="p-3.5 sm:p-4 bg-[#10111A] border-t border-white/10 flex items-center justify-between gap-3 flex-shrink-0">
               <div>
-                <p className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Tarif</p>
+                <p className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">
+                  {isOwnerPromoter ? 'Mode Organisateur' : 'Tarif'}
+                </p>
                 <p className="font-heading text-lg font-extrabold text-[#E9C349]">
-                  À partir de {event.price.toLocaleString('fr-FR')} F
+                  {isOwnerPromoter
+                    ? 'Cockpit & Finances'
+                    : `À partir de ${event.price.toLocaleString('fr-FR')} F`}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={handleStartBooking}
-                className="py-3 px-6 rounded-2xl font-heading font-extrabold text-xs sm:text-sm tracking-wider uppercase flex items-center gap-2 transition-all shadow-lg bg-[#E9C349] hover:bg-[#F3D779] text-[#241A00] shadow-[#E9C349]/20 active:scale-95 cursor-pointer"
-              >
-                <span>Acheter mes places</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
+              {isOwnerPromoter ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onManageEvent) {
+                      onManageEvent(event);
+                    } else {
+                      onClose();
+                    }
+                  }}
+                  className="py-3 px-5 sm:px-6 rounded-2xl font-heading font-extrabold text-xs sm:text-sm tracking-wider uppercase flex items-center gap-2 transition-all shadow-lg bg-[#8A2BE2] hover:bg-[#7A1FD2] text-white border border-[#DCB8FF]/30 shadow-[#8A2BE2]/25 active:scale-95 cursor-pointer"
+                >
+                  <ShieldCheck className="w-4 h-4 text-[#E9C349]" />
+                  <span>Gérer cet événement (Cockpit)</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleStartBooking}
+                  className="py-3 px-6 rounded-2xl font-heading font-extrabold text-xs sm:text-sm tracking-wider uppercase flex items-center gap-2 transition-all shadow-lg bg-[#E9C349] hover:bg-[#F3D779] text-[#241A00] shadow-[#E9C349]/20 active:scale-95 cursor-pointer"
+                >
+                  <span>Acheter mes places</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              )}
             </div>
           )}
 

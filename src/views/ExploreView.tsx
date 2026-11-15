@@ -17,13 +17,19 @@ import { MapView } from '../components/MapView';
 interface ExploreViewProps {
   events: EventItem[];
   isLoading?: boolean;
+  currentUserId?: string;
+  currentRole?: string;
   onSelectEvent: (event: EventItem) => void;
+  onManageEvent?: (event: EventItem) => void;
 }
 
 export const ExploreView: React.FC<ExploreViewProps> = ({
   events,
   isLoading = false,
+  currentUserId,
+  currentRole,
   onSelectEvent,
+  onManageEvent,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCity, setSelectedCity] = useState('All');
@@ -233,6 +239,9 @@ export const ExploreView: React.FC<ExploreViewProps> = ({
               event={event}
               variant="grid"
               onSelect={onSelectEvent}
+              currentUserId={currentUserId}
+              currentRole={currentRole}
+              onManageEvent={onManageEvent}
             />
           ))}
         </div>

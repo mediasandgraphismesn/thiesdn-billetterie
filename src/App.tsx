@@ -396,7 +396,7 @@ export default function App() {
           if (window.location.pathname !== '/') {
             window.history.replaceState(null, '', '/');
           }
-          setActiveTab('events_mgmt');
+          setActiveTab('finances');
         } else if (effectiveRole === 'admin') {
           setIsPosRoute(false);
           if (window.location.pathname !== '/admin') {
@@ -950,7 +950,7 @@ export default function App() {
                   window.history.pushState(null, '', '/');
                 }
                 if (role === 'admin') setActiveTab('dashboard');
-                else if (role === 'promoter') setActiveTab('events_mgmt');
+                else if (role === 'promoter') setActiveTab('finances');
                 else setActiveTab('home');
               }
             }}
@@ -1249,7 +1249,10 @@ export default function App() {
                   events={effectiveRole === 'promoter' ? myEvents : events}
                   isLoading={isLoadingEvents}
                   isPromoterView={effectiveRole === 'promoter'}
+                  currentUserId={user.id}
+                  currentRole={effectiveRole}
                   onSelectEvent={(evt) => setSelectedEventForDetail(evt)}
+                  onManageEvent={() => handleTabChange('finances')}
                   onNavigateToExplore={() => handleTabChange('explore')}
                   onNavigateToCreate={() => handleTabChange('create')}
                 />
@@ -1260,7 +1263,10 @@ export default function App() {
                 <ExploreView
                   events={events}
                   isLoading={isLoadingEvents}
+                  currentUserId={user.id}
+                  currentRole={effectiveRole}
                   onSelectEvent={(evt) => setSelectedEventForDetail(evt)}
+                  onManageEvent={() => handleTabChange('finances')}
                 />
               )}
 
@@ -1510,6 +1516,12 @@ export default function App() {
         onRequireAuth={() => {
           setSelectedEventForDetail(null);
           setActiveTab('profile');
+        }}
+        currentUserId={user.id}
+        currentRole={effectiveRole}
+        onManageEvent={() => {
+          setSelectedEventForDetail(null);
+          handleTabChange('finances');
         }}
       />
 

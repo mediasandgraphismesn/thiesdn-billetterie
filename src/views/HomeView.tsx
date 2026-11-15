@@ -9,7 +9,10 @@ interface HomeViewProps {
   events: EventItem[];
   isLoading?: boolean;
   isPromoterView?: boolean;
+  currentUserId?: string;
+  currentRole?: string;
   onSelectEvent: (event: EventItem) => void;
+  onManageEvent?: (event: EventItem) => void;
   onNavigateToExplore: () => void;
   onNavigateToCreate: () => void;
 }
@@ -18,7 +21,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
   events,
   isLoading = false,
   isPromoterView = false,
+  currentUserId,
+  currentRole,
   onSelectEvent,
+  onManageEvent,
   onNavigateToExplore,
   onNavigateToCreate,
 }) => {
@@ -232,6 +238,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 event={event}
                 variant="list"
                 onSelect={onSelectEvent}
+                currentUserId={currentUserId}
+                currentRole={currentRole}
+                isOwnerPromoter={isPromoterView}
+                onManageEvent={onManageEvent}
               />
             ))}
           </div>
