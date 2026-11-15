@@ -1589,6 +1589,68 @@ export const fetchSalesAgentsFromSupabase = async (): Promise<{
   }
 };
 
+export interface LinkedSalesAgentSummary {
+  id: string;
+  userId: string;
+  eventId: string;
+  pointDeVente: string;
+  status: 'active' | 'suspended';
+}
+
+/**
+ * Vérifie directement dans Supabase si l'utilisateur authentifié (`auth.uid()`)
+ * est rattaché à un point de vente actif dans `public.sales_agents`.
+ * Permet de donner la priorité au contexte `/pos` même si son profil est `promoter`.
+ */
+export const fetchLinkedSalesAgentForUser = async (
+  userId: string
+): Promise<{ agent: LinkedSalesAgentSummary | null; error: string | null }> => {
+  const client = getSupabaseClient();
+  if (!client || !userId) {
+    return { agent: null, error: null };
+  }
+
+  try {
+    const { data, error } = await client
+      .from('sales_agents')
+      .select('id, user_id, event_id, point_de_vente, status')
+      .eq('user_id', userId)
+      .limit(5);
+
+    if (error) {
+      return { agent: null, error: error.message };
+    }
+
+    const rows = (data || []) as Array<{
+      id: string;
+      user_id?: string | null;
+      event_id?: string | null;
+      point_de_vente?: string | null;
+      status?: string | null;
+    }>;
+
+    const activeRows = rows.filter((r) => r.status !== 'suspended');
+    if (activeRows.length === 0) {
+      return { agent: null, error: null };
+    }
+
+    const preferred = activeRows[0];
+    return {
+      agent: {
+        id: String(preferred.id),
+        userId: String(preferred.user_id || userId),
+        eventId: String(preferred.event_id || ''),
+        pointDeVente: String(preferred.point_de_vente || 'Point de Vente'),
+        status: preferred.status === 'suspended' ? 'suspended' : 'active',
+      },
+      error: null,
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Erreur vérification point de vente';
+    return { agent: null, error: message };
+  }
+};
+
 export const generateStandardUuid = (): string => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();

@@ -67,6 +67,7 @@ import { useAuth } from './contexts/AuthContext';
 import {
   getSupabaseClient,
   fetchUserProfile,
+  fetchLinkedSalesAgentForUser,
   signOutWithSupabase,
   fetchEventsFromSupabase,
   updateEventStatusInSupabase,
@@ -167,6 +168,8 @@ export default function App() {
   const [claimToken, setClaimToken] = useState<string | null>(getInitialClaimToken());
   const [directTicketId, setDirectTicketId] = useState<string | null>(getInitialTicketId());
   const [isPosRoute, setIsPosRoute] = useState<boolean>(getInitialIsPosRoute());
+  const [posLinkedAgentId, setPosLinkedAgentId] = useState<string | null>(null);
+  const [isCheckingPosAccess, setIsCheckingPosAccess] = useState<boolean>(() => getInitialIsPosRoute());
   const [isAuthenticated, setIsAuthenticated] = useState(authIsAuthenticated);
   const [user, setUser] = useState<UserProfile>(contextUser || INITIAL_USER);
   const [events, setEvents] = useState<EventItem[]>([]);
@@ -335,6 +338,13 @@ export default function App() {
           setScanStationCode(null);
         }
 
+        if (getInitialIsPosRoute()) {
+          setIsPosRoute(true);
+          return;
+        }
+        setIsPosRoute(false);
+        setPosLinkedAgentId(null);
+
         const currentPath = window.location.pathname;
         if (currentPath === '/admin') {
           setActiveTab('dashboard');
@@ -377,44 +387,73 @@ export default function App() {
     }
   }, [isAuthenticated, isAuthLoading, effectiveRole]);
 
-  // PRIORITÉ 2 : Guard d'accès et redirection hermétique pour la route /pos
+  // PRIORITÉ 2 : Guard contextuel /pos — Priorité absolue si auth.uid() existe dans sales_agents
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const isPos = getInitialIsPosRoute();
+    const isPos = getInitialIsPosRoute() || isPosRoute;
     if (!isPos) {
-      setIsPosRoute(false);
+      setPosLinkedAgentId(null);
+      setIsCheckingPosAccess(false);
       return;
     }
 
-    if (!isAuthLoading) {
-      if (isAuthenticated) {
-        if (effectiveRole === 'sales_agent') {
-          setIsPosRoute(true);
-          setActiveTab('sales_agent');
-        } else if (effectiveRole === 'promoter') {
-          setIsPosRoute(false);
-          if (window.location.pathname !== '/') {
-            window.history.replaceState(null, '', '/');
-          }
-          setActiveTab('finances');
-        } else if (effectiveRole === 'admin') {
-          setIsPosRoute(false);
-          if (window.location.pathname !== '/admin') {
-            window.history.replaceState(null, '', '/admin');
-          }
-          setActiveTab('dashboard');
-        } else {
-          setIsPosRoute(false);
-          if (window.location.pathname !== '/') {
-            window.history.replaceState(null, '', '/');
-          }
-          setActiveTab('home');
-        }
-      } else {
-        setIsPosRoute(true);
-      }
+    if (isAuthLoading) return;
+
+    if (!isAuthenticated || !user?.id) {
+      setPosLinkedAgentId(null);
+      setIsCheckingPosAccess(false);
+      setIsPosRoute(true);
+      return;
     }
-  }, [isAuthenticated, isAuthLoading, effectiveRole]);
+
+    let cancelled = false;
+    const resolvePosContextAccess = async () => {
+      setIsCheckingPosAccess(true);
+      const linkedRes = await fetchLinkedSalesAgentForUser(user.id);
+      if (cancelled) return;
+
+      if (linkedRes.agent) {
+        // Point de vente lié trouvé : afficher la caisse même si le profil est promoter
+        setPosLinkedAgentId(linkedRes.agent.id);
+        setIsPosRoute(true);
+        setActiveTab('sales_agent');
+        setIsCheckingPosAccess(false);
+        return;
+      }
+
+      // Aucun point de vente lié : appliquer la redirection habituelle selon le rôle
+      setPosLinkedAgentId(null);
+      setIsCheckingPosAccess(false);
+
+      if (effectiveRole === 'sales_agent') {
+        setIsPosRoute(true);
+        setActiveTab('sales_agent');
+      } else if (effectiveRole === 'promoter') {
+        setIsPosRoute(false);
+        if (window.location.pathname !== '/') {
+          window.history.replaceState(null, '', '/');
+        }
+        setActiveTab('finances');
+      } else if (effectiveRole === 'admin') {
+        setIsPosRoute(false);
+        if (window.location.pathname !== '/admin') {
+          window.history.replaceState(null, '', '/admin');
+        }
+        setActiveTab('dashboard');
+      } else {
+        setIsPosRoute(false);
+        if (window.location.pathname !== '/') {
+          window.history.replaceState(null, '', '/');
+        }
+        setActiveTab('home');
+      }
+    };
+
+    void resolvePosContextAccess();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, isAuthLoading, effectiveRole, user?.id, isPosRoute]);
 
   // Chargement et écoute Realtime des notifications utilisateur (user_notifications)
   useEffect(() => {
@@ -491,6 +530,10 @@ export default function App() {
     const adminOnlyTabs = ['dashboard', 'events_mgmt', 'moderation', 'orders', 'payments', 'users', 'checkin', 'settings', 'admin'];
     if (adminOnlyTabs.includes(tab) && role !== 'admin') {
       return false;
+    }
+
+    if (posLinkedAgentId && tab === 'sales_agent') {
+      return true;
     }
 
     if (!isAuth) {
@@ -630,15 +673,18 @@ export default function App() {
           setIsAuthenticated(true);
           const isConfirmed = Boolean(session.user.email_confirmed_at || (session.user as any).confirmed_at);
           fetchUserProfile(session.user.id, session.user).then((profile) => {
+            const onPosUrl = getInitialIsPosRoute();
             if (profile) {
               setUser({ ...profile, isEmailConfirmed: isConfirmed });
               setCurrentRole(profile.role);
-              if (profile.role === 'admin' && !isAdminPreview) {
-                setActiveTab('dashboard');
-              } else if (profile.role === 'sales_agent') {
-                setActiveTab('sales_agent');
-              } else if (profile.role === 'artist') {
-                setActiveTab('artist');
+              if (!onPosUrl) {
+                if (profile.role === 'admin' && !isAdminPreview) {
+                  setActiveTab('dashboard');
+                } else if (profile.role === 'sales_agent') {
+                  setActiveTab('sales_agent');
+                } else if (profile.role === 'artist') {
+                  setActiveTab('artist');
+                }
               }
             } else {
               const role = (session.user.user_metadata?.role as any) || 'user';
@@ -651,12 +697,14 @@ export default function App() {
                 isEmailConfirmed: isConfirmed,
               }));
               setCurrentRole(role);
-              if (role === 'admin' && !isAdminPreview) {
-                setActiveTab('dashboard');
-              } else if (role === 'sales_agent') {
-                setActiveTab('sales_agent');
-              } else if (role === 'artist') {
-                setActiveTab('artist');
+              if (!onPosUrl) {
+                if (role === 'admin' && !isAdminPreview) {
+                  setActiveTab('dashboard');
+                } else if (role === 'sales_agent') {
+                  setActiveTab('sales_agent');
+                } else if (role === 'artist') {
+                  setActiveTab('artist');
+                }
               }
             }
           });
@@ -674,15 +722,18 @@ export default function App() {
             setIsAuthenticated(true);
             const isConfirmed = Boolean(session.user.email_confirmed_at || (session.user as any).confirmed_at);
             const profile = await fetchUserProfile(session.user.id, session.user);
+            const onPosUrl = getInitialIsPosRoute();
             if (profile) {
               setUser({ ...profile, isEmailConfirmed: isConfirmed });
               setCurrentRole(profile.role);
-              if (profile.role === 'admin' && !isAdminPreview) {
-                setActiveTab('dashboard');
-              } else if (profile.role === 'sales_agent') {
-                setActiveTab('sales_agent');
-              } else if (profile.role === 'artist') {
-                setActiveTab('artist');
+              if (!onPosUrl) {
+                if (profile.role === 'admin' && !isAdminPreview) {
+                  setActiveTab('dashboard');
+                } else if (profile.role === 'sales_agent') {
+                  setActiveTab('sales_agent');
+                } else if (profile.role === 'artist') {
+                  setActiveTab('artist');
+                }
               }
             } else {
               const role = (session.user.user_metadata?.role as any) || 'user';
@@ -695,12 +746,14 @@ export default function App() {
                 isEmailConfirmed: isConfirmed,
               }));
               setCurrentRole(role);
-              if (role === 'admin' && !isAdminPreview) {
-                setActiveTab('dashboard');
-              } else if (role === 'sales_agent') {
-                setActiveTab('sales_agent');
-              } else if (role === 'artist') {
-                setActiveTab('artist');
+              if (!onPosUrl) {
+                if (role === 'admin' && !isAdminPreview) {
+                  setActiveTab('dashboard');
+                } else if (role === 'sales_agent') {
+                  setActiveTab('sales_agent');
+                } else if (role === 'artist') {
+                  setActiveTab('artist');
+                }
               }
             }
             fetchUserTicketsFromSupabase(session.user.id).then(({ tickets: dbTickets }) => {
@@ -708,6 +761,7 @@ export default function App() {
             });
           } else if (event === 'SIGNED_OUT') {
             setIsAuthenticated(false);
+            setPosLinkedAgentId(null);
             setUser({ ...INITIAL_USER, role: 'user', isEmailConfirmed: false });
             setCurrentRole('user');
             setIsAdminPreview(false);
@@ -747,6 +801,7 @@ export default function App() {
   const handleSignOut = async () => {
     await signOutWithSupabase();
     setIsAuthenticated(false);
+    setPosLinkedAgentId(null);
     setUser({ ...INITIAL_USER, role: 'user' });
     setCurrentRole('user');
     setIsAdminPreview(false);
@@ -923,31 +978,80 @@ export default function App() {
 
   // PRIORITÉ 2 : Isolation hermétique plein écran pour la route POS /pos ou /vendeur
   if (isPosRoute) {
+    const showPosVerificationSpinner =
+      isAuthLoading ||
+      (isAuthenticated && isCheckingPosAccess && effectiveRole !== 'sales_agent' && !posLinkedAgentId);
+
     return (
       <div className="fixed inset-0 z-50 bg-[#0a0a0a] overflow-y-auto font-sans text-[#E5E2E1]">
         <div className="bg-pattern" />
-        {isAuthenticated && effectiveRole === 'sales_agent' ? (
-          <SalesAgentDashboardView
-            user={user}
-            onNavigateBack={() => {
-              setIsPosRoute(false);
-              if (typeof window !== 'undefined') {
-                window.history.pushState(null, '', '/');
-              }
-              setActiveTab('home');
-            }}
-          />
+        {showPosVerificationSpinner ? (
+          <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-[#8A2BE2]/20 border border-[#8A2BE2]/40 flex items-center justify-center animate-pulse">
+              <span className="w-6 h-6 border-2 border-[#E9C349] border-t-transparent rounded-full animate-spin" />
+            </div>
+            <p className="font-heading text-sm font-bold text-white tracking-wide">
+              Vérification de votre guichet POS...
+            </p>
+            <p className="text-xs text-gray-400">
+              Synchronisation avec votre point de vente Supabase.
+            </p>
+          </div>
+        ) : isAuthenticated && (effectiveRole === 'sales_agent' || Boolean(posLinkedAgentId)) ? (
+          <div className="p-3 sm:p-6">
+            <SalesAgentDashboardView
+              user={user}
+              events={events}
+              currentAgentId={posLinkedAgentId ?? undefined}
+              onNavigateBack={() => {
+                setIsPosRoute(false);
+                setPosLinkedAgentId(null);
+                if (typeof window !== 'undefined') {
+                  window.history.pushState(null, '', '/');
+                }
+                if (effectiveRole === 'promoter') {
+                  setActiveTab('finances');
+                } else if (effectiveRole === 'admin') {
+                  setActiveTab('dashboard');
+                } else {
+                  setActiveTab('home');
+                }
+              }}
+            />
+          </div>
         ) : (
           <PosAuthView
-            onLoginSuccess={(role) => {
-              handleLoginSuccess(role as any);
+            isAuthenticated={isAuthenticated}
+            currentUserId={user?.id}
+            currentRole={effectiveRole}
+            onLoginSuccess={(role, options) => {
+              const linkedAgentId = options?.linkedAgentId ?? null;
+              if (linkedAgentId) {
+                const normalizedRole =
+                  (role as 'user' | 'promoter' | 'admin' | 'sales_agent' | 'artist') || 'sales_agent';
+                setIsAuthenticated(true);
+                setCurrentRole(normalizedRole);
+                setUser((prev) => ({
+                  ...prev,
+                  role: normalizedRole,
+                  assignedAgentId: linkedAgentId,
+                }));
+                setPosLinkedAgentId(linkedAgentId);
+                setIsCheckingPosAccess(false);
+                setIsPosRoute(true);
+                setActiveTab('sales_agent');
+                return;
+              }
+
+              setPosLinkedAgentId(null);
+              handleLoginSuccess(role as 'user' | 'promoter' | 'admin' | 'sales_agent' | 'artist');
               if (role === 'sales_agent') {
                 setIsPosRoute(true);
                 setActiveTab('sales_agent');
               } else {
                 setIsPosRoute(false);
                 if (typeof window !== 'undefined') {
-                  window.history.pushState(null, '', '/');
+                  window.history.pushState(null, '', role === 'admin' ? '/admin' : '/');
                 }
                 if (role === 'admin') setActiveTab('dashboard');
                 else if (role === 'promoter') setActiveTab('finances');
@@ -956,10 +1060,11 @@ export default function App() {
             }}
             onNavigateHome={() => {
               setIsPosRoute(false);
+              setPosLinkedAgentId(null);
               if (typeof window !== 'undefined') {
                 window.history.pushState(null, '', '/');
               }
-              setActiveTab('home');
+              setActiveTab(effectiveRole === 'promoter' ? 'finances' : 'home');
             }}
           />
         )}

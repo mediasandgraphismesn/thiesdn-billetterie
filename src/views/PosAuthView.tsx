@@ -1,21 +1,92 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Store, Lock, Mail, Eye, EyeOff, ArrowRight, ArrowLeft, ShieldCheck, AlertCircle } from 'lucide-react';
-import { signInWithSupabase, fetchUserProfile, isSupabaseConfigured } from '../services/supabase';
+import {
+  signInWithSupabase,
+  signOutWithSupabase,
+  fetchUserProfile,
+  fetchLinkedSalesAgentForUser,
+  getSupabaseClient,
+  isSupabaseConfigured,
+} from '../services/supabase';
 import { TurnstileGate, type TurnstileGateHandle } from '../components/TurnstileGate';
 
-interface PosAuthViewProps {
-  onLoginSuccess: (role: 'sales_agent' | 'admin' | string) => void;
-  onNavigateHome: () => void;
+export interface PosAuthSuccessOptions {
+  linkedAgentId?: string | null;
 }
 
-export const PosAuthView: React.FC<PosAuthViewProps> = ({ onLoginSuccess, onNavigateHome }) => {
+interface PosAuthViewProps {
+  onLoginSuccess: (
+    role: 'sales_agent' | 'admin' | 'promoter' | 'artist' | 'user' | string,
+    options?: PosAuthSuccessOptions
+  ) => void;
+  onNavigateHome: () => void;
+  isAuthenticated?: boolean;
+  currentUserId?: string;
+  currentRole?: string;
+}
+
+export const PosAuthView: React.FC<PosAuthViewProps> = ({
+  onLoginSuccess,
+  onNavigateHome,
+  isAuthenticated = false,
+  currentUserId,
+  currentRole,
+}) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [isCheckingSession, setIsCheckingSession] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const turnstileRef = useRef<TurnstileGateHandle | null>(null);
+
+  // Si une session active existe déjà (ex. promoteur connecté ouvrant /pos), vérifier prioritairement sales_agents
+  useEffect(() => {
+    if (!isSupabaseConfigured()) return;
+    if (isAuthenticated === false && !currentUserId) return;
+
+    let cancelled = false;
+    const client = getSupabaseClient();
+    if (!client) return;
+
+    const verifyExistingPosAccess = async () => {
+      setIsCheckingSession(true);
+      try {
+        let uid = currentUserId;
+        let authUser = undefined;
+
+        if (!uid) {
+          const { data: sessionData } = await client.auth.getSession();
+          uid = sessionData.session?.user?.id;
+          authUser = sessionData.session?.user;
+        }
+
+        if (!uid || cancelled) return;
+
+        const [linkedRes, profile] = await Promise.all([
+          fetchLinkedSalesAgentForUser(uid),
+          currentRole ? Promise.resolve(null) : fetchUserProfile(uid, authUser),
+        ]);
+
+        if (cancelled) return;
+
+        if (linkedRes.agent) {
+          const resolvedRole = currentRole || profile?.role || 'sales_agent';
+          onLoginSuccess(resolvedRole, { linkedAgentId: linkedRes.agent.id });
+        }
+      } finally {
+        if (!cancelled) {
+          setIsCheckingSession(false);
+        }
+      }
+    };
+
+    void verifyExistingPosAccess();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, currentUserId, currentRole]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,23 +110,30 @@ export const PosAuthView: React.FC<PosAuthViewProps> = ({ onLoginSuccess, onNavi
       try {
         const res = await signInWithSupabase(cleanEmail, password, captchaToken);
         if (res.user?.id) {
-          const profile = await fetchUserProfile(res.user.id, res.user);
+          const [profile, linkedRes] = await Promise.all([
+            fetchUserProfile(res.user.id, res.user),
+            fetchLinkedSalesAgentForUser(res.user.id),
+          ]);
           const role = profile?.role || res.user.user_metadata?.role || 'user';
 
-          if (role === 'sales_agent' || role === 'admin') {
-            onLoginSuccess(role);
+          // Priorité absolue au contexte /pos : si user_id existe dans sales_agents, ouvrir la caisse immédiatement
+          if (linkedRes.agent) {
+            onLoginSuccess(role, { linkedAgentId: linkedRes.agent.id });
+          } else if (role === 'sales_agent' || role === 'admin' || role === 'promoter') {
+            // Aucun point de vente lié : appliquer la redirection habituelle selon le rôle
+            onLoginSuccess(role, { linkedAgentId: null });
           } else {
+            // Client simple (role === 'user' ou 'artist') sans point de vente : déconnexion + message explicite maintenu à l'écran
+            await signOutWithSupabase();
             setError(
-              'Ce compte est actuellement configuré comme ' +
-                (role === 'promoter' ? 'Promoteur' : 'Client') +
-                ". Vous devez utiliser un compte vendeur ('sales_agent') pour accéder au terminal de caisse."
+              "Aucun point de vente actif n'est associé à ce compte. Vous devez disposer d'un point de vente relié ('sales_agents') pour accéder au terminal de caisse."
             );
           }
         } else {
           setError('Identifiants incorrects.');
         }
-      } catch (err: any) {
-        const msg = err?.message || '';
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : '';
         if (msg.includes('Invalid login credentials') || msg.includes('invalid_grant')) {
           setError('Email ou mot de passe incorrect.');
         } else {
@@ -69,7 +147,7 @@ export const PosAuthView: React.FC<PosAuthViewProps> = ({ onLoginSuccess, onNavi
       // Mode hors-ligne / fallback
       setTimeout(() => {
         setLoading(false);
-        onLoginSuccess('sales_agent');
+        onLoginSuccess('sales_agent', { linkedAgentId: null });
       }, 400);
     }
   };
@@ -97,6 +175,13 @@ export const PosAuthView: React.FC<PosAuthViewProps> = ({ onLoginSuccess, onNavi
             Connectez-vous pour accéder à votre caisse mobile, déclarer vos ventes physiques et suivre vos commissions.
           </p>
         </div>
+
+        {isCheckingSession && (
+          <div className="p-3.5 rounded-2xl bg-[#8A2BE2]/15 border border-[#8A2BE2]/40 text-[#DCB8FF] text-xs flex items-center gap-2.5 animate-in fade-in">
+            <span className="w-4 h-4 border-2 border-[#E9C349] border-t-transparent rounded-full animate-spin shrink-0" />
+            <span>Vérification de votre accès point de vente...</span>
+          </div>
+        )}
 
         {error && (
           <div className="p-3.5 rounded-2xl bg-red-950/60 border border-red-500/50 text-red-200 text-xs flex items-start gap-2.5 animate-in fade-in">
@@ -164,10 +249,10 @@ export const PosAuthView: React.FC<PosAuthViewProps> = ({ onLoginSuccess, onNavi
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || isCheckingSession}
             className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-[#8A2BE2] to-[#6A1BB2] hover:from-[#9B3BF2] hover:to-[#7B24C2] text-white font-heading font-extrabold text-sm uppercase tracking-wider shadow-lg shadow-[#8A2BE2]/30 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:hover:scale-100 cursor-pointer"
           >
-            {loading ? (
+            {loading || isCheckingSession ? (
               <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
             ) : (
               <>
