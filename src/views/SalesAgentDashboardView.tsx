@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import {
   Store,
   Ticket,
@@ -22,12 +21,29 @@ import {
   Scan,
   Camera,
   CameraOff,
+  Flashlight,
   Check,
   CheckCheck,
   Search,
   ShoppingCart,
+  Wifi,
+  WifiOff,
+  CloudUpload,
 } from 'lucide-react';
 import { SalesAgent, UserTicket, EventItem, UserProfile } from '../types';
+import {
+  startOptimizedScanner,
+  OptimizedScannerHandle,
+  ScannerMetrics,
+} from '../utils/scannerEngine';
+import {
+  savePosAgentSnapshot,
+  loadPosAgentSnapshot,
+  recordOfflinePosSale,
+  getPendingOfflinePosSales,
+  getPendingOfflineQrCodes,
+  syncPendingOfflinePosSales,
+} from '../services/posOfflineCache';
 import {
   getStoredSalesAgents,
   getStoredTickets,
@@ -35,6 +51,7 @@ import {
   recordAgentSettlement,
   saveSalesAgents,
   lookupPhysicalTicketForSale,
+  verifyPosTicketForSale,
   confirmSinglePhysicalTicketSale,
   fetchSalesAgentsFromSupabase,
   fetchAllSoldTicketsFromSupabase,
@@ -105,9 +122,32 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
   onNavigateBack,
 }) => {
   const isConnected = isSupabaseConfigured();
-  const [agents, setAgents] = useState<SalesAgent[]>(() => (isConnected ? [] : getStoredSalesAgents()));
-  const [tickets, setTickets] = useState<UserTicket[]>(() => (isConnected ? [] : getStoredTickets()));
-  const [isRefreshing, setIsRefreshing] = useState<boolean>(isConnected);
+  const initialOfflineSnapshot = useMemo(
+    () => loadPosAgentSnapshot(currentAgentId || user?.assignedAgentId),
+    [currentAgentId, user?.assignedAgentId]
+  );
+  const [isOnline, setIsOnline] = useState<boolean>(() =>
+    typeof navigator !== 'undefined' ? navigator.onLine : true
+  );
+  const [agents, setAgents] = useState<SalesAgent[]>(() => {
+    if (!isConnected) return getStoredSalesAgents();
+    if (initialOfflineSnapshot.agents.length > 0) return initialOfflineSnapshot.agents;
+    return [];
+  });
+  const [tickets, setTickets] = useState<UserTicket[]>(() => {
+    if (!isConnected) return getStoredTickets();
+    if (initialOfflineSnapshot.tickets.length > 0) return initialOfflineSnapshot.tickets;
+    return [];
+  });
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(
+    isConnected && (typeof navigator === 'undefined' || navigator.onLine)
+  );
+  const [pendingOfflineCount, setPendingOfflineCount] = useState<number>(() =>
+    getPendingOfflinePosSales(currentAgentId || user?.assignedAgentId).length
+  );
+  const [isSyncingOffline, setIsSyncingOffline] = useState<boolean>(false);
+  const [offlineSyncBanner, setOfflineSyncBanner] = useState<string | null>(null);
+  const [saleSuccessIsOffline, setSaleSuccessIsOffline] = useState<boolean>(false);
   const [selectedAgentId, setSelectedAgentId] = useState<string>(() => {
     if (currentAgentId) return currentAgentId;
     if (user?.assignedAgentId) return user.assignedAgentId;
@@ -132,29 +172,43 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
   const [saleErrorMessage, setSaleErrorMessage] = useState<string | null>(null);
   const [isCameraScanning, setIsCameraScanning] = useState(false);
   const [isStartingCamera, setIsStartingCamera] = useState(false);
+  const [cameraRequested, setCameraRequested] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
-  const scannerRef = useRef<Html5Qrcode | null>(null);
+  const [torchSupported, setTorchSupported] = useState(false);
+  const [isTorchOn, setIsTorchOn] = useState(false);
+  const [scannerMetrics, setScannerMetrics] = useState<ScannerMetrics | null>(null);
+  const scannerHandleRef = useRef<OptimizedScannerHandle | null>(null);
   const scannerRunIdRef = useRef<number>(0);
   const lastScannedTimeRef = useRef<number>(0);
   const buyerNameInputRef = useRef<HTMLInputElement | null>(null);
 
   const stopCameraScanner = useCallback(async () => {
     scannerRunIdRef.current += 1;
-    const instance = scannerRef.current;
-    scannerRef.current = null;
-    if (instance) {
+    const handle = scannerHandleRef.current;
+    scannerHandleRef.current = null;
+    if (handle) {
       try {
-        if (instance.isScanning) {
-          await instance.stop();
-        }
-        instance.clear();
+        await handle.stop();
       } catch {
         // Ignorer les erreurs de nettoyage caméra si le nœud DOM est déjà démonté
       }
     }
+    setCameraRequested(false);
     setIsCameraScanning(false);
     setIsStartingCamera(false);
+    setTorchSupported(false);
+    setIsTorchOn(false);
   }, []);
+
+  const toggleTorch = useCallback(async () => {
+    const handle = scannerHandleRef.current;
+    if (!handle || !handle.isTorchSupported()) return;
+    const next = !isTorchOn;
+    const ok = await handle.setTorch(next);
+    if (ok) {
+      setIsTorchOn(next);
+    }
+  }, [isTorchOn]);
 
   // Modale de demande de reversement
   const [showSettlementModal, setShowSettlementModal] = useState(false);
@@ -169,6 +223,11 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
     if (!activeAgent) return null;
     return events.find((e) => e.id === activeAgent.eventId) || null;
   }, [events, activeAgent]);
+
+  const pendingOfflineQrSet = useMemo(
+    () => getPendingOfflineQrCodes(activeAgent?.id),
+    [activeAgent?.id, tickets, pendingOfflineCount]
+  );
 
   // Refs synchronisées pour éviter toute closure obsolète dans les callbacks caméra
   const activeAgentRef = useRef<SalesAgent | null>(activeAgent);
@@ -292,66 +351,164 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
     }
   }, [saleMode, unsoldAgentTickets, selectedManualTicketCode]);
 
+  const refreshPendingOfflineState = useCallback((agentId?: string) => {
+    setPendingOfflineCount(getPendingOfflinePosSales(agentId).length);
+  }, []);
+
   const handleRefresh = useCallback(async (agentOverrideId?: string) => {
     setIsRefreshing(true);
+    const preferredId = agentOverrideId || currentAgentId || selectedAgentIdRef.current || user?.assignedAgentId;
+    const browserOnline = typeof navigator === 'undefined' ? true : navigator.onLine;
+
+    // Mode hors-ligne ou déconnecté : restauration immédiate depuis le cache localStorage sans bloquer le POS
+    if (!isConnected || !browserOnline) {
+      const snap = loadPosAgentSnapshot(preferredId);
+      if (snap.agents.length > 0) {
+        setAgents(snap.agents);
+        setTickets(snap.tickets);
+        if (snap.activeAgent && snap.activeAgent.id !== selectedAgentIdRef.current) {
+          setSelectedAgentId(snap.activeAgent.id);
+        }
+        refreshPendingOfflineState(snap.activeAgent?.id || preferredId);
+      } else if (!isConnected) {
+        setAgents(getStoredSalesAgents());
+        setTickets(getStoredTickets());
+      }
+      setIsRefreshing(false);
+      return;
+    }
+
     clearLocalTicketReserveCache();
 
-    if (isConnected) {
-      const agentsRes = await fetchSalesAgentsFromSupabase();
-      const loadedAgents = !agentsRes.error ? agentsRes.agents : getStoredSalesAgents();
-      if (!agentsRes.error) {
-        setAgents(agentsRes.agents);
-        saveSalesAgents(agentsRes.agents);
-      } else {
-        setAgents(getStoredSalesAgents());
-      }
-
-      const preferredId = agentOverrideId || currentAgentId || selectedAgentIdRef.current;
-      const normalizedUserPhone = (user?.phone || '').replace(/[^0-9]/g, '');
-      const targetAgent =
-        loadedAgents.find((a) => preferredId && a.id === preferredId) ||
-        loadedAgents.find((a) => user?.assignedAgentId && a.id === user.assignedAgentId) ||
-        loadedAgents.find((a) => user?.id && a.userId === user.id) ||
-        loadedAgents.find(
-          (a) =>
-            (normalizedUserPhone &&
-              a.telephone.replace(/[^0-9]/g, '') === normalizedUserPhone) ||
-            (user?.email && a.email && a.email.toLowerCase() === user.email.toLowerCase())
-        ) ||
-        loadedAgents[0];
-
-      if (targetAgent && targetAgent.id !== selectedAgentIdRef.current) {
-        setSelectedAgentId(targetAgent.id);
-      }
-
-      const ticketsRes = await fetchAllSoldTicketsFromSupabase(
-        targetAgent
-          ? {
-              agentId: targetAgent.id,
-              eventId: targetAgent.eventId,
-            }
+    const explicitAgentFilter = agentOverrideId || currentAgentId || user?.assignedAgentId;
+    const agentsRes = await fetchSalesAgentsFromSupabase(
+      explicitAgentFilter
+        ? { agentId: explicitAgentFilter }
+        : user?.role === 'sales_agent' && user?.id
+          ? { userId: user.id }
           : undefined
-      );
-      if (!ticketsRes.error) {
-        const strictAgentTickets = targetAgent
-          ? ticketsRes.tickets.filter((t) => t.agentId === targetAgent.id)
-          : ticketsRes.tickets;
-        setTickets(strictAgentTickets);
-        saveStoredTickets(strictAgentTickets);
-      } else {
-        const storedFallback = getStoredTickets();
-        const strictFallback = targetAgent
-          ? storedFallback.filter((t) => t.agentId === targetAgent.id)
-          : storedFallback;
-        setTickets(strictFallback);
-      }
+    );
+
+    const offlineSnap = loadPosAgentSnapshot(preferredId);
+    const loadedAgents = !agentsRes.error
+      ? agentsRes.agents
+      : offlineSnap.agents.length > 0
+        ? offlineSnap.agents
+        : getStoredSalesAgents();
+
+    if (!agentsRes.error) {
+      setAgents(agentsRes.agents);
+      saveSalesAgents(agentsRes.agents);
+    } else if (offlineSnap.agents.length > 0) {
+      setAgents(offlineSnap.agents);
     } else {
       setAgents(getStoredSalesAgents());
-      setTickets(getStoredTickets());
+    }
+
+    const normalizedUserPhone = (user?.phone || '').replace(/[^0-9]/g, '');
+    const targetAgent =
+      loadedAgents.find((a) => preferredId && a.id === preferredId) ||
+      loadedAgents.find((a) => user?.assignedAgentId && a.id === user.assignedAgentId) ||
+      loadedAgents.find((a) => user?.id && a.userId === user.id) ||
+      loadedAgents.find(
+        (a) =>
+          (normalizedUserPhone &&
+            a.telephone.replace(/[^0-9]/g, '') === normalizedUserPhone) ||
+          (user?.email && a.email && a.email.toLowerCase() === user.email.toLowerCase())
+      ) ||
+      loadedAgents[0];
+
+    if (targetAgent && targetAgent.id !== selectedAgentIdRef.current) {
+      setSelectedAgentId(targetAgent.id);
+    }
+
+    const ticketsRes = await fetchAllSoldTicketsFromSupabase(
+      targetAgent
+        ? {
+            agentId: targetAgent.id,
+            eventId: targetAgent.eventId,
+          }
+        : undefined
+    );
+
+    if (!ticketsRes.error) {
+      const strictAgentTickets = targetAgent
+        ? ticketsRes.tickets.filter((t) => t.agentId === targetAgent.id)
+        : ticketsRes.tickets;
+
+      if (targetAgent) {
+        // Mettre en cache localStorage les QR codes valides + superposer les ventes hors-ligne en attente
+        savePosAgentSnapshot(targetAgent, strictAgentTickets);
+        const syncedView = loadPosAgentSnapshot(targetAgent.id);
+        setTickets(syncedView.tickets.length > 0 ? syncedView.tickets : strictAgentTickets);
+        saveStoredTickets(syncedView.tickets.length > 0 ? syncedView.tickets : strictAgentTickets);
+        refreshPendingOfflineState(targetAgent.id);
+      } else {
+        setTickets(strictAgentTickets);
+        saveStoredTickets(strictAgentTickets);
+      }
+    } else {
+      const snapFallback = loadPosAgentSnapshot(targetAgent?.id || preferredId);
+      const storedFallback = snapFallback.tickets.length > 0 ? snapFallback.tickets : getStoredTickets();
+      const strictFallback = targetAgent
+        ? storedFallback.filter((t) => t.agentId === targetAgent.id)
+        : storedFallback;
+      setTickets(strictFallback);
+      refreshPendingOfflineState(targetAgent?.id || preferredId);
     }
 
     setIsRefreshing(false);
-  }, [isConnected, currentAgentId, user?.assignedAgentId, user?.id, user?.phone, user?.email]);
+  }, [isConnected, currentAgentId, user?.assignedAgentId, user?.id, user?.role, user?.phone, user?.email, refreshPendingOfflineState]);
+
+  const runOfflineQueueSync = useCallback(async (agentIdOverride?: string) => {
+    const targetAgentId = agentIdOverride || activeAgentRef.current?.id || currentAgentId || user?.assignedAgentId;
+    const queue = getPendingOfflinePosSales(targetAgentId);
+    if (queue.length === 0) {
+      refreshPendingOfflineState(targetAgentId);
+      return;
+    }
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+
+    setIsSyncingOffline(true);
+    const result = await syncPendingOfflinePosSales(targetAgentId);
+    setIsSyncingOffline(false);
+    refreshPendingOfflineState(targetAgentId);
+
+    if (result.syncedCount > 0) {
+      setOfflineSyncBanner(
+        `${result.syncedCount} vente(s) hors-ligne synchronisée(s) avec Supabase.`
+      );
+      void handleRefresh(targetAgentId);
+      setTimeout(() => {
+        setOfflineSyncBanner(null);
+      }, 4500);
+    }
+  }, [currentAgentId, user?.assignedAgentId, handleRefresh, refreshPendingOfflineState]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const onNetworkOnline = () => {
+      setIsOnline(true);
+      void runOfflineQueueSync(activeAgentRef.current?.id);
+    };
+
+    const onNetworkOffline = () => {
+      setIsOnline(false);
+    };
+
+    window.addEventListener('online', onNetworkOnline);
+    window.addEventListener('offline', onNetworkOffline);
+
+    if (navigator.onLine) {
+      void runOfflineQueueSync(currentAgentId || user?.assignedAgentId);
+    }
+
+    return () => {
+      window.removeEventListener('online', onNetworkOnline);
+      window.removeEventListener('offline', onNetworkOffline);
+    };
+  }, [runOfflineQueueSync, currentAgentId, user?.assignedAgentId]);
 
   useEffect(() => {
     void handleRefresh(currentAgentId);
@@ -387,19 +544,41 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
     if (fromCamera) {
       playPosFeedbackTone('success');
     }
+    const browserOnline = typeof navigator === 'undefined' ? true : navigator.onLine;
+    if (isConnected && browserOnline) {
+      void verifyPosTicketForSale(currentAgent.id, cleanCode).then((srv) => {
+        if (srv.verifiedByServer && !srv.canBeSold) {
+          setPendingTicketForConfirm(null);
+          setSaleErrorMessage(srv.message);
+          playPosFeedbackTone('error');
+        }
+      });
+    }
     setTimeout(() => {
       buyerNameInputRef.current?.focus();
     }, 150);
     return true;
-  }, []);
+  }, [isConnected]);
 
   const startCameraScanner = useCallback(async () => {
-    await stopCameraScanner();
+    const prevHandle = scannerHandleRef.current;
+    scannerHandleRef.current = null;
+    if (prevHandle) {
+      try {
+        await prevHandle.stop();
+      } catch {
+        // Ignorer
+      }
+    }
+
+    scannerRunIdRef.current += 1;
     const runId = scannerRunIdRef.current;
     setCameraError(null);
     setIsStartingCamera(true);
+    setIsTorchOn(false);
+    setTorchSupported(false);
 
-    await new Promise((resolve) => setTimeout(resolve, 180));
+    await new Promise((resolve) => setTimeout(resolve, 100));
     if (runId !== scannerRunIdRef.current) {
       setIsStartingCamera(false);
       return;
@@ -413,31 +592,20 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
     }
 
     try {
-      const html5Qr = new Html5Qrcode(elementId, {
-        formatsToSupport: [
-          Html5QrcodeSupportedFormats.QR_CODE,
-          Html5QrcodeSupportedFormats.CODE_128,
-          Html5QrcodeSupportedFormats.CODE_39,
-          Html5QrcodeSupportedFormats.EAN_13,
-          Html5QrcodeSupportedFormats.EAN_8,
-          Html5QrcodeSupportedFormats.DATA_MATRIX,
-        ],
-        verbose: false,
-      });
-      scannerRef.current = html5Qr;
-
-      await html5Qr.start(
-        { facingMode: 'environment' },
-        {
-          fps: 10,
-          qrbox: (viewfinderWidth, viewfinderHeight) => {
-            const boxW = Math.max(180, Math.floor(viewfinderWidth * 0.84));
-            const boxH = Math.max(150, Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.72));
-            return { width: boxW, height: boxH };
-          },
-          aspectRatio: 1.0,
+      const handle = await startOptimizedScanner({
+        elementId,
+        formats: ['QR_CODE', 'CODE_128', 'CODE_39', 'EAN_13', 'EAN_8', 'DATA_MATRIX'],
+        fps: 18,
+        fpsDecimation: 3,
+        aspectRatio: 1.0,
+        debounceMs: 2500,
+        qrboxRatio: { widthRatio: 0.84, heightRatio: 0.72, minWidth: 180, minHeight: 150 },
+        onReady: (metrics) => {
+          if (runId !== scannerRunIdRef.current) return;
+          setScannerMetrics(metrics);
+          setTorchSupported(metrics.torchSupported);
         },
-        (decodedText) => {
+        onDecode: (decodedText) => {
           if (runId !== scannerRunIdRef.current) return;
           const now = Date.now();
           if (now - lastScannedTimeRef.current < 2500) return;
@@ -448,16 +616,15 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
           void stopCameraScanner();
           handleCheckTicketForSale(clean, true);
         },
-        () => {
-          // Frames vides ignorées pendant la recherche
-        }
-      );
+      });
 
       if (runId === scannerRunIdRef.current) {
+        scannerHandleRef.current = handle;
+        setTorchSupported(handle.isTorchSupported());
         setIsCameraScanning(true);
         setIsStartingCamera(false);
       } else {
-        await stopCameraScanner();
+        await handle.stop();
       }
     } catch (err: unknown) {
       console.warn('Erreur activation camera POS:', err);
@@ -465,6 +632,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
         setCameraError(
           "Impossible d'activer l'appareil photo. Vérifiez les permissions caméra ou saisissez le code ci-dessous."
         );
+        setCameraRequested(false);
         setIsCameraScanning(false);
         setIsStartingCamera(false);
       }
@@ -472,15 +640,26 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
   }, [handleCheckTicketForSale, stopCameraScanner]);
 
   useEffect(() => {
-    if (showSaleModal && saleMode === 'scan' && !pendingTicketForConfirm) {
+    if (showSaleModal && saleMode === 'scan' && cameraRequested && !pendingTicketForConfirm) {
       void startCameraScanner();
-    } else {
+    } else if (!showSaleModal || saleMode !== 'scan' || Boolean(pendingTicketForConfirm)) {
       void stopCameraScanner();
     }
     return () => {
       void stopCameraScanner();
     };
-  }, [showSaleModal, saleMode, pendingTicketForConfirm, startCameraScanner, stopCameraScanner]);
+  }, [showSaleModal, saleMode, cameraRequested, pendingTicketForConfirm, startCameraScanner, stopCameraScanner]);
+
+  // Nettoyage strict si le composant POS est démonté lors d'un changement de page
+  useEffect(() => {
+    return () => {
+      const handle = scannerHandleRef.current;
+      scannerHandleRef.current = null;
+      if (handle) {
+        void handle.stop();
+      }
+    };
+  }, []);
 
   // Helper partagé pour activer un billet physique nominatif (Scan Caméra ou Déclaration Manuelle)
   const submitSingleNominalSale = async (targetTicket: UserTicket) => {
@@ -493,40 +672,90 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
     setIsSubmittingSale(true);
     setSaleErrorMessage(null);
     setSaleSuccessMessage(null);
+    setSaleSuccessIsOffline(false);
 
     const prevAgents = [...agents];
     const prevTickets = [...tickets];
     const soldPrice = targetTicket.price || 3500;
     const trimmedName = buyerName.trim();
     const trimmedPhone = buyerPhone.trim();
+    const soldNowIso = new Date().toISOString();
 
-    setAgents((prev) =>
-      prev.map((a) =>
-        a.id === activeAgent.id
-          ? {
-              ...a,
-              soldCount: a.soldCount + 1,
-              cashCollected: a.cashCollected + soldPrice,
-              amountDue: a.amountDue + Math.round(soldPrice * (1 - a.commissionPercent / 100)),
-            }
-          : a
-      )
-    );
+    const applyOptimisticSale = () => {
+      setAgents((prev) =>
+        prev.map((a) =>
+          a.id === activeAgent.id
+            ? {
+                ...a,
+                soldCount: a.soldCount + 1,
+                cashCollected: a.cashCollected + soldPrice,
+                amountDue: a.amountDue + Math.round(soldPrice * (1 - a.commissionPercent / 100)),
+              }
+            : a
+        )
+      );
 
-    setTickets((prev) =>
-      prev.map((t) =>
-        t.qrCode === targetTicket.qrCode || t.id === targetTicket.id
-          ? {
-              ...t,
-              status: 'sold_valid',
-              holderName: trimmedName,
-              holderPhone: trimmedPhone,
-              soldAt: new Date().toISOString(),
-            }
-          : t
-      )
-    );
+      setTickets((prev) =>
+        prev.map((t) =>
+          t.qrCode === targetTicket.qrCode || t.id === targetTicket.id
+            ? {
+                ...t,
+                status: 'sold_valid',
+                holderName: trimmedName,
+                holderPhone: trimmedPhone,
+                soldAt: soldNowIso,
+              }
+            : t
+        )
+      );
+    };
 
+    const completeOfflineSale = (): boolean => {
+      const offlineRes = recordOfflinePosSale({
+        agent: activeAgent,
+        ticket: targetTicket,
+        holderName: trimmedName,
+        holderPhone: trimmedPhone,
+      });
+      setIsSubmittingSale(false);
+
+      if (!offlineRes.success) {
+        setAgents(prevAgents);
+        setTickets(prevTickets);
+        setSaleErrorMessage(offlineRes.message);
+        playPosFeedbackTone('error');
+        return false;
+      }
+
+      setPendingOfflineCount(offlineRes.queuedCount);
+      setSaleSuccessIsOffline(true);
+      playPosFeedbackTone('success');
+      setSaleSuccessMessage(offlineRes.message);
+      setPendingTicketForConfirm(null);
+      setBuyerName('');
+      setBuyerPhone('');
+      setManualTicketCode('');
+      setSelectedManualTicketCode('');
+      setManualFilterQuery('');
+
+      setTimeout(() => {
+        setShowSaleModal(false);
+        setSaleSuccessMessage(null);
+        setSaleSuccessIsOffline(false);
+      }, 2800);
+      return true;
+    };
+
+    applyOptimisticSale();
+
+    // 1. Mode Hors-Ligne explicite (navigator.onLine === false) : validation locale immédiate sans blocage
+    const browserOnline = typeof navigator === 'undefined' ? true : navigator.onLine;
+    if (!browserOnline || !isConnected) {
+      completeOfflineSale();
+      return;
+    }
+
+    // 2. En ligne : validation Supabase avec repli automatique hors-ligne en cas de coupure réseau
     const res = await confirmSinglePhysicalTicketSale(
       activeAgent.id,
       targetTicket.qrCode,
@@ -536,9 +765,24 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
       },
       prevTickets
     );
-    setIsSubmittingSale(false);
 
     if (!res.success) {
+      const lowerMsg = (res.message || '').toLowerCase();
+      const isNetworkFailure =
+        (typeof navigator !== 'undefined' && navigator.onLine === false) ||
+        lowerMsg.includes('failed to fetch') ||
+        lowerMsg.includes('network') ||
+        lowerMsg.includes('réseau') ||
+        lowerMsg.includes('load failed') ||
+        lowerMsg.includes('timeout');
+
+      if (isNetworkFailure) {
+        setIsOnline(false);
+        completeOfflineSale();
+        return;
+      }
+
+      setIsSubmittingSale(false);
       setAgents(prevAgents);
       setTickets(prevTickets);
       setSaleErrorMessage(res.message);
@@ -546,6 +790,8 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
       return;
     }
 
+    setIsSubmittingSale(false);
+    setSaleSuccessIsOffline(false);
     playPosFeedbackTone('success');
     setSaleSuccessMessage(res.message);
     setPendingTicketForConfirm(null);
@@ -654,7 +900,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
         <div className="absolute top-0 right-0 w-48 h-48 bg-[#E9C349]/10 rounded-full blur-3xl pointer-events-none" />
 
         <div className="space-y-1.5 relative z-10">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {onNavigateBack && (
               <button
                 type="button"
@@ -671,6 +917,54 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
             <span className="text-[10px] uppercase font-extrabold tracking-wider text-[#E9C349] bg-[#E9C349]/10 px-2 py-0.5 rounded-full border border-[#E9C349]/20">
               Guichet Partenaire Agréé
             </span>
+
+            {/* Indicateur de statut réseau POS (🟢 En ligne / 🔴 Hors-ligne) */}
+            <span
+              className={`inline-flex items-center gap-1.5 text-[11px] font-extrabold px-2.5 py-0.5 rounded-full border ${
+                isOnline
+                  ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35'
+                  : 'bg-rose-500/20 text-rose-200 border-rose-500/45 animate-pulse'
+              }`}
+              title={
+                isOnline
+                  ? `Connecté à Supabase • ${unsoldAgentTickets.length} billets en cache local`
+                  : 'Réseau indisponible : les scans restent enregistrés en cache local'
+              }
+            >
+              {isOnline ? (
+                <>
+                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                  <Wifi className="w-3 h-3 text-emerald-300" />
+                  <span>En ligne</span>
+                </>
+              ) : (
+                <>
+                  <span className="w-2 h-2 rounded-full bg-rose-400" />
+                  <WifiOff className="w-3 h-3 text-rose-300" />
+                  <span>Hors-ligne</span>
+                </>
+              )}
+            </span>
+
+            {pendingOfflineCount > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (isOnline && !isSyncingOffline) {
+                    void runOfflineQueueSync(activeAgent.id);
+                  }
+                }}
+                className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-200 border border-amber-500/40"
+                title="Ventes réalisées hors-ligne en attente de synchronisation Supabase"
+              >
+                <CloudUpload className={`w-3 h-3 ${isSyncingOffline ? 'animate-bounce' : ''}`} />
+                <span>
+                  {isSyncingOffline
+                    ? 'Synchro en cours...'
+                    : `${pendingOfflineCount} en attente de synchro`}
+                </span>
+              </button>
+            )}
           </div>
 
           <h1 className="font-heading text-xl sm:text-2xl font-extrabold text-white tracking-tight">
@@ -725,6 +1019,14 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
           </button>
         </div>
       </div>
+
+      {/* Bandeau confirmation synchronisation automatique après reconnexion */}
+      {offlineSyncBanner && (
+        <div className="p-3.5 rounded-2xl bg-emerald-950/70 border border-emerald-500/50 text-emerald-200 text-xs font-bold flex items-center gap-2 animate-in fade-in">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>{offlineSyncBanner}</span>
+        </div>
+      )}
 
       {/* Carte de l'Événement Assigné */}
       <div className="glass-panel p-5 rounded-3xl border border-white/10 space-y-3">
@@ -818,6 +1120,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
             setManualTicketCode('');
             setBuyerName('');
             setBuyerPhone('');
+            setCameraRequested(true);
             setShowSaleModal(true);
           }}
           disabled={remainingTickets <= 0}
@@ -834,6 +1137,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
             setSaleSuccessMessage(null);
             setCameraError(null);
             setSaleMode('manual');
+            setCameraRequested(false);
             setPendingTicketForConfirm(null);
             setManualTicketCode('');
             setBuyerName('');
@@ -900,6 +1204,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                 type="button"
                 onClick={() => {
                   setSaleMode('scan');
+                  setCameraRequested(true);
                   setSaleErrorMessage(null);
                   setSaleSuccessMessage(null);
                 }}
@@ -935,54 +1240,93 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
             {/* MÉTHODE A : SCAN CAMÉRA + SAISIE MANUELLE + CONFIRMATION NOMINATIVE */}
             {saleMode === 'scan' && (
               <div className="space-y-4">
-                {/* Viseur Caméra Arrière Temps Réel (auto-démarré si aucun billet en attente) */}
+                {/* Viseur Caméra Arrière Temps Réel (démarré uniquement sur clic Scanner) */}
                 {!pendingTicketForConfirm && (
                   <div className="rounded-2xl border border-[#E9C349]/30 bg-black/70 overflow-hidden">
-                    <div className="flex items-center justify-between px-3 py-2 border-b border-white/10 bg-white/[0.03]">
-                      <div className="flex items-center gap-2 text-xs font-bold text-[#E9C349]">
-                        <Camera className="w-3.5 h-3.5" />
-                        <span>
+                    <div className="flex items-center justify-between px-3 py-2 border-b border-white/10 bg-white/[0.03] gap-2">
+                      <div className="flex items-center gap-2 text-xs font-bold text-[#E9C349] min-w-0">
+                        <Camera className="w-3.5 h-3.5 shrink-0" />
+                        <span className="truncate">
                           {isStartingCamera
                             ? 'Activation caméra...'
                             : isCameraScanning
                               ? 'Caméra active — Visez le QR ou Code-Barres'
-                              : 'Scanner Caméra'}
+                              : 'Scanner Caméra en veille'}
                         </span>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (isCameraScanning || isStartingCamera) {
-                            void stopCameraScanner();
-                          } else {
-                            void startCameraScanner();
-                          }
-                        }}
-                        className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-[11px] font-bold text-white flex items-center gap-1 transition-colors"
-                      >
-                        {isCameraScanning || isStartingCamera ? (
-                          <>
-                            <CameraOff className="w-3 h-3" />
-                            <span>Arrêter</span>
-                          </>
-                        ) : (
-                          <>
-                            <Camera className="w-3 h-3" />
-                            <span>Activer</span>
-                          </>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {isCameraScanning && torchSupported && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void toggleTorch();
+                            }}
+                            title="Allumer / Éteindre la torche"
+                            className={`px-2 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-colors ${
+                              isTorchOn
+                                ? 'bg-[#E9C349] text-[#241A00]'
+                                : 'bg-white/10 hover:bg-white/20 text-white'
+                            }`}
+                          >
+                            <Flashlight className="w-3 h-3" />
+                            <span>{isTorchOn ? 'Torche ON' : 'Torche'}</span>
+                          </button>
                         )}
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (isCameraScanning || isStartingCamera) {
+                              void stopCameraScanner();
+                            } else {
+                              setCameraRequested(true);
+                            }
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-[11px] font-bold text-white flex items-center gap-1 transition-colors"
+                        >
+                          {isCameraScanning || isStartingCamera ? (
+                            <>
+                              <CameraOff className="w-3 h-3" />
+                              <span>Arrêter</span>
+                            </>
+                          ) : (
+                            <>
+                              <Camera className="w-3 h-3" />
+                              <span>Scanner</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
 
                     <div className="relative">
                       <div id="pos-camera-viewfinder" className="w-full min-h-[210px] bg-black" />
+                      {!isCameraScanning && !isStartingCamera && !cameraError && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/75 p-4 text-center">
+                          <Camera className="w-7 h-7 text-[#E9C349]" />
+                          <button
+                            type="button"
+                            onClick={() => setCameraRequested(true)}
+                            className="px-4 py-2 rounded-xl bg-[#E9C349] text-[#241A00] text-xs font-heading font-extrabold uppercase tracking-wider"
+                          >
+                            Démarrer la Caméra
+                          </button>
+                        </div>
+                      )}
+                      {isCameraScanning && scannerMetrics && (
+                        <div className="px-3 py-1 bg-black/80 border-t border-white/10 flex items-center justify-between text-[10px] text-gray-400 font-mono">
+                          <span>{scannerMetrics.engineLabel}</span>
+                          <span>
+                            {scannerMetrics.fps} FPS (1/{scannerMetrics.fpsDecimation}) • Prêt en {scannerMetrics.cameraStartMs} ms
+                          </span>
+                        </div>
+                      )}
                       {cameraError && (
                         <div className="p-3 bg-rose-950/70 border-t border-rose-500/30 text-[11px] text-rose-200 flex items-center justify-between gap-2">
                           <span>{cameraError}</span>
                           <button
                             type="button"
                             onClick={() => {
-                              void startCameraScanner();
+                              setCameraRequested(true);
                             }}
                             className="shrink-0 px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-white font-bold"
                           >
@@ -1265,9 +1609,17 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
 
             {/* Messages de retour */}
             {saleSuccessMessage && (
-              <div className="p-3 rounded-xl bg-emerald-950/70 border border-emerald-500/50 text-emerald-300 text-xs font-bold flex items-center gap-2 animate-in fade-in">
-                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
-                <span>{saleSuccessMessage}</span>
+              <div className="p-3.5 rounded-xl bg-emerald-950/75 border border-emerald-500/60 text-emerald-200 text-xs font-bold space-y-2 animate-in fade-in">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-400" />
+                  <span>{saleSuccessMessage}</span>
+                </div>
+                {saleSuccessIsOffline && (
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/20 border border-amber-400/50 text-amber-200 text-[11px] font-extrabold">
+                    <CloudUpload className="w-3.5 h-3.5 text-amber-300" />
+                    <span>Mode Hors-Ligne - En attente de synchronisation</span>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1348,10 +1700,18 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                           </span>
                         )}
                         {isSoldValid && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold">
-                            <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                            Vendu
-                          </span>
+                          <div className="flex flex-wrap items-center gap-1 justify-end">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                              Vendu
+                            </span>
+                            {pendingOfflineQrSet.has(t.qrCode.trim().toUpperCase()) && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-200 border border-amber-400/40 text-[10px] font-bold">
+                                <CloudUpload className="w-2.5 h-2.5" />
+                                Attente synchro
+                              </span>
+                            )}
+                          </div>
                         )}
                         {isScanned && (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 text-[10px] font-bold">
@@ -1450,10 +1810,18 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                           </span>
                         )}
                         {isSoldValid && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold">
-                            <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                            Vendu (sold_valid)
-                          </span>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                              Vendu (sold_valid)
+                            </span>
+                            {pendingOfflineQrSet.has(t.qrCode.trim().toUpperCase()) && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-200 border border-amber-400/40 text-[10px] font-bold">
+                                <CloudUpload className="w-3 h-3" />
+                                Mode Hors-Ligne - En attente de synchronisation
+                              </span>
+                            )}
+                          </div>
                         )}
                         {isScanned && (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 text-[10px] font-bold">

@@ -15,7 +15,6 @@ import {
   Clock,
 } from 'lucide-react';
 import QRCode from 'qrcode';
-import jsPDF from 'jspdf';
 import { UserTicket } from '../types';
 import { AddToCalendarButton } from './AddToCalendarButton';
 import { CalendarEventData } from '../services/calendar';
@@ -329,9 +328,10 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
     ticket?.status === 'pending' || ticket?.status === 'payment_signaled';
 
   // Génération d'un reçu PDF propre (sans QR code, format A4 sobre) via jsPDF
-  const handleDownloadReceipt = () => {
+  const handleDownloadReceipt = async () => {
     if (!ticket) return;
     try {
+      const { default: jsPDF } = await import('jspdf');
       const doc = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',

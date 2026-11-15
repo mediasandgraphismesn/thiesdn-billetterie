@@ -15,8 +15,13 @@ import {
   AlertTriangle,
   Camera,
   CameraOff,
+  Flashlight,
 } from 'lucide-react';
-import { Html5Qrcode } from 'html5-qrcode';
+import {
+  startOptimizedScanner,
+  OptimizedScannerHandle,
+  ScannerMetrics,
+} from '../utils/scannerEngine';
 import { UserTicket, Accreditation, EventItem } from '../types';
 import { scanTicketAtomic, scanTicketWithSupabase, scanGuestTicketAtomic, scanAccreditationAtomic, getStoredAccreditations } from '../services/supabase';
 
@@ -47,7 +52,10 @@ export const CheckInScannerView: React.FC<CheckInScannerViewProps> = ({
   const [activeTab, setActiveTab] = useState<'scan' | 'list'>('scan');
   const [isCameraActive, setIsCameraActive] = useState<boolean>(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
-  const scannerRef = useRef<Html5Qrcode | null>(null);
+  const [torchSupported, setTorchSupported] = useState<boolean>(false);
+  const [isTorchOn, setIsTorchOn] = useState<boolean>(false);
+  const [scannerMetrics, setScannerMetrics] = useState<ScannerMetrics | null>(null);
+  const scannerHandleRef = useRef<OptimizedScannerHandle | null>(null);
   const lastScannedRef = useRef<{ code: string; timestamp: number }>({ code: '', timestamp: 0 });
 
   // Sons de feedback simples avec Web Audio API (aucun MP3 externe requis)
@@ -80,17 +88,21 @@ export const CheckInScannerView: React.FC<CheckInScannerViewProps> = ({
     }
   };
 
-  // Initialisation de la caméra arrière (facingMode: "environment") avec html5-qrcode
+  // Initialisation optimisée de la caméra arrière (640x480 / 720p max, FPS 18, Web Worker + WASM iOS)
   useEffect(() => {
-    if (activeTab !== 'scan') {
-      if (scannerRef.current) {
-        if (scannerRef.current.isScanning) {
-          scannerRef.current.stop().catch(() => {});
-        }
-        scannerRef.current.clear();
-        scannerRef.current = null;
-        setIsCameraActive(false);
+    const cleanupHandle = () => {
+      const current = scannerHandleRef.current;
+      scannerHandleRef.current = null;
+      if (current) {
+        void current.stop();
       }
+      setIsCameraActive(false);
+      setTorchSupported(false);
+      setIsTorchOn(false);
+    };
+
+    if (activeTab !== 'scan') {
+      cleanupHandle();
       return;
     }
 
@@ -98,45 +110,32 @@ export const CheckInScannerView: React.FC<CheckInScannerViewProps> = ({
     let isMounted = true;
 
     const startCamera = async () => {
-      // Temporisation de sécurité pour s'assurer de la présence du DOM
-      await new Promise((resolve) => setTimeout(resolve, 250));
+      await new Promise((resolve) => setTimeout(resolve, 120));
       if (!isMounted) return;
 
       const element = document.getElementById(scannerElementId);
       if (!element) return;
 
-      // Nettoyer toute instance préexistante
-      if (scannerRef.current) {
-        try {
-          if (scannerRef.current.isScanning) {
-            await scannerRef.current.stop();
-          }
-          scannerRef.current.clear();
-        } catch {
-          // Ignorer
-        }
-        scannerRef.current = null;
-      }
+      cleanupHandle();
 
       try {
         setCameraError(null);
-        const html5Qr = new Html5Qrcode(scannerElementId);
-        scannerRef.current = html5Qr;
-
-        await html5Qr.start(
-          { facingMode: 'environment' },
-          {
-            fps: 10,
-            qrbox: (viewfinderWidth, viewfinderHeight) => {
-              const edge = Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.75);
-              return { width: edge, height: edge };
-            },
-            aspectRatio: 1.0,
+        const handle = await startOptimizedScanner({
+          elementId: scannerElementId,
+          formats: ['QR_CODE', 'CODE_128', 'CODE_39', 'EAN_13', 'EAN_8', 'DATA_MATRIX'],
+          fps: 18,
+          fpsDecimation: 3,
+          aspectRatio: 1.0,
+          debounceMs: 3000,
+          qrboxRatio: { widthRatio: 0.75, heightRatio: 0.75, minWidth: 160, minHeight: 160 },
+          onReady: (metrics) => {
+            if (!isMounted) return;
+            setScannerMetrics(metrics);
+            setTorchSupported(metrics.torchSupported);
           },
-          (decodedText) => {
+          onDecode: (decodedText) => {
             if (!isMounted) return;
             const now = Date.now();
-            // Anti-rebond : éviter de rescanner en boucle le même billet en moins de 3s
             if (
               lastScannedRef.current.code === decodedText &&
               now - lastScannedRef.current.timestamp < 3000
@@ -144,42 +143,45 @@ export const CheckInScannerView: React.FC<CheckInScannerViewProps> = ({
               return;
             }
             lastScannedRef.current = { code: decodedText, timestamp: now };
-            handleVerifyCode(decodedText);
+            void handleVerifyCode(decodedText);
           },
-          () => {
-            // Frames vides ignorées pendant la recherche
-          }
-        );
+        });
 
         if (isMounted) {
+          scannerHandleRef.current = handle;
+          setTorchSupported(handle.isTorchSupported());
           setIsCameraActive(true);
+        } else {
+          await handle.stop();
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.warn('Erreur activation caméra:', err);
         if (isMounted) {
           setIsCameraActive(false);
           setCameraError(
-            err?.message ||
-              "Impossible d'activer la caméra arrière. Vérifiez les autorisations de caméra de votre navigateur."
+            err instanceof Error && err.message
+              ? err.message
+              : "Impossible d'activer la caméra arrière. Vérifiez les autorisations de caméra de votre navigateur."
           );
         }
       }
     };
 
-    startCamera();
+    void startCamera();
 
     return () => {
       isMounted = false;
-      if (scannerRef.current) {
-        if (scannerRef.current.isScanning) {
-          scannerRef.current.stop().catch(() => {});
-        }
-        scannerRef.current.clear();
-        scannerRef.current = null;
-      }
-      setIsCameraActive(false);
+      cleanupHandle();
     };
   }, [activeTab]);
+
+  const toggleTorch = async () => {
+    const handle = scannerHandleRef.current;
+    if (!handle || !handle.isTorchSupported()) return;
+    const next = !isTorchOn;
+    const ok = await handle.setTorch(next);
+    if (ok) setIsTorchOn(next);
+  };
 
   const handleVerifyCode = async (code: string) => {
     if (!code || isValidating) return;
@@ -399,11 +401,35 @@ export const CheckInScannerView: React.FC<CheckInScannerViewProps> = ({
               )}
             </div>
 
+            {/* Bouton Torche en basse luminosité */}
+            {isCameraActive && torchSupported && (
+              <button
+                type="button"
+                onClick={() => {
+                  void toggleTorch();
+                }}
+                className={`absolute top-4 right-16 z-20 px-2.5 py-1.5 rounded-xl text-[11px] font-bold flex items-center gap-1.5 shadow-lg transition-all ${
+                  isTorchOn
+                    ? 'bg-[#E9C349] text-[#241A00]'
+                    : 'bg-black/75 border border-white/20 text-white hover:bg-black/90'
+                }`}
+              >
+                <Flashlight className="w-3.5 h-3.5" />
+                <span>{isTorchOn ? 'Torche ON' : 'Torche'}</span>
+              </button>
+            )}
+
             {/* Pastille Statut Caméra */}
             <div className="absolute bottom-3 inset-x-4 z-10 flex items-center justify-center pointer-events-none">
               <span className="px-3 py-1 rounded-full bg-black/75 backdrop-blur-md border border-white/10 text-[11px] font-semibold text-[#DCB8FF] flex items-center gap-1.5 shadow-lg">
                 <span className={`w-2 h-2 rounded-full ${isCameraActive ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
-                <span>{isCameraActive ? 'Caméra Arrière Active • Visez le QR code' : 'Caméra en attente'}</span>
+                <span>
+                  {isCameraActive
+                    ? scannerMetrics
+                      ? `Actif (${scannerMetrics.fps} FPS • 1/${scannerMetrics.fpsDecimation} • ${scannerMetrics.cameraStartMs}ms)`
+                      : 'Caméra Arrière Active • Visez le QR code'
+                    : 'Caméra en attente'}
+                </span>
               </span>
             </div>
           </div>

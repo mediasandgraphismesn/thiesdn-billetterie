@@ -10,11 +10,6 @@ import { PWAInstallPrompt } from './components/PWAInstallPrompt';
 import { ShieldAlert, Eye, ArrowRight, X } from 'lucide-react';
 
 import { HomeView } from './views/HomeView';
-import { ExploreView } from './views/ExploreView';
-import { CreateEventView } from './views/CreateEventView';
-import { ProfileView } from './views/ProfileView';
-import { AuthView } from './views/AuthView';
-import { TicketsWalletView } from './views/TicketsWalletView';
 import { AdminSidebar } from './components/admin/AdminSidebar';
 import { AdminNotificationCenter } from './components/admin/AdminNotificationCenter';
 import {
@@ -23,17 +18,22 @@ import {
   markAllNotificationsAsRead,
   playNotificationChime,
 } from './services/userNotificationService';
-import { SalesAgentDashboardView } from './views/SalesAgentDashboardView';
-import { PosAuthView } from './views/PosAuthView';
-import { ArtistDashboardView } from './views/ArtistDashboardView';
-import { PublicScannerStationView } from './views/PublicScannerStationView';
-import { ClaimTicketView } from './views/ClaimTicketView';
-import { CGVView } from './views/CGVView';
-import { LoginHistoryView } from './views/LoginHistoryView';
-import { VigileSessionsView } from './views/VigileSessionsView';
 import LoadingIntro from './components/LoadingIntro';
 
-// Optimisation React 19 : Code Splitting pour affichage instantane mobile
+// Optimisation React 19 : Code Splitting intégral pour affichage instantané mobile
+const ExploreView = React.lazy(() => import('./views/ExploreView').then((m) => ({ default: m.ExploreView })));
+const CreateEventView = React.lazy(() => import('./views/CreateEventView').then((m) => ({ default: m.CreateEventView })));
+const ProfileView = React.lazy(() => import('./views/ProfileView').then((m) => ({ default: m.ProfileView })));
+const AuthView = React.lazy(() => import('./views/AuthView').then((m) => ({ default: m.AuthView })));
+const TicketsWalletView = React.lazy(() => import('./views/TicketsWalletView').then((m) => ({ default: m.TicketsWalletView })));
+const SalesAgentDashboardView = React.lazy(() => import('./views/SalesAgentDashboardView').then((m) => ({ default: m.SalesAgentDashboardView })));
+const PosAuthView = React.lazy(() => import('./views/PosAuthView').then((m) => ({ default: m.PosAuthView })));
+const ArtistDashboardView = React.lazy(() => import('./views/ArtistDashboardView').then((m) => ({ default: m.ArtistDashboardView })));
+const PublicScannerStationView = React.lazy(() => import('./views/PublicScannerStationView').then((m) => ({ default: m.PublicScannerStationView })));
+const ClaimTicketView = React.lazy(() => import('./views/ClaimTicketView').then((m) => ({ default: m.ClaimTicketView })));
+const CGVView = React.lazy(() => import('./views/CGVView').then((m) => ({ default: m.CGVView })));
+const LoginHistoryView = React.lazy(() => import('./views/LoginHistoryView').then((m) => ({ default: m.LoginHistoryView })));
+const VigileSessionsView = React.lazy(() => import('./views/VigileSessionsView').then((m) => ({ default: m.VigileSessionsView })));
 const FinancesView = React.lazy(() => import('./views/FinancesView').then((m) => ({ default: m.FinancesView })));
 const EventsManagementView = React.lazy(() => import('./views/EventsManagementView').then((m) => ({ default: m.EventsManagementView })));
 const ModerationView = React.lazy(() => import('./views/ModerationView').then((m) => ({ default: m.ModerationView })));
@@ -76,6 +76,7 @@ import {
   fetchOrderTicketsByToken,
   fetchTicketByPublicId,
 } from './services/supabase';
+import { loadPosAgentSnapshot } from './services/posOfflineCache';
 
 const getInitialScanCode = (): string | null => {
   if (typeof window === 'undefined') return null;
@@ -408,6 +409,19 @@ export default function App() {
 
     let cancelled = false;
     const resolvePosContextAccess = async () => {
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        const snap = loadPosAgentSnapshot(user.assignedAgentId);
+        const cachedAgent =
+          snap.agents.find((a) => a.userId === user.id) || snap.activeAgent;
+        if (cachedAgent) {
+          setPosLinkedAgentId(cachedAgent.id);
+          setIsPosRoute(true);
+          setActiveTab('sales_agent');
+          setIsCheckingPosAccess(false);
+          return;
+        }
+      }
+
       setIsCheckingPosAccess(true);
       const linkedRes = await fetchLinkedSalesAgentForUser(user.id);
       if (cancelled) return;
@@ -419,6 +433,18 @@ export default function App() {
         setActiveTab('sales_agent');
         setIsCheckingPosAccess(false);
         return;
+      }
+
+      if (linkedRes.error) {
+        const snap = loadPosAgentSnapshot(user.assignedAgentId);
+        const cachedAgent = snap.agents.find((a) => a.userId === user.id);
+        if (cachedAgent) {
+          setPosLinkedAgentId(cachedAgent.id);
+          setIsPosRoute(true);
+          setActiveTab('sales_agent');
+          setIsCheckingPosAccess(false);
+          return;
+        }
       }
 
       // Aucun point de vente lié : appliquer la redirection habituelle selon le rôle
@@ -609,14 +635,19 @@ export default function App() {
 
   useEffect(() => {
     refreshEvents();
-    fetchOrdersFromSupabase().then(({ orders }) => {
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated || effectiveRole !== 'admin') {
+      setPendingOrdersCount(0);
+      return;
+    }
+    fetchOrdersFromSupabase({ statuses: ['pending', 'payment_signaled'] }).then(({ orders }) => {
       if (orders) {
-        setPendingOrdersCount(
-          orders.filter((o) => o.status === 'pending' || o.status === 'payment_signaled').length
-        );
+        setPendingOrdersCount(orders.length);
       }
     });
-  }, []);
+  }, [isAuthenticated, effectiveRole]);
 
   // Détection et ouverture automatique d'un billet digital via lien direct (/ticket/:id ou ?ticket=ID)
   useEffect(() => {
@@ -934,31 +965,37 @@ export default function App() {
   // Sécurité hermétique : si un code de poste de scan est présent dans l'URL (/scan/:code),
   // on affiche immédiatement l'interface de scan mobile autonome (sans header, sans sidebar ni accès admin)
   if (scanStationCode) {
-    return <PublicScannerStationView accessCode={scanStationCode} />;
+    return (
+      <React.Suspense fallback={<ViewSkeletonLoader />}>
+        <PublicScannerStationView accessCode={scanStationCode} />
+      </React.Suspense>
+    );
   }
 
   // Écran autonome de réclamation de billet offert (/claim-ticket/:token)
   if (claimToken) {
     return (
-      <ClaimTicketView
-        claimToken={claimToken}
-        currentUser={isAuthenticated ? user : null}
-        onClaimSuccess={(claimedTicket) => {
-          setTickets((prev) => [claimedTicket, ...prev.filter((t) => t.id !== claimedTicket.id)]);
-          setClaimToken(null);
-          setActiveTab('tickets');
-          if (typeof window !== 'undefined') {
-            window.history.pushState({}, '', '/');
-          }
-        }}
-        onNavigateHome={() => {
-          setClaimToken(null);
-          setActiveTab('home');
-          if (typeof window !== 'undefined') {
-            window.history.pushState({}, '', '/');
-          }
-        }}
-      />
+      <React.Suspense fallback={<ViewSkeletonLoader />}>
+        <ClaimTicketView
+          claimToken={claimToken}
+          currentUser={isAuthenticated ? user : null}
+          onClaimSuccess={(claimedTicket) => {
+            setTickets((prev) => [claimedTicket, ...prev.filter((t) => t.id !== claimedTicket.id)]);
+            setClaimToken(null);
+            setActiveTab('tickets');
+            if (typeof window !== 'undefined') {
+              window.history.pushState({}, '', '/');
+            }
+          }}
+          onNavigateHome={() => {
+            setClaimToken(null);
+            setActiveTab('home');
+            if (typeof window !== 'undefined') {
+              window.history.pushState({}, '', '/');
+            }
+          }}
+        />
+      </React.Suspense>
     );
   }
 
@@ -999,74 +1036,78 @@ export default function App() {
           </div>
         ) : isAuthenticated && (effectiveRole === 'sales_agent' || Boolean(posLinkedAgentId)) ? (
           <div className="p-3 sm:p-6">
-            <SalesAgentDashboardView
-              user={user}
-              events={events}
-              currentAgentId={posLinkedAgentId ?? undefined}
-              onNavigateBack={() => {
+            <React.Suspense fallback={<ViewSkeletonLoader />}>
+              <SalesAgentDashboardView
+                user={user}
+                events={events}
+                currentAgentId={posLinkedAgentId ?? undefined}
+                onNavigateBack={() => {
+                  setIsPosRoute(false);
+                  setPosLinkedAgentId(null);
+                  if (typeof window !== 'undefined') {
+                    window.history.pushState(null, '', '/');
+                  }
+                  if (effectiveRole === 'promoter') {
+                    setActiveTab('finances');
+                  } else if (effectiveRole === 'admin') {
+                    setActiveTab('dashboard');
+                  } else {
+                    setActiveTab('home');
+                  }
+                }}
+              />
+            </React.Suspense>
+          </div>
+        ) : (
+          <React.Suspense fallback={<ViewSkeletonLoader />}>
+            <PosAuthView
+              isAuthenticated={isAuthenticated}
+              currentUserId={user?.id}
+              currentRole={effectiveRole}
+              onLoginSuccess={(role, options) => {
+                const linkedAgentId = options?.linkedAgentId ?? null;
+                if (linkedAgentId) {
+                  const normalizedRole =
+                    (role as 'user' | 'promoter' | 'admin' | 'sales_agent' | 'artist') || 'sales_agent';
+                  setIsAuthenticated(true);
+                  setCurrentRole(normalizedRole);
+                  setUser((prev) => ({
+                    ...prev,
+                    role: normalizedRole,
+                    assignedAgentId: linkedAgentId,
+                  }));
+                  setPosLinkedAgentId(linkedAgentId);
+                  setIsCheckingPosAccess(false);
+                  setIsPosRoute(true);
+                  setActiveTab('sales_agent');
+                  return;
+                }
+
+                setPosLinkedAgentId(null);
+                handleLoginSuccess(role as 'user' | 'promoter' | 'admin' | 'sales_agent' | 'artist');
+                if (role === 'sales_agent') {
+                  setIsPosRoute(true);
+                  setActiveTab('sales_agent');
+                } else {
+                  setIsPosRoute(false);
+                  if (typeof window !== 'undefined') {
+                    window.history.pushState(null, '', role === 'admin' ? '/admin' : '/');
+                  }
+                  if (role === 'admin') setActiveTab('dashboard');
+                  else if (role === 'promoter') setActiveTab('finances');
+                  else setActiveTab('home');
+                }
+              }}
+              onNavigateHome={() => {
                 setIsPosRoute(false);
                 setPosLinkedAgentId(null);
                 if (typeof window !== 'undefined') {
                   window.history.pushState(null, '', '/');
                 }
-                if (effectiveRole === 'promoter') {
-                  setActiveTab('finances');
-                } else if (effectiveRole === 'admin') {
-                  setActiveTab('dashboard');
-                } else {
-                  setActiveTab('home');
-                }
+                setActiveTab(effectiveRole === 'promoter' ? 'finances' : 'home');
               }}
             />
-          </div>
-        ) : (
-          <PosAuthView
-            isAuthenticated={isAuthenticated}
-            currentUserId={user?.id}
-            currentRole={effectiveRole}
-            onLoginSuccess={(role, options) => {
-              const linkedAgentId = options?.linkedAgentId ?? null;
-              if (linkedAgentId) {
-                const normalizedRole =
-                  (role as 'user' | 'promoter' | 'admin' | 'sales_agent' | 'artist') || 'sales_agent';
-                setIsAuthenticated(true);
-                setCurrentRole(normalizedRole);
-                setUser((prev) => ({
-                  ...prev,
-                  role: normalizedRole,
-                  assignedAgentId: linkedAgentId,
-                }));
-                setPosLinkedAgentId(linkedAgentId);
-                setIsCheckingPosAccess(false);
-                setIsPosRoute(true);
-                setActiveTab('sales_agent');
-                return;
-              }
-
-              setPosLinkedAgentId(null);
-              handleLoginSuccess(role as 'user' | 'promoter' | 'admin' | 'sales_agent' | 'artist');
-              if (role === 'sales_agent') {
-                setIsPosRoute(true);
-                setActiveTab('sales_agent');
-              } else {
-                setIsPosRoute(false);
-                if (typeof window !== 'undefined') {
-                  window.history.pushState(null, '', role === 'admin' ? '/admin' : '/');
-                }
-                if (role === 'admin') setActiveTab('dashboard');
-                else if (role === 'promoter') setActiveTab('finances');
-                else setActiveTab('home');
-              }
-            }}
-            onNavigateHome={() => {
-              setIsPosRoute(false);
-              setPosLinkedAgentId(null);
-              if (typeof window !== 'undefined') {
-                window.history.pushState(null, '', '/');
-              }
-              setActiveTab(effectiveRole === 'promoter' ? 'finances' : 'home');
-            }}
-          />
+          </React.Suspense>
         )}
       </div>
     );
@@ -1196,11 +1237,9 @@ export default function App() {
             user={{ ...user, role: 'admin' }}
             onNavigateToOrders={() => handleTabChange('orders')}
             onNewSignaledOrder={() => {
-              fetchOrdersFromSupabase().then(({ orders }) => {
+              fetchOrdersFromSupabase({ statuses: ['pending', 'payment_signaled'] }).then(({ orders }) => {
                 if (orders) {
-                  setPendingOrdersCount(
-                    orders.filter((o) => o.status === 'pending' || o.status === 'payment_signaled').length
-                  );
+                  setPendingOrdersCount(orders.length);
                 }
               });
             }}
@@ -1284,7 +1323,9 @@ export default function App() {
                     : 'Veuillez vous authentifier pour accéder à cet espace.'}
                 </p>
               </div>
-              <AuthView onLoginSuccess={handleLoginSuccess} />
+              <React.Suspense fallback={<ViewSkeletonLoader />}>
+                <AuthView onLoginSuccess={handleLoginSuccess} />
+              </React.Suspense>
             </div>
           ) : /* Condition 2 : Authentifié mais rôle insuffisant (Route Guard Bloquant) */
           isAuthenticated && !isTabPermitted ? (
@@ -1534,6 +1575,7 @@ export default function App() {
               {activeTab === 'tickets' && (
                 <TicketsWalletView
                   tickets={tickets}
+                  userId={isAuthenticated ? user.id : undefined}
                   userName={user.name}
                   orderFilter={orderFilter}
                   onClearOrderFilter={() => setOrderFilter(null)}

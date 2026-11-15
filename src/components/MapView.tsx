@@ -17,6 +17,8 @@ import {
   Compass,
 } from 'lucide-react';
 import { EventItem } from '../types';
+import { SafeImage } from './SafeImage';
+import { getOptimizedImageUrl } from '../utils/imageOptimizer';
 
 // Coordonnées GPS officielles des villes principales du Sénégal
 const CITY_COORDINATES: Record<string, { center: [number, number]; zoom: number }> = {
@@ -370,10 +372,13 @@ export const MapView: React.FC<MapViewProps> = ({
                 <div className="p-3 space-y-2.5 bg-[#181818] text-white">
                   {/* Miniature Poster */}
                   {event.posterUrl && (
-                    <div className="relative w-full h-28 rounded-xl overflow-hidden border border-white/10">
-                      <img
-                        src={event.posterUrl}
+                    <div className="relative w-full h-28 rounded-xl overflow-hidden border border-white/10 bg-[#141414]">
+                      <SafeImage
+                        src={getOptimizedImageUrl(event.posterUrl, 480)}
+                        rawSrc={event.posterUrl}
                         alt={event.title}
+                        loading="lazy"
+                        decoding="async"
                         className="w-full h-full object-cover"
                       />
                       <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-black/70 backdrop-blur-sm text-[10px] font-bold text-[#DCB8FF] border border-white/10">

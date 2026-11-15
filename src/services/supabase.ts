@@ -1540,7 +1540,16 @@ export const saveSalesAgents = (agents: SalesAgent[]): void => {
   }
 };
 
-export const fetchSalesAgentsFromSupabase = async (): Promise<{
+export interface FetchSalesAgentsOptions {
+  agentId?: string;
+  userId?: string;
+  promoterId?: string;
+  eventId?: string;
+}
+
+export const fetchSalesAgentsFromSupabase = async (
+  options?: FetchSalesAgentsOptions
+): Promise<{
   agents: SalesAgent[];
   error: string | null;
 }> => {
@@ -1550,10 +1559,25 @@ export const fetchSalesAgentsFromSupabase = async (): Promise<{
   }
 
   try {
-    const { data, error } = await client
+    let query = client
       .from('sales_agents')
       .select('*')
       .order('created_at', { ascending: false });
+
+    if (options?.agentId) {
+      query = query.eq('id', options.agentId);
+    }
+    if (options?.userId) {
+      query = query.eq('user_id', options.userId);
+    }
+    if (options?.promoterId) {
+      query = query.eq('promoter_id', options.promoterId);
+    }
+    if (options?.eventId) {
+      query = query.eq('event_id', options.eventId);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.warn('Fallback local pour sales_agents:', error.message);
@@ -1581,7 +1605,9 @@ export const fetchSalesAgentsFromSupabase = async (): Promise<{
       createdAt: String(d.created_at || new Date().toISOString()),
     }));
 
-    saveSalesAgents(mapped);
+    if (!options?.agentId && !options?.userId && !options?.eventId) {
+      saveSalesAgents(mapped);
+    }
     return { agents: mapped, error: null };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Erreur réseau sales_agents';
@@ -1737,6 +1763,30 @@ export const provisionSalesAgentAuthAccount = async (params: {
   }
 
   try {
+    // Validation stricte du jeton JWT utilisateur avant appel à l'Edge Function
+    const { data: sessionData } = await client.auth.getSession();
+    let accessToken = sessionData?.session?.access_token || '';
+    const expiresAtSec = sessionData?.session?.expires_at || 0;
+    const isNearExpiry = expiresAtSec > 0 && expiresAtSec * 1000 - Date.now() < 60_000;
+
+    if (!accessToken || isNearExpiry) {
+      const { data: refreshed } = await client.auth.refreshSession();
+      if (refreshed?.session?.access_token) {
+        accessToken = refreshed.session.access_token;
+      }
+    }
+
+    if (!accessToken) {
+      return {
+        success: false,
+        error: 'Session expirée ou non authentifiée (JWT manquant). Veuillez vous reconnecter.',
+      };
+    }
+
+    const authHeaders = {
+      Authorization: `Bearer ${accessToken}`,
+    };
+
     const functionName =
       params.action === 'reset_password'
         ? 'create-sales-agent-account/reset-password'
@@ -1744,14 +1794,17 @@ export const provisionSalesAgentAuthAccount = async (params: {
 
     let { data, error } = await client.functions.invoke<SalesAgentAuthProvisionResult>(
       functionName,
-      { body: params }
+      { body: params, headers: authHeaders }
     );
 
     // Repli automatique si l'Edge Function déployée n'expose pas le sous-chemin /reset-password
     if (error && params.action === 'reset_password') {
       ({ data, error } = await client.functions.invoke<SalesAgentAuthProvisionResult>(
         'create-sales-agent-account',
-        { body: { ...params, action: 'reset_password', regeneratePassword: true } }
+        {
+          body: { ...params, action: 'reset_password', regeneratePassword: true },
+          headers: authHeaders,
+        }
       ));
     }
 
@@ -2553,46 +2606,59 @@ export const confirmSinglePhysicalTicketSale = async (
   const client = getSupabaseClient();
   if (client) {
     try {
-      const { data: updatedRow, error: ticketUpdateErr } = await client
-        .from('tickets')
-        .update({
-          status: 'sold_valid',
-          holder_name: customerData.name.trim(),
-          holder_phone: customerData.phone.trim(),
-          holder_email: customerData.email?.trim() || null,
-          sold_at: nowIso,
-          agent_id: agent.id,
-          agent_name: agent.pointDeVente,
-        })
-        .eq('id', targetId)
-        .select('id, status')
-        .maybeSingle();
+      // Validation prioritaire côté serveur via RPC SECURITY DEFINER atomique (FOR UPDATE)
+      const { data: rpcData, error: rpcErr } = await client.rpc('activate_physical_ticket_sale', {
+        p_agent_id: agent.id,
+        p_ticket_code: check.ticket.qrCode,
+        p_holder_name: customerData.name.trim(),
+        p_holder_phone: customerData.phone.trim(),
+        p_holder_email: customerData.email?.trim() || null,
+      });
 
-      if (ticketUpdateErr || !updatedRow) {
-        // Repli via RPC SECURITY DEFINER si la policy UPDATE directe bloque
-        const { data: rpcData, error: rpcErr } = await client.rpc('activate_physical_ticket_sale', {
-          p_agent_id: agent.id,
-          p_ticket_code: check.ticket.qrCode,
-          p_holder_name: customerData.name.trim(),
-          p_holder_phone: customerData.phone.trim(),
-          p_holder_email: customerData.email?.trim() || null,
-        });
+      const rpcResult = rpcData as { success?: boolean; message?: string } | null;
 
-        const rpcResult = rpcData as { success?: boolean; message?: string } | null;
-        if (rpcErr || !rpcResult?.success) {
+      if (!rpcErr && rpcResult?.success) {
+        // Succès atomique confirmé par PostgreSQL
+      } else if (rpcResult && rpcResult.success === false) {
+        saveStoredTickets(allTickets);
+        agents[agentIndex] = previousAgentSnapshot;
+        saveSalesAgents(agents);
+        return {
+          success: false,
+          message:
+            rpcResult.message ||
+            'Impossible d’activer le billet sur Supabase (billet déjà vendu, annulé ou non assigné).',
+        };
+      } else {
+        // Repli contrôlé vers UPDATE RLS uniquement si la RPC n'est pas joignable
+        const { data: updatedRow, error: ticketUpdateErr } = await client
+          .from('tickets')
+          .update({
+            status: 'sold_valid',
+            holder_name: customerData.name.trim(),
+            holder_phone: customerData.phone.trim(),
+            holder_email: customerData.email?.trim() || null,
+            sold_at: nowIso,
+            agent_id: agent.id,
+            agent_name: agent.pointDeVente,
+          })
+          .eq('id', targetId)
+          .select('id, status')
+          .maybeSingle();
+
+        if (ticketUpdateErr || !updatedRow) {
           saveStoredTickets(allTickets);
           agents[agentIndex] = previousAgentSnapshot;
           saveSalesAgents(agents);
           return {
             success: false,
             message:
-              rpcResult?.message ||
               rpcErr?.message ||
               ticketUpdateErr?.message ||
               'Impossible d’activer le billet sur Supabase (droits RLS ou billet déjà vendu).',
           };
         }
-      } else {
+
         const { error: agentUpdateErr } = await client
           .from('sales_agents')
           .update({
@@ -2627,6 +2693,77 @@ export const confirmSinglePhysicalTicketSale = async (
     ticket: updatedTargetTicket || check.ticket,
     agent,
   };
+};
+
+/**
+ * Vérification côté serveur d'un billet physique scanné au guichet POS
+ * avant d'autoriser la confirmation de vente (Mission 4).
+ */
+export const verifyPosTicketForSale = async (
+  agentId: string,
+  ticketCode: string
+): Promise<{
+  verifiedByServer: boolean;
+  canBeSold: boolean;
+  message: string;
+  ticket?: Partial<UserTicket>;
+}> => {
+  const client = getSupabaseClient();
+  const cleanCode = ticketCode.trim().toUpperCase();
+  if (!client || !agentId || !cleanCode) {
+    return {
+      verifiedByServer: false,
+      canBeSold: false,
+      message: 'Client Supabase indisponible ou paramètres incomplets.',
+    };
+  }
+
+  try {
+    const { data, error } = await client.rpc('verify_pos_ticket_for_sale', {
+      p_agent_id: agentId,
+      p_ticket_code: cleanCode,
+    });
+
+    if (error || !data) {
+      return {
+        verifiedByServer: false,
+        canBeSold: false,
+        message: error?.message || 'Erreur lors de la vérification serveur du billet.',
+      };
+    }
+
+    const res = data as {
+      success?: boolean;
+      message?: string;
+      ticket?: Record<string, unknown>;
+    };
+
+    return {
+      verifiedByServer: true,
+      canBeSold: Boolean(res.success),
+      message: res.message || (res.success ? 'Billet validé serveur.' : 'Billet refusé.'),
+      ticket: res.ticket
+        ? {
+            id: String(res.ticket.id || ''),
+            qrCode: String(res.ticket.qr_code || cleanCode),
+            eventId: res.ticket.event_id ? String(res.ticket.event_id) : undefined,
+            eventTitle: String(res.ticket.event_title || 'Événement Thièsdn'),
+            tierName: String(res.ticket.tier_name || 'Standard'),
+            price: Number(res.ticket.price) || 0,
+            status: (res.ticket.status as UserTicket['status']) || 'printed_not_sold',
+            agentId: res.ticket.agent_id ? String(res.ticket.agent_id) : agentId,
+            serialNumber: res.ticket.serial_number ? Number(res.ticket.serial_number) : undefined,
+          }
+        : undefined,
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Erreur réseau vérification POS';
+    return {
+      verifiedByServer: false,
+      canBeSold: false,
+      message,
+    };
+  }
 };
 
 export const recordAgentSale = async (
@@ -6626,15 +6763,35 @@ export const fetchPreRegistrationCounts = async (): Promise<Record<string, numbe
   }
 };
 
-export const fetchOrdersFromSupabase = async (): Promise<{ orders: OrderRecord[]; error: string | null }> => {
+export interface FetchOrdersOptions {
+  userId?: string;
+  eventId?: string;
+  statuses?: string[];
+}
+
+export const fetchOrdersFromSupabase = async (
+  options?: FetchOrdersOptions
+): Promise<{ orders: OrderRecord[]; error: string | null }> => {
   const client = getSupabaseClient();
   if (!client) return { orders: [], error: 'Supabase non connecté.' };
 
   try {
-    const { data, error } = await client
+    let query = client
       .from('orders')
       .select('*')
       .order('created_at', { ascending: false });
+
+    if (options?.userId) {
+      query = query.eq('user_id', options.userId);
+    }
+    if (options?.eventId) {
+      query = query.eq('event_id', options.eventId);
+    }
+    if (options?.statuses && options.statuses.length > 0) {
+      query = query.in('status', options.statuses);
+    }
+
+    const { data, error } = await query;
 
     if (error) return { orders: [], error: error.message };
 

@@ -19,6 +19,8 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { EventItem, OrderRecord, UserTicket } from '../types';
+import { SafeImage } from '../components/SafeImage';
+import { getOptimizedImageUrl } from '../utils/imageOptimizer';
 import {
   getStoredOrders,
   fetchOrdersFromSupabase,
@@ -584,10 +586,13 @@ export const ModerationView: React.FC<ModerationViewProps> = ({
                   <div className="space-y-4">
                     {/* Header with image */}
                     <div className="flex gap-4">
-                      <div className="w-24 h-24 rounded-2xl overflow-hidden flex-shrink-0 relative">
-                        <img
-                          src={event.posterUrl}
+                      <div className="w-24 h-24 rounded-2xl overflow-hidden flex-shrink-0 relative bg-[#141414]">
+                        <SafeImage
+                          src={getOptimizedImageUrl(event.posterUrl, 300)}
+                          rawSrc={event.posterUrl}
                           alt={event.title}
+                          loading="lazy"
+                          decoding="async"
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                         />
                         <span className="absolute top-1 left-1 bg-[#8A2BE2] text-white text-[9px] font-bold px-1.5 py-0.5 rounded">

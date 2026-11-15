@@ -48,7 +48,7 @@ export default defineConfig(() => {
           importScripts: ['/push-handler.js'],
           clientsClaim: true,
           maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5 Mo pour autoriser le precache du bundle
-          globPatterns: ['**/*.{js,css,html,png,svg,woff2,ico}'],
+          globPatterns: ['**/*.{js,css,html,png,svg,woff2,ico,wasm}'],
           runtimeCaching: [
             {
               // Ne JAMAIS mettre en cache les requêtes de base de données ou d'authentification Supabase
@@ -71,8 +71,26 @@ export default defineConfig(() => {
         },
       }),
     ],
+    worker: {
+      format: 'es',
+    },
     build: {
       sourcemap: true,
+      rollupOptions: {
+        output: {
+          manualChunks: (id) => {
+            if (!id.includes('node_modules')) return undefined;
+            if (id.includes('react-dom') || id.includes('/react/')) return 'vendor-react';
+            if (id.includes('@supabase/')) return 'vendor-supabase';
+            if (id.includes('lucide-react')) return 'vendor-icons';
+            if (id.includes('leaflet')) return 'vendor-maps';
+            if (id.includes('html5-qrcode') || id.includes('jsqr') || id.includes('zxing-wasm')) {
+              return 'vendor-scanner';
+            }
+            return undefined;
+          },
+        },
+      },
     },
     resolve: {
       alias: {

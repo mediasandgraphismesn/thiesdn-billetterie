@@ -27,9 +27,12 @@ import { UserTicket, OrderRecord } from '../types';
 import { getStoredOrders, fetchOrdersFromSupabase, cancelTicketAssignment } from '../services/supabase';
 import { AddToCalendarButton } from '../components/AddToCalendarButton';
 import { AssignTicketModal } from '../components/AssignTicketModal';
+import { SafeImage } from '../components/SafeImage';
+import { getOptimizedImageUrl } from '../utils/imageOptimizer';
 
 interface TicketsWalletViewProps {
   tickets: UserTicket[];
+  userId?: string;
   userName?: string;
   onOpenPass: (ticket: UserTicket) => void;
   onExploreEvents: () => void;
@@ -40,6 +43,7 @@ interface TicketsWalletViewProps {
 
 export const TicketsWalletView: React.FC<TicketsWalletViewProps> = ({
   tickets,
+  userId,
   userName = 'Moi',
   onOpenPass,
   onExploreEvents,
@@ -54,14 +58,14 @@ export const TicketsWalletView: React.FC<TicketsWalletViewProps> = ({
   const [cancellingTicketId, setCancellingTicketId] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchOrdersFromSupabase().then((res) => {
+    fetchOrdersFromSupabase(userId ? { userId } : undefined).then((res) => {
       if (res.orders && res.orders.length > 0) {
         setOrders(res.orders);
       } else {
         setOrders(getStoredOrders());
       }
     });
-  }, []);
+  }, [userId]);
 
   const handleCancelAssignment = async (ticketId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -241,11 +245,14 @@ export const TicketsWalletView: React.FC<TicketsWalletViewProps> = ({
                       className="glass-panel rounded-3xl p-5 hover:border-[#8A2BE2] transition-all cursor-pointer group relative overflow-hidden shadow-xl"
                     >
                       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                        {/* Poster Thumbnail */}
-                        <div className="w-full sm:w-28 h-28 rounded-2xl overflow-hidden flex-shrink-0 relative">
-                          <img
-                            src={ticket.eventPoster}
+                        {/* Poster Thumbnail optimisé WebP + Lazy Loading */}
+                        <div className="w-full sm:w-28 h-28 rounded-2xl overflow-hidden flex-shrink-0 relative bg-[#141414]">
+                          <SafeImage
+                            src={getOptimizedImageUrl(ticket.eventPoster, 400)}
+                            rawSrc={ticket.eventPoster}
                             alt={ticket.eventTitle}
+                            loading="lazy"
+                            decoding="async"
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                           />
                           <div className="absolute top-1 left-1 bg-[#E9C349] text-[#241A00] text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded">
@@ -369,9 +376,12 @@ export const TicketsWalletView: React.FC<TicketsWalletViewProps> = ({
                           <div className="flex items-center justify-between gap-2 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-3 w-full">
                             <div className="flex items-center gap-2.5">
                               {ticket.assignedToAvatar || ticket.holderAvatar ? (
-                                <img
-                                  src={ticket.assignedToAvatar || ticket.holderAvatar}
-                                  alt={ticket.assignedToName}
+                                <SafeImage
+                                  src={getOptimizedImageUrl(ticket.assignedToAvatar || ticket.holderAvatar || '', 128)}
+                                  rawSrc={ticket.assignedToAvatar || ticket.holderAvatar}
+                                  alt={ticket.assignedToName || userName}
+                                  loading="lazy"
+                                  decoding="async"
                                   className="w-9 h-9 rounded-xl object-cover border border-emerald-400"
                                 />
                               ) : (
@@ -491,10 +501,13 @@ export const TicketsWalletView: React.FC<TicketsWalletViewProps> = ({
                       className="glass-panel rounded-3xl p-5 hover:border-[#8A2BE2] transition-all cursor-pointer group relative overflow-hidden shadow-lg opacity-90 hover:opacity-100"
                     >
                       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                        <div className="w-full sm:w-28 h-28 rounded-2xl overflow-hidden flex-shrink-0 relative grayscale group-hover:grayscale-0 transition-all">
-                          <img
-                            src={ticket.eventPoster}
+                        <div className="w-full sm:w-28 h-28 rounded-2xl overflow-hidden flex-shrink-0 relative grayscale group-hover:grayscale-0 transition-all bg-[#141414]">
+                          <SafeImage
+                            src={getOptimizedImageUrl(ticket.eventPoster, 400)}
+                            rawSrc={ticket.eventPoster}
                             alt={ticket.eventTitle}
+                            loading="lazy"
+                            decoding="async"
                             className="w-full h-full object-cover"
                           />
                           <div className="absolute top-1 left-1 bg-black/80 text-gray-300 text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded">

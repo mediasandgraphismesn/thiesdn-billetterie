@@ -18,8 +18,13 @@ import {
   ArrowRight,
   Camera,
   CameraOff,
+  Flashlight,
 } from 'lucide-react';
-import { Html5Qrcode } from 'html5-qrcode';
+import {
+  startOptimizedScanner,
+  OptimizedScannerHandle,
+  ScannerMetrics,
+} from '../utils/scannerEngine';
 import { ScanStation } from '../types';
 import {
   verifyScanStationAccess,
@@ -50,10 +55,13 @@ export const PublicScannerStationView: React.FC<PublicScannerStationViewProps> =
   const [inputCode, setInputCode] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
 
-  // Caméra arrière & Scanner Html5Qrcode
+  // Caméra arrière & Scanner Optimisé (Web Worker + WASM iOS + Torche)
   const [isCameraActive, setIsCameraActive] = useState<boolean>(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
-  const scannerRef = useRef<Html5Qrcode | null>(null);
+  const [torchSupported, setTorchSupported] = useState<boolean>(false);
+  const [isTorchOn, setIsTorchOn] = useState<boolean>(false);
+  const [scannerMetrics, setScannerMetrics] = useState<ScannerMetrics | null>(null);
+  const scannerHandleRef = useRef<OptimizedScannerHandle | null>(null);
   const lastScannedRef = useRef<{ code: string; timestamp: number }>({ code: '', timestamp: 0 });
 
   // Connectivité réseau & synchronisation hors-ligne
@@ -254,51 +262,49 @@ export const PublicScannerStationView: React.FC<PublicScannerStationViewProps> =
     setInputCode('');
   };
 
-  // Démarrage & cycle de vie du lecteur caméra Html5Qrcode
+  // Démarrage & cycle de vie optimisé du lecteur caméra (640x480 / 720p max, FPS 18, Web Worker + WASM)
   useEffect(() => {
     let isMounted = true;
     const scannerElementId = 'qr-reader';
 
+    const cleanupHandle = () => {
+      const current = scannerHandleRef.current;
+      scannerHandleRef.current = null;
+      if (current) {
+        void current.stop();
+      }
+      setIsCameraActive(false);
+      setTorchSupported(false);
+      setIsTorchOn(false);
+    };
+
     const startCamera = async () => {
-      // Petite attente pour garantir le montage effectif du conteneur DOM
       await new Promise((r) => setTimeout(r, 120));
       if (!isMounted) return;
 
       const element = document.getElementById(scannerElementId);
       if (!element) return;
 
-      // Nettoyer toute instance active préalable
-      if (scannerRef.current) {
-        try {
-          if (scannerRef.current.isScanning) {
-            await scannerRef.current.stop();
-          }
-          scannerRef.current.clear();
-        } catch {
-          // Ignorer
-        }
-        scannerRef.current = null;
-      }
+      cleanupHandle();
 
       try {
         setCameraError(null);
-        const html5Qr = new Html5Qrcode(scannerElementId);
-        scannerRef.current = html5Qr;
-
-        await html5Qr.start(
-          { facingMode: 'environment' },
-          {
-            fps: 10,
-            qrbox: (viewfinderWidth, viewfinderHeight) => {
-              const edge = Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.75);
-              return { width: edge, height: edge };
-            },
-            aspectRatio: 1.0,
+        const handle = await startOptimizedScanner({
+          elementId: scannerElementId,
+          formats: ['QR_CODE', 'CODE_128', 'CODE_39', 'EAN_13', 'EAN_8', 'DATA_MATRIX'],
+          fps: 18,
+          fpsDecimation: 3,
+          aspectRatio: 1.0,
+          debounceMs: 3000,
+          qrboxRatio: { widthRatio: 0.75, heightRatio: 0.75, minWidth: 160, minHeight: 160 },
+          onReady: (metrics) => {
+            if (!isMounted) return;
+            setScannerMetrics(metrics);
+            setTorchSupported(metrics.torchSupported);
           },
-          (decodedText) => {
+          onDecode: (decodedText) => {
             if (!isMounted) return;
             const now = Date.now();
-            // Anti-rebond : éviter de rescanner en boucle le même billet en moins de 3s
             if (
               lastScannedRef.current.code === decodedText &&
               now - lastScannedRef.current.timestamp < 3000
@@ -306,44 +312,47 @@ export const PublicScannerStationView: React.FC<PublicScannerStationViewProps> =
               return;
             }
             lastScannedRef.current = { code: decodedText, timestamp: now };
-            handleVerify(decodedText);
+            void handleVerify(decodedText);
           },
-          () => {
-            // Frames vides ignorées pendant la recherche
-          }
-        );
+        });
 
         if (isMounted) {
+          scannerHandleRef.current = handle;
+          setTorchSupported(handle.isTorchSupported());
           setIsCameraActive(true);
+        } else {
+          await handle.stop();
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.warn('Erreur activation caméra poste public:', err);
         if (isMounted) {
           setIsCameraActive(false);
           setCameraError(
-            err?.message ||
-              "Impossible d'activer la caméra arrière. Vérifiez les autorisations de votre navigateur ou utilisez la saisie manuelle."
+            err instanceof Error && err.message
+              ? err.message
+              : "Impossible d'activer la caméra arrière. Vérifiez les autorisations de votre navigateur ou utilisez la saisie manuelle."
           );
         }
       }
     };
 
     if (station) {
-      startCamera();
+      void startCamera();
     }
 
     return () => {
       isMounted = false;
-      if (scannerRef.current) {
-        if (scannerRef.current.isScanning) {
-          scannerRef.current.stop().catch(() => {});
-        }
-        scannerRef.current.clear();
-        scannerRef.current = null;
-      }
-      setIsCameraActive(false);
+      cleanupHandle();
     };
   }, [station?.accessCode]);
+
+  const toggleTorch = async () => {
+    const handle = scannerHandleRef.current;
+    if (!handle || !handle.isTorchSupported()) return;
+    const next = !isTorchOn;
+    const ok = await handle.setTorch(next);
+    if (ok) setIsTorchOn(next);
+  };
 
   // 1. Écran de chargement
   if (isLoading) {
@@ -540,11 +549,35 @@ export const PublicScannerStationView: React.FC<PublicScannerStationViewProps> =
               )}
             </div>
 
+            {/* Bouton Torche basse luminosité */}
+            {isCameraActive && torchSupported && (
+              <button
+                type="button"
+                onClick={() => {
+                  void toggleTorch();
+                }}
+                className={`absolute top-4 right-12 z-20 px-2.5 py-1 rounded-xl text-[10px] font-bold flex items-center gap-1 shadow-lg transition-all ${
+                  isTorchOn
+                    ? 'bg-[#E9C349] text-[#241A00]'
+                    : 'bg-black/75 border border-white/20 text-white hover:bg-black/90'
+                }`}
+              >
+                <Flashlight className="w-3 h-3" />
+                <span>{isTorchOn ? 'ON' : 'Torche'}</span>
+              </button>
+            )}
+
             {/* Pastille Statut Caméra */}
             <div className="absolute bottom-3 inset-x-4 z-10 flex items-center justify-center pointer-events-none">
               <span className="px-3 py-1 rounded-full bg-black/75 backdrop-blur-md border border-white/10 text-[10px] font-semibold text-[#DCB8FF] flex items-center gap-1.5 shadow-lg">
                 <span className={`w-2 h-2 rounded-full ${isCameraActive ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
-                <span>{isCameraActive ? 'Caméra Arrière Active • Visez le QR code' : 'Caméra en attente'}</span>
+                <span>
+                  {isCameraActive
+                    ? scannerMetrics
+                      ? `Actif (${scannerMetrics.fps} FPS • 1/${scannerMetrics.fpsDecimation} • ${scannerMetrics.cameraStartMs}ms)`
+                      : 'Caméra Arrière Active • Visez le QR code'
+                    : 'Caméra en attente'}
+                </span>
               </span>
             </div>
           </div>
