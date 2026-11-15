@@ -21,6 +21,7 @@ import {
   EventPreRegistration,
   LoginHistoryRecord,
   VigileSessionRecord,
+  PosShiftHandoverRecord,
 } from '../types';
 import { INITIAL_TICKETS } from '../data/mockEvents';
 import { parseEventDates } from './calendar';
@@ -105,6 +106,7 @@ const STORAGE_ORDERS_KEY = 'thiesdn_orders_v2';
 const STORAGE_TRANSACTIONS_KEY = 'thiesdn_transactions_v2';
 const STORAGE_SETTINGS_KEY = 'thiesdn_platform_settings_v1';
 const STORAGE_AGENTS_KEY = 'thiesdn_sales_agents_v1';
+const STORAGE_SHIFT_HANDOVERS_KEY = 'thiesdn_pos_shift_handovers_v1';
 const STORAGE_TICKETS_PURGED_FLAG = 'thiesdn_tickets_v2_purged_sample_v1';
 const STORAGE_AGENTS_PURGED_FLAG = 'thiesdn_sales_agents_v1_purged_sample_v1';
 
@@ -2555,6 +2557,7 @@ export const confirmSinglePhysicalTicketSale = async (
     name: string;
     phone: string;
     email?: string;
+    isManualEntry?: boolean;
   },
   candidateTickets?: UserTicket[]
 ): Promise<{ success: boolean; message: string; ticket?: UserTicket; agent?: SalesAgent }> => {
@@ -2586,6 +2589,7 @@ export const confirmSinglePhysicalTicketSale = async (
   const targetId = check.ticket.id;
   const nowIso = new Date().toISOString();
 
+  const isManualEntry = Boolean(customerData.isManualEntry);
   let updatedTargetTicket: UserTicket | null = null;
   const updatedTickets = allTickets.map((t) => {
     if (t.id === targetId) {
@@ -2595,6 +2599,7 @@ export const confirmSinglePhysicalTicketSale = async (
         holderName: customerData.name.trim(),
         holderPhone: customerData.phone.trim(),
         holderEmail: customerData.email?.trim() || undefined,
+        isManualEntry,
         soldAt: nowIso,
         agentId: agent.id,
         agentName: agent.pointDeVente,
@@ -2615,13 +2620,32 @@ export const confirmSinglePhysicalTicketSale = async (
   if (client) {
     try {
       // Validation prioritaire côté serveur via RPC SECURITY DEFINER atomique (FOR UPDATE)
-      const { data: rpcData, error: rpcErr } = await client.rpc('activate_physical_ticket_sale', {
+      let { data: rpcData, error: rpcErr } = await client.rpc('activate_physical_ticket_sale', {
         p_agent_id: agent.id,
         p_ticket_code: check.ticket.qrCode,
         p_holder_name: customerData.name.trim(),
         p_holder_phone: customerData.phone.trim(),
         p_holder_email: customerData.email?.trim() || null,
+        p_is_manual_entry: isManualEntry,
       });
+
+      // Compatibilité transitoire si la RPC distante n'accepte pas encore p_is_manual_entry
+      if (rpcErr && /p_is_manual_entry|function.*activate_physical_ticket_sale|PGRST202/i.test(rpcErr.message || '')) {
+        ({ data: rpcData, error: rpcErr } = await client.rpc('activate_physical_ticket_sale', {
+          p_agent_id: agent.id,
+          p_ticket_code: check.ticket.qrCode,
+          p_holder_name: customerData.name.trim(),
+          p_holder_phone: customerData.phone.trim(),
+          p_holder_email: customerData.email?.trim() || null,
+        }));
+        const legacyRpcRes = rpcData as { success?: boolean } | null;
+        if (!rpcErr && legacyRpcRes?.success && isManualEntry) {
+          await client
+            .from('tickets')
+            .update({ is_manual_entry: true })
+            .eq('id', targetId);
+        }
+      }
 
       const rpcResult = rpcData as { success?: boolean; message?: string } | null;
 
@@ -2646,6 +2670,7 @@ export const confirmSinglePhysicalTicketSale = async (
             holder_name: customerData.name.trim(),
             holder_phone: customerData.phone.trim(),
             holder_email: customerData.email?.trim() || null,
+            is_manual_entry: isManualEntry,
             sold_at: nowIso,
             agent_id: agent.id,
             agent_name: agent.pointDeVente,
@@ -3950,6 +3975,7 @@ export const preloadStationTicketsCache = async (
         purchasedAt: raw.purchased_at || raw.created_at || new Date().toISOString(),
         status: raw.status || 'valid',
         isPhysical: Boolean(raw.is_physical),
+        isManualEntry: Boolean(raw.is_manual_entry),
         agentId: raw.agent_id || undefined,
         agentName: raw.agent_name || undefined,
         batchNumber: raw.batch_number || undefined,
@@ -5039,6 +5065,7 @@ ALTER TABLE public.tickets ADD COLUMN IF NOT EXISTS serial_number INT;
 ALTER TABLE public.tickets ADD COLUMN IF NOT EXISTS holder_phone TEXT;
 ALTER TABLE public.tickets ADD COLUMN IF NOT EXISTS holder_email TEXT;
 ALTER TABLE public.tickets ADD COLUMN IF NOT EXISTS sold_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE public.tickets ADD COLUMN IF NOT EXISTS is_manual_entry BOOLEAN NOT NULL DEFAULT FALSE;
 
 -- Migration idempotente : élargir la contrainte de statut (bases déjà créées)
 ALTER TABLE public.tickets DROP CONSTRAINT IF EXISTS tickets_status_check;
@@ -5300,19 +5327,24 @@ $$;
 
 -- RPC 1.1 : Activation unitaire par le collaborateur (identité de l'acheteur OBLIGATOIRE)
 DROP FUNCTION IF EXISTS public.activate_physical_ticket_sale(UUID, TEXT);
+DROP FUNCTION IF EXISTS public.activate_physical_ticket_sale(UUID, TEXT, TEXT, TEXT, TEXT);
+DROP FUNCTION IF EXISTS public.activate_physical_ticket_sale(UUID, TEXT, TEXT, TEXT, TEXT, BOOLEAN);
 CREATE OR REPLACE FUNCTION public.activate_physical_ticket_sale(
   p_agent_id UUID,
   p_ticket_code TEXT,
   p_holder_name TEXT,
   p_holder_phone TEXT,
-  p_holder_email TEXT DEFAULT NULL
+  p_holder_email TEXT DEFAULT NULL,
+  p_is_manual_entry BOOLEAN DEFAULT FALSE
 )
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
   v_ticket public.tickets%ROWTYPE;
+  v_manual BOOLEAN := COALESCE(p_is_manual_entry, FALSE);
 BEGIN
   IF length(trim(coalesce(p_holder_name, ''))) = 0 OR length(trim(coalesce(p_holder_phone, ''))) = 0 THEN
     RETURN jsonb_build_object('success', false, 'message', 'Le nom et le téléphone du client sont obligatoires pour activer le billet.');
@@ -5346,7 +5378,8 @@ BEGIN
   UPDATE public.tickets
   SET status = 'sold_valid', sold_at = now(), agent_id = p_agent_id,
       holder_name = trim(p_holder_name), holder_phone = trim(p_holder_phone),
-      holder_email = nullif(trim(coalesce(p_holder_email, '')), '')
+      holder_email = nullif(trim(coalesce(p_holder_email, '')), ''),
+      is_manual_entry = v_manual
   WHERE id = v_ticket.id;
 
   UPDATE public.sales_agents
@@ -5358,7 +5391,13 @@ BEGIN
   RETURN jsonb_build_object(
     'success', true,
     'message', 'Billet activé avec succès (' || v_ticket.price || ' FCFA).',
-    'ticket', jsonb_build_object('id', v_ticket.id, 'qr_code', v_ticket.qr_code, 'price', v_ticket.price, 'status', 'sold_valid')
+    'ticket', jsonb_build_object(
+      'id', v_ticket.id,
+      'qr_code', v_ticket.qr_code,
+      'price', v_ticket.price,
+      'status', 'sold_valid',
+      'is_manual_entry', v_manual
+    )
   );
 END;
 $$;
@@ -6952,6 +6991,7 @@ interface SupabaseTicketRow {
   used_at?: string | null;
   status?: UserTicket['status'] | null;
   is_physical?: boolean | null;
+  is_manual_entry?: boolean | null;
   agent_id?: string | null;
   agent_name?: string | null;
   sales_agents?: { point_de_vente?: string | null; gerant_name?: string | null } | null;
@@ -7067,6 +7107,7 @@ export const fetchAllSoldTicketsFromSupabase = async (
       usedAt: t.used_at || undefined,
       status: t.status || 'valid',
       isPhysical: Boolean(t.is_physical),
+      isManualEntry: Boolean(t.is_manual_entry),
       agentId: t.agent_id || undefined,
       agentName: t.sales_agents?.point_de_vente || t.agent_name || undefined,
       sales_agents: t.sales_agents ?? null,
@@ -7140,6 +7181,7 @@ export const fetchUserTicketsFromSupabase = async (
       purchasedAt: t.created_at || new Date().toISOString(),
       status: t.status || 'valid',
       isPhysical: Boolean(t.is_physical),
+      isManualEntry: Boolean(t.is_manual_entry),
       agentId: t.agent_id || undefined,
       agentName: t.sales_agents?.point_de_vente || t.agent_name || undefined,
       sales_agents: t.sales_agents ?? null,
@@ -7357,6 +7399,7 @@ export const getTicketByClaimToken = async (
           purchasedAt: t.created_at || new Date().toISOString(),
           status: t.status || 'valid',
           isPhysical: Boolean(t.is_physical),
+          isManualEntry: Boolean(t.is_manual_entry),
           assignedToProfileId: t.assigned_to_profile_id || undefined,
           assignedToName: t.assigned_to_name || undefined,
           assignedToPhone: t.assigned_to_phone || undefined,
@@ -8051,6 +8094,7 @@ export const fetchTicketByPublicId = async (
         purchasedAt: t.created_at || new Date().toISOString(),
         status: t.status || 'valid',
         isPhysical: Boolean(t.is_physical),
+        isManualEntry: Boolean(t.is_manual_entry),
         agentId: t.agent_id || undefined,
         agentName: t.agent_name || undefined,
         userId: t.user_id,
@@ -8089,6 +8133,7 @@ export const fetchTicketByPublicId = async (
         purchasedAt: t.created_at || new Date().toISOString(),
         status: t.status || 'valid',
         isPhysical: Boolean(t.is_physical),
+        isManualEntry: Boolean(t.is_manual_entry),
         agentId: t.agent_id || undefined,
         agentName: t.sales_agents?.point_de_vente || t.agent_name || undefined,
         sales_agents: t.sales_agents ?? null,
@@ -8131,4 +8176,232 @@ export const fetchTicketWithAgent = async (
 
   if (error) return { data: null, error: error.message };
   return { data: data as unknown as TicketWithAgentRow, error: null };
+};
+
+interface SupabaseShiftHandoverRow {
+  id: string;
+  agent_id: string;
+  agent_name?: string | null;
+  event_id?: string | null;
+  event_title?: string | null;
+  sold_count?: number | null;
+  manual_sales_count?: number | null;
+  expected_amount?: number | string | null;
+  counted_amount?: number | string | null;
+  discrepancy_amount?: number | string | null;
+  status: 'matched' | 'mismatch_blocked';
+  notes?: string | null;
+  submitted_by?: string | null;
+  created_at: string;
+}
+
+const mapShiftHandoverRow = (row: SupabaseShiftHandoverRow): PosShiftHandoverRecord => ({
+  id: row.id,
+  agentId: row.agent_id,
+  agentName: row.agent_name || undefined,
+  eventId: row.event_id || undefined,
+  eventTitle: row.event_title || undefined,
+  soldCount: Number(row.sold_count) || 0,
+  manualSalesCount: Number(row.manual_sales_count) || 0,
+  expectedAmount: Number(row.expected_amount) || 0,
+  countedAmount: Number(row.counted_amount) || 0,
+  discrepancyAmount: Number(row.discrepancy_amount) || 0,
+  status: row.status === 'matched' ? 'matched' : 'mismatch_blocked',
+  notes: row.notes || undefined,
+  submittedBy: row.submitted_by || undefined,
+  createdAt: row.created_at,
+});
+
+export const getStoredPosShiftHandovers = (): PosShiftHandoverRecord[] => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(STORAGE_SHIFT_HANDOVERS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as PosShiftHandoverRecord[]) : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveStoredPosShiftHandovers = (records: PosShiftHandoverRecord[]): void => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(STORAGE_SHIFT_HANDOVERS_KEY, JSON.stringify(records.slice(0, 100)));
+  } catch {
+    // Ignore erreur quota localStorage
+  }
+};
+
+/**
+ * Enregistre un relevé / clôture de caisse (Shift Handover) d'un point de vente POS.
+ * Journalise à la fois les clôtures conformes ('matched') et les blocages pour écart ('mismatch_blocked').
+ */
+export const submitPosShiftHandover = async (params: {
+  agent: SalesAgent;
+  soldCount: number;
+  manualSalesCount: number;
+  expectedAmount: number;
+  countedAmount: number;
+  submittedBy?: string;
+  notes?: string;
+}): Promise<{
+  matched: boolean;
+  discrepancyAmount: number;
+  record: PosShiftHandoverRecord;
+  syncedToServer: boolean;
+  error?: string;
+}> => {
+  const expectedRounded = Math.round(Number(params.expectedAmount) || 0);
+  const countedRounded = Math.round(Number(params.countedAmount) || 0);
+  const discrepancyAmount = countedRounded - expectedRounded;
+  const matched = discrepancyAmount === 0;
+  const status: PosShiftHandoverRecord['status'] = matched ? 'matched' : 'mismatch_blocked';
+  const nowIso = new Date().toISOString();
+
+  const localRecord: PosShiftHandoverRecord = {
+    id: `shift-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`,
+    agentId: params.agent.id,
+    agentName: params.agent.pointDeVente,
+    eventId: params.agent.eventId,
+    eventTitle: params.agent.eventTitle,
+    soldCount: Math.max(0, Math.round(params.soldCount)),
+    manualSalesCount: Math.max(0, Math.round(params.manualSalesCount)),
+    expectedAmount: expectedRounded,
+    countedAmount: countedRounded,
+    discrepancyAmount,
+    status,
+    notes: params.notes,
+    submittedBy: params.submittedBy,
+    createdAt: nowIso,
+  };
+
+  const existingLocal = getStoredPosShiftHandovers();
+  saveStoredPosShiftHandovers([localRecord, ...existingLocal]);
+
+  const client = getSupabaseClient();
+  if (!client || (typeof navigator !== 'undefined' && navigator.onLine === false)) {
+    return {
+      matched,
+      discrepancyAmount,
+      record: localRecord,
+      syncedToServer: false,
+    };
+  }
+
+  try {
+    const insertPayload: Record<string, unknown> = {
+      agent_id: params.agent.id,
+      agent_name: params.agent.pointDeVente,
+      event_title: params.agent.eventTitle,
+      sold_count: localRecord.soldCount,
+      manual_sales_count: localRecord.manualSalesCount,
+      expected_amount: expectedRounded,
+      counted_amount: countedRounded,
+      discrepancy_amount: discrepancyAmount,
+      status,
+      notes: params.notes || null,
+    };
+    if (isValidUUID(params.agent.eventId)) {
+      insertPayload.event_id = params.agent.eventId;
+    }
+    if (isValidUUID(params.submittedBy)) {
+      insertPayload.submitted_by = params.submittedBy;
+    }
+
+    const { data, error } = await client
+      .from('pos_shift_handovers')
+      .insert(insertPayload)
+      .select('*')
+      .single();
+
+    if (error || !data) {
+      return {
+        matched,
+        discrepancyAmount,
+        record: localRecord,
+        syncedToServer: false,
+        error: error?.message,
+      };
+    }
+
+    const mapped = mapShiftHandoverRow(data as unknown as SupabaseShiftHandoverRow);
+    saveStoredPosShiftHandovers([
+      mapped,
+      ...existingLocal.filter((r) => r.id !== localRecord.id && r.id !== mapped.id),
+    ]);
+    return {
+      matched,
+      discrepancyAmount,
+      record: mapped,
+      syncedToServer: true,
+    };
+  } catch (err: unknown) {
+    return {
+      matched,
+      discrepancyAmount,
+      record: localRecord,
+      syncedToServer: false,
+      error: err instanceof Error ? err.message : 'Erreur réseau',
+    };
+  }
+};
+
+/**
+ * Récupère l'historique des relevés / blocages de caisse POS pour le Cockpit Promoteur / Admin.
+ */
+export const fetchPosShiftHandovers = async (options?: {
+  eventId?: string;
+  agentId?: string;
+}): Promise<{ handovers: PosShiftHandoverRecord[]; error: string | null }> => {
+  const client = getSupabaseClient();
+  const eventId = options?.eventId && options.eventId !== 'all' ? options.eventId : undefined;
+  const agentId = options?.agentId && options.agentId !== 'all' ? options.agentId : undefined;
+
+  const filterLocal = (rows: PosShiftHandoverRecord[]) =>
+    rows.filter((r) => {
+      if (eventId && r.eventId !== eventId) return false;
+      if (agentId && r.agentId !== agentId) return false;
+      return true;
+    });
+
+  if (!client) {
+    return { handovers: filterLocal(getStoredPosShiftHandovers()), error: null };
+  }
+
+  try {
+    let query = client
+      .from('pos_shift_handovers')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(100);
+
+    if (eventId && isValidUUID(eventId)) {
+      query = query.eq('event_id', eventId);
+    }
+    if (agentId && isValidUUID(agentId)) {
+      query = query.eq('agent_id', agentId);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      return {
+        handovers: filterLocal(getStoredPosShiftHandovers()),
+        error: error.message,
+      };
+    }
+
+    const mapped = ((data as unknown as SupabaseShiftHandoverRow[] | null) || []).map(
+      mapShiftHandoverRow
+    );
+    if (!eventId && !agentId) {
+      saveStoredPosShiftHandovers(mapped);
+    }
+    return { handovers: mapped, error: null };
+  } catch (err: unknown) {
+    return {
+      handovers: filterLocal(getStoredPosShiftHandovers()),
+      error: err instanceof Error ? err.message : 'Erreur chargement clôtures POS',
+    };
+  }
 };

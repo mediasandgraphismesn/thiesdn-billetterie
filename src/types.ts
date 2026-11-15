@@ -194,6 +194,23 @@ export interface TicketAllocation {
   createdAt: string;
 }
 
+export interface PosShiftHandoverRecord {
+  id: string;
+  agentId: string;
+  agentName?: string;
+  eventId?: string;
+  eventTitle?: string;
+  soldCount: number;
+  manualSalesCount: number;
+  expectedAmount: number;
+  countedAmount: number;
+  discrepancyAmount: number;
+  status: 'matched' | 'mismatch_blocked';
+  notes?: string;
+  submittedBy?: string;
+  createdAt: string;
+}
+
 export type TicketAssignmentStatus = 'unassigned' | 'pending' | 'accepted' | 'declined';
 
 /** Point de vente joint depuis la table sales_agents via tickets.agent_id */
@@ -241,6 +258,7 @@ export interface UserTicket {
   sales_agents?: TicketSalesAgentJoin | null;
   soldAt?: string;
   usedAt?: string;
+  isManualEntry?: boolean;
   validatedBy?: string;
   validatedStationId?: string;
   validatedStationName?: string;

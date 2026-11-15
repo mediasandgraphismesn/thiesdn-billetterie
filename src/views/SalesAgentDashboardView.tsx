@@ -34,6 +34,8 @@ import {
   BellRing,
   ChevronLeft,
   ChevronRight,
+  AlertTriangle,
+  Lock,
 } from 'lucide-react';
 import { SalesAgent, UserTicket, EventItem, UserProfile } from '../types';
 import { usePushNotifications } from '../hooks/usePushNotifications';
@@ -64,6 +66,7 @@ import {
   isSupabaseConfigured,
   clearLocalTicketReserveCache,
   getSupabaseClient,
+  submitPosShiftHandover,
 } from '../services/supabase';
 
 const playPosFeedbackTone = (type: 'success' | 'error') => {
@@ -203,6 +206,8 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
   const scannerRunIdRef = useRef<number>(0);
   const lastScannedTimeRef = useRef<number>(0);
   const buyerNameInputRef = useRef<HTMLInputElement | null>(null);
+  const pendingSaleEntryMethodRef = useRef<'camera' | 'manual'>('manual');
+  const [pendingSaleIsManual, setPendingSaleIsManual] = useState<boolean>(true);
 
   const stopCameraScanner = useCallback(async () => {
     scannerRunIdRef.current += 1;
@@ -248,6 +253,18 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
   const [settlementAmount, setSettlementAmount] = useState<number>(0);
   const [settlementSuccessMessage, setSettlementSuccessMessage] = useState<string | null>(null);
 
+  // Modale de Clôture de Caisse (Shift Handover)
+  const [showShiftCloseModal, setShowShiftCloseModal] = useState(false);
+  const [countedCashInput, setCountedCashInput] = useState('');
+  const [isSubmittingShiftClose, setIsSubmittingShiftClose] = useState(false);
+  const [shiftCloseError, setShiftCloseError] = useState<string | null>(null);
+  const [shiftCloseSuccess, setShiftCloseSuccess] = useState<{
+    countedAmount: number;
+    soldCount: number;
+    timestamp: string;
+    syncedToServer: boolean;
+  } | null>(null);
+
   const activeAgent = useMemo(() => {
     return agents.find((a) => a.id === selectedAgentId) || agents[0] || null;
   }, [agents, selectedAgentId]);
@@ -290,6 +307,11 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
   const soldAgentTickets = useMemo(
     () => agentTickets.filter((t) => isTicketSoldStatus(t.status)),
     [agentTickets]
+  );
+
+  const manualSoldCount = useMemo(
+    () => soldAgentTickets.filter((t) => Boolean(t.isManualEntry)).length,
+    [soldAgentTickets]
   );
 
   const allocatedCountDisplay = useMemo(() => {
@@ -595,6 +617,10 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
       return false;
     }
 
+    const isManual = !fromCamera;
+    pendingSaleEntryMethodRef.current = isManual ? 'manual' : 'camera';
+    setPendingSaleIsManual(isManual);
+
     setPendingTicketForConfirm(check.ticket);
     if (fromCamera) {
       playPosFeedbackTone('success');
@@ -717,12 +743,20 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
   }, []);
 
   // Helper partagé pour activer un billet physique nominatif (Scan Caméra ou Déclaration Manuelle)
-  const submitSingleNominalSale = async (targetTicket: UserTicket) => {
+  const submitSingleNominalSale = async (
+    targetTicket: UserTicket,
+    explicitIsManual?: boolean
+  ) => {
     if (!activeAgent) return;
     if (!buyerName.trim() || !buyerPhone.trim()) {
       setSaleErrorMessage('Le nom et le téléphone du client sont obligatoires pour activer le billet.');
       return;
     }
+
+    const isManualEntry =
+      typeof explicitIsManual === 'boolean'
+        ? explicitIsManual
+        : saleMode === 'manual' || pendingSaleEntryMethodRef.current === 'manual';
 
     setIsSubmittingSale(true);
     setSaleErrorMessage(null);
@@ -758,6 +792,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                 status: 'sold_valid',
                 holderName: trimmedName,
                 holderPhone: trimmedPhone,
+                isManualEntry,
                 soldAt: soldNowIso,
               }
             : t
@@ -771,6 +806,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
         ticket: targetTicket,
         holderName: trimmedName,
         holderPhone: trimmedPhone,
+        isManualEntry,
       });
       setIsSubmittingSale(false);
 
@@ -817,6 +853,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
       {
         name: trimmedName,
         phone: trimmedPhone,
+        isManualEntry,
       },
       prevTickets
     );
@@ -863,10 +900,13 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
     }, 2000);
   };
 
-  // Confirmation explicite depuis l'onglet Scan Billet Unique
+  // Confirmation explicite depuis l'onglet Scan Billet Unique (ou saisie clavier)
   const handleConfirmSingleSale = async () => {
     if (!pendingTicketForConfirm) return;
-    await submitSingleNominalSale(pendingTicketForConfirm);
+    await submitSingleNominalSale(
+      pendingTicketForConfirm,
+      pendingSaleEntryMethodRef.current === 'manual'
+    );
   };
 
   // Confirmation explicite depuis l'onglet Déclaration Manuelle (billet sélectionné en stock)
@@ -875,7 +915,55 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
       setSaleErrorMessage('Veuillez sélectionner un billet disponible dans votre stock.');
       return;
     }
-    await submitSingleNominalSale(selectedManualTicket);
+    await submitSingleNominalSale(selectedManualTicket, true);
+  };
+
+  // Relevé / Clôture de Caisse à l'aveugle (Shift Handover)
+  const handleSubmitShiftClose = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeAgent || isSubmittingShiftClose) return;
+
+    const cleanDigits = countedCashInput.replace(/[^0-9]/g, '');
+    if (!cleanDigits) {
+      setShiftCloseError('Veuillez saisir le montant total en espèces que vous avez en main.');
+      return;
+    }
+
+    const countedAmount = Number(cleanDigits);
+    const expectedAmount = Math.round(estimatedTotalCash);
+    setIsSubmittingShiftClose(true);
+    setShiftCloseError(null);
+
+    try {
+      const res = await submitPosShiftHandover({
+        agent: activeAgent,
+        soldCount: soldCountDisplay,
+        manualSalesCount: manualSoldCount,
+        expectedAmount,
+        countedAmount,
+        submittedBy: user?.id,
+      });
+
+      if (!res.matched) {
+        playPosFeedbackTone('error');
+        setShiftCloseSuccess(null);
+        setShiftCloseError(
+          'Le montant saisi ne correspond pas aux ventes déclarées. Veuillez contacter le superviseur.'
+        );
+        return;
+      }
+
+      playPosFeedbackTone('success');
+      setShiftCloseError(null);
+      setShiftCloseSuccess({
+        countedAmount: res.record.countedAmount,
+        soldCount: res.record.soldCount,
+        timestamp: res.record.createdAt,
+        syncedToServer: res.syncedToServer,
+      });
+    } finally {
+      setIsSubmittingShiftClose(false);
+    }
   };
 
   const handleDeclareSettlement = async (e: React.FormEvent) => {
@@ -1253,8 +1341,8 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
         </div>
       </div>
 
-      {/* Barre d'Actions Rapides : "Méthode Scan" & "Déclaration Manuelle" & "Reversement" */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+      {/* Barre d'Actions Rapides : Scan, Déclaration Manuelle, Reversement & Clôture de Caisse */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2">
         <button
           type="button"
           onClick={() => {
@@ -1262,6 +1350,8 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
             setSaleSuccessMessage(null);
             setCameraError(null);
             setSaleMode('scan');
+            pendingSaleEntryMethodRef.current = 'manual';
+            setPendingSaleIsManual(true);
             setPendingTicketForConfirm(null);
             setManualTicketCode('');
             setBuyerName('');
@@ -1283,6 +1373,8 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
             setSaleSuccessMessage(null);
             setCameraError(null);
             setSaleMode('manual');
+            pendingSaleEntryMethodRef.current = 'manual';
+            setPendingSaleIsManual(true);
             setCameraRequested(false);
             setPendingTicketForConfirm(null);
             setManualTicketCode('');
@@ -1308,6 +1400,20 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
         >
           <DollarSign className="w-4 h-4" />
           <span>Déclarer Reversement</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setCountedCashInput('');
+            setShiftCloseError(null);
+            setShiftCloseSuccess(null);
+            setShowShiftCloseModal(true);
+          }}
+          className="py-4 px-4 rounded-2xl bg-[#1C1B1B] hover:bg-rose-950/35 border border-rose-500/45 text-rose-200 hover:text-white font-heading font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-md active:scale-98 cursor-pointer"
+        >
+          <Lock className="w-4 h-4 text-rose-400" />
+          <span>Clôturer ma caisse</span>
         </button>
       </div>
 
@@ -1555,6 +1661,18 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                         <span className="text-gray-400">Nouveau statut :</span>
                         <span className="text-emerald-400 font-extrabold uppercase">
                           sold_valid (Actif pour entrée)
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-[11px] pt-1 border-t border-white/5">
+                        <span className="text-gray-400">Mode d&apos;activation :</span>
+                        <span
+                          className={`font-bold ${
+                            pendingSaleIsManual ? 'text-amber-300' : 'text-emerald-300'
+                          }`}
+                        >
+                          {pendingSaleIsManual
+                            ? 'Déclaration manuelle (traçable)'
+                            : 'Scan caméra vérifié'}
                         </span>
                       </div>
                     </div>
@@ -2026,6 +2144,136 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                 Confirmer le Versement
               </button>
             </div>
+          </form>
+        </div>
+      )}
+
+      {/* MODALE 3 : CLÔTURER MA CAISSE (RELEVÉ DE CAISSE / SHIFT HANDOVER) */}
+      {showShiftCloseModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in">
+          <form
+            onSubmit={handleSubmitShiftClose}
+            className="bg-[#1C1B1B] border border-rose-500/40 w-full max-w-md rounded-3xl p-6 space-y-5 shadow-2xl relative"
+          >
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center gap-2">
+                <Lock className="w-5 h-5 text-rose-400" />
+                <h3 className="font-heading font-extrabold text-base text-white">
+                  Clôturer ma caisse (Relevé)
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowShiftCloseModal(false)}
+                className="text-gray-400 hover:text-white text-xs font-bold cursor-pointer"
+              >
+                Fermer
+              </button>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-black/40 border border-white/10 space-y-1.5 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-gray-400">Point de vente :</span>
+                <span className="font-bold text-white">{activeAgent.pointDeVente}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-gray-400">Billets déclarés vendus :</span>
+                <span className="font-bold text-[#E9C349]">{soldCountDisplay} billet(s)</span>
+              </div>
+              {manualSoldCount > 0 && (
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-400">Dont ventes manuelles :</span>
+                  <span className="font-bold text-amber-300">{manualSoldCount}</span>
+                </div>
+              )}
+            </div>
+
+            {!shiftCloseSuccess ? (
+              <>
+                <p className="text-xs text-gray-300 leading-relaxed">
+                  Comptez physiquement les billets et pièces en votre possession puis saisissez le montant exact en FCFA pour contrôler et clôturer votre service.
+                </p>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] uppercase font-bold text-gray-400 tracking-wider block">
+                    Montant total en espèces compté (FCFA) *
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoFocus
+                    value={countedCashInput}
+                    onChange={(e) => {
+                      setCountedCashInput(e.target.value.replace(/[^0-9]/g, ''));
+                      if (shiftCloseError) setShiftCloseError(null);
+                    }}
+                    placeholder="Ex : 35000"
+                    className="w-full bg-black/50 border border-white/15 focus:border-[#E9C349] rounded-xl px-4 py-3 text-lg font-heading font-black text-white placeholder:text-gray-500 outline-none"
+                  />
+                  {countedCashInput && (
+                    <p className="text-[11px] text-[#E9C349] font-semibold">
+                      Saisie : {Number(countedCashInput).toLocaleString('fr-FR')} FCFA
+                    </p>
+                  )}
+                </div>
+
+                {shiftCloseError && (
+                  <div
+                    role="alert"
+                    className="p-4 rounded-2xl bg-rose-950/85 border-2 border-rose-500 text-rose-100 text-xs font-bold flex items-start gap-2.5 animate-in fade-in shadow-lg"
+                  >
+                    <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <p className="text-rose-300 uppercase tracking-wider text-[10px] font-black">
+                        Écart de caisse détecté — Clôture bloquée
+                      </p>
+                      <p className="leading-snug text-sm">{shiftCloseError}</p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowShiftCloseModal(false)}
+                    className="w-1/3 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 text-xs font-bold cursor-pointer"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmittingShiftClose || !countedCashInput.trim() || Boolean(shiftCloseError)}
+                    className="flex-1 py-3 rounded-xl btn-gold-glow text-[#241A00] font-heading font-extrabold text-xs uppercase tracking-wider transition-all shadow-lg disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    {isSubmittingShiftClose ? 'Vérification...' : 'Valider la clôture'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="space-y-4">
+                <div className="p-4 rounded-2xl bg-emerald-950/70 border border-emerald-500/50 text-emerald-100 space-y-2">
+                  <div className="flex items-center gap-2 text-emerald-300 font-heading font-extrabold text-sm">
+                    <CheckCircle2 className="w-5 h-5 shrink-0" />
+                    <span>Caisse clôturée avec succès !</span>
+                  </div>
+                  <p className="text-xs text-emerald-100/90 leading-relaxed">
+                    Le montant compté ({shiftCloseSuccess.countedAmount.toLocaleString('fr-FR')} FCFA pour {shiftCloseSuccess.soldCount} billet(s)) correspond exactement aux ventes déclarées.
+                  </p>
+                  <p className="text-[10px] text-emerald-300/80">
+                    Horodatage : {new Date(shiftCloseSuccess.timestamp).toLocaleString('fr-FR')}
+                    {!shiftCloseSuccess.syncedToServer && ' • Enregistré localement (synchro en attente)'}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowShiftCloseModal(false)}
+                  className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-heading font-extrabold text-xs uppercase tracking-wider cursor-pointer"
+                >
+                  Terminer
+                </button>
+              </div>
+            )}
           </form>
         </div>
       )}

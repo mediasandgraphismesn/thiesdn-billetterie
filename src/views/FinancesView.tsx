@@ -48,6 +48,7 @@ import {
   MoreVertical,
   MessageCircle,
   KeyRound,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   getStoredTransactions,
@@ -79,6 +80,7 @@ import {
   createCoproducer,
   clearTestPhysicalTickets,
   clearLocalTicketReserveCache,
+  fetchPosShiftHandovers,
 } from '../services/supabase';
 import {
   PlatformPaymentSettings,
@@ -89,6 +91,7 @@ import {
   TicketTier,
   EventCoproducer,
   CoproducerRole,
+  PosShiftHandoverRecord,
 } from '../types';
 import { generatePhysicalTicketsPdf } from '../services/pdfTicketGenerator';
 import { THIES_33_QUARTIERS } from '../data/thiesQuartiers';
@@ -221,6 +224,8 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
   const [previewAgent, setPreviewAgent] = useState<SalesAgent | null>(null);
   // Inspection modale d'un billet vendu (mode promoteur/admin)
   const [selectedTicketForModal, setSelectedTicketForModal] = useState<UserTicket | null>(null);
+  // Historique des relevés et blocages de caisse POS
+  const [shiftHandovers, setShiftHandovers] = useState<PosShiftHandoverRecord[]>([]);
 
   // Menu Options Avancées
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
@@ -272,14 +277,17 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
       setOrders(getStoredOrders());
       setTickets(getStoredTickets());
       setAllocations(getStoredTicketAllocations());
+      const localShifts = await fetchPosShiftHandovers({ eventId: targetEventId });
+      setShiftHandovers(localShifts.handovers);
       return;
     }
 
-    const [agentsRes, allocRes, ordersRes, ticketsRes] = await Promise.all([
+    const [agentsRes, allocRes, ordersRes, ticketsRes, shiftRes] = await Promise.all([
       fetchSalesAgentsFromSupabase(),
       fetchTicketAllocationsFromSupabase(targetEventId),
       fetchOrdersFromSupabase(),
       fetchAllSoldTicketsFromSupabase({ eventId: targetEventId }),
+      fetchPosShiftHandovers({ eventId: targetEventId }),
     ]);
 
     if (!agentsRes.error) {
@@ -294,6 +302,9 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
     if (!ticketsRes.error) {
       setTickets(ticketsRes.tickets);
     }
+    if (!shiftRes.error) {
+      setShiftHandovers(shiftRes.handovers);
+    }
   };
 
   useEffect(() => {
@@ -306,7 +317,8 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
       fetchTicketAllocationsFromSupabase(targetEventId),
       fetchOrdersFromSupabase(),
       fetchAllSoldTicketsFromSupabase({ eventId: targetEventId }),
-    ]).then(([agentsRes, allocRes, ordersRes, ticketsRes]) => {
+      fetchPosShiftHandovers({ eventId: targetEventId }),
+    ]).then(([agentsRes, allocRes, ordersRes, ticketsRes, shiftRes]) => {
       if (!isMounted) return;
       if (!agentsRes.error) {
         setAgents(agentsRes.agents);
@@ -319,6 +331,9 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
       }
       if (!ticketsRes.error) {
         setTickets(ticketsRes.tickets);
+      }
+      if (!shiftRes.error) {
+        setShiftHandovers(shiftRes.handovers);
       }
     });
 
@@ -511,15 +526,55 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
         : Math.max(0, printedCount - ag.soldCount);
       const cancelledCount = allocated.filter((t) => t.status === 'cancelled').length;
 
+      const manualCount = allocated.filter(
+        (t) => isSoldTicketStatus(t.status) && Boolean(t.isManualEntry)
+      ).length;
+
       return {
         agent: ag,
         printedCount,
         soldCount,
         unsoldCount,
         cancelledCount,
+        manualCount,
       };
     });
   }, [networkAgents, eventPhysicalTickets, isConnected]);
+
+  // Alerte Ventes Manuelles & Écarts de Caisse POS pour le Cockpit Promoteur
+  const manualSalesByAgent = useMemo(() => {
+    return networkAgents
+      .map((ag) => {
+        const agentSold = soldPhysicalTickets.filter((t) => t.agentId === ag.id);
+        const manualTickets = agentSold.filter((t) => Boolean(t.isManualEntry));
+        const manualCount = manualTickets.length;
+        const totalSold = agentSold.length || ag.soldCount || 0;
+        const manualAmount = manualTickets.reduce((sum, t) => sum + (Number(t.price) || 0), 0);
+        const ratioPercent = totalSold > 0 ? Math.round((manualCount / totalSold) * 100) : 0;
+        return {
+          agent: ag,
+          manualCount,
+          totalSold,
+          manualAmount,
+          ratioPercent,
+        };
+      })
+      .sort((a, b) => b.manualCount - a.manualCount || b.totalSold - a.totalSold);
+  }, [networkAgents, soldPhysicalTickets]);
+
+  const totalManualSalesCount = useMemo(
+    () => manualSalesByAgent.reduce((sum, row) => sum + row.manualCount, 0),
+    [manualSalesByAgent]
+  );
+
+  const blockedShiftHandovers = useMemo(() => {
+    const allowedAgentIds = new Set(networkAgents.map((a) => a.id));
+    return shiftHandovers.filter(
+      (s) =>
+        s.status === 'mismatch_blocked' &&
+        (allowedAgentIds.size === 0 || allowedAgentIds.has(s.agentId))
+    );
+  }, [shiftHandovers, networkAgents]);
 
   // Totaux financiers du réseau physique
   const networkTotalGrossCollected = useMemo(() => {
@@ -1329,12 +1384,16 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
   }, [signaledOrders]);
 
   const agentLiveStatsById = useMemo(() => {
-    const statsMap = new Map<string, { printedCount: number; soldCount: number; unsoldCount: number }>();
+    const statsMap = new Map<
+      string,
+      { printedCount: number; soldCount: number; unsoldCount: number; manualCount: number }
+    >();
     physicalTicketsByAgent.forEach((entry) => {
       statsMap.set(entry.agent.id, {
         printedCount: entry.printedCount,
         soldCount: entry.soldCount,
         unsoldCount: entry.unsoldCount,
+        manualCount: entry.manualCount,
       });
     });
     return statsMap;
@@ -1775,6 +1834,143 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                     : 'Contrôle laser le jour J'}
                 </p>
               </div>
+            </div>
+
+            {/* Alerte Promoteur : Ventes Manuelles par Vendeur & Écarts de Caisse POS */}
+            <div
+              className={`p-5 sm:p-6 rounded-3xl border space-y-4 shadow-xl transition-all ${
+                totalManualSalesCount > 0 || blockedShiftHandovers.length > 0
+                  ? 'bg-gradient-to-br from-amber-950/35 via-[#1C1B1B] to-rose-950/20 border-amber-500/40'
+                  : 'bg-white/5 border-white/10'
+              }`}
+            >
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3.5">
+                <div className="flex items-start sm:items-center gap-3">
+                  <div
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                      totalManualSalesCount > 0
+                        ? 'bg-amber-500/20 border border-amber-500/40 text-amber-300'
+                        : 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400'
+                    }`}
+                  >
+                    {totalManualSalesCount > 0 ? (
+                      <AlertTriangle className="w-5 h-5" />
+                    ) : (
+                      <ShieldCheck className="w-5 h-5" />
+                    )}
+                  </div>
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="font-heading font-extrabold text-base sm:text-lg text-white">
+                        Alerte Sécurité : Ventes Manuelles
+                      </h3>
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full text-xs font-black border ${
+                          totalManualSalesCount > 0
+                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                            : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                        }`}
+                      >
+                        {totalManualSalesCount} billet(s) manuel(s)
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-300 mt-0.5">
+                      {totalManualSalesCount > 0
+                        ? 'Ces billets ont été activés sans scan caméra (déclaration manuelle ou saisie du code). Vérifiez les vendeurs concernés.'
+                        : 'Aucune vente manuelle détectée : 100 % des billets physiques vendus ont été scannés par caméra.'}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setPromoterTab('network')}
+                  className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 text-xs font-bold text-white inline-flex items-center gap-1.5 self-start sm:self-auto shrink-0 cursor-pointer"
+                >
+                  <Store className="w-3.5 h-3.5 text-[#E9C349]" />
+                  <span>Gérer les vendeurs</span>
+                </button>
+              </div>
+
+              {manualSalesByAgent.length === 0 ? (
+                <p className="text-xs text-gray-400">
+                  Aucun point de vente physique n&apos;est encore rattaché à cet événement.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {manualSalesByAgent.map(({ agent, manualCount, totalSold, manualAmount, ratioPercent }) => (
+                    <div
+                      key={agent.id}
+                      className={`p-3.5 rounded-2xl border flex items-center justify-between gap-3 ${
+                        manualCount > 0
+                          ? 'bg-amber-950/30 border-amber-500/40'
+                          : 'bg-black/25 border-white/10'
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <p className="font-heading font-bold text-sm text-white truncate">
+                          {agent.pointDeVente}
+                        </p>
+                        <p className="text-[11px] text-gray-400 truncate">
+                          {agent.gerantName} • {totalSold} vendu(s) au total
+                        </p>
+                        {manualCount > 0 && (
+                          <p className="text-[11px] text-amber-300/90 font-semibold mt-0.5">
+                            {manualAmount.toLocaleString('fr-FR')} F ({ratioPercent}% des ventes)
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="text-right shrink-0">
+                        <span
+                          className={`inline-block px-2.5 py-1 rounded-xl text-xs font-black border ${
+                            manualCount > 0
+                              ? 'bg-amber-500/20 text-amber-200 border-amber-400/50'
+                              : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                          }`}
+                        >
+                          {manualCount} manuel{manualCount > 1 ? 's' : ''}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {blockedShiftHandovers.length > 0 && (
+                <div className="p-3.5 rounded-2xl bg-rose-950/60 border border-rose-500/45 space-y-2">
+                  <div className="flex items-center gap-2 text-rose-300 text-xs font-extrabold uppercase tracking-wider">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>
+                      Alertes Clôture de Caisse Bloquée ({blockedShiftHandovers.length})
+                    </span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {blockedShiftHandovers.slice(0, 5).map((shift) => (
+                      <div
+                        key={shift.id}
+                        className="flex flex-wrap items-center justify-between gap-2 text-xs text-rose-100 bg-black/30 px-3 py-2 rounded-xl border border-rose-500/20"
+                      >
+                        <span className="font-bold">
+                          {shift.agentName || 'Guichet POS'}
+                        </span>
+                        <span>
+                          Saisi : <strong>{shift.countedAmount.toLocaleString('fr-FR')} F</strong> vs Attendu :{' '}
+                          <strong>{shift.expectedAmount.toLocaleString('fr-FR')} F</strong> (Écart :{' '}
+                          <strong className="text-rose-300">
+                            {shift.discrepancyAmount > 0 ? '+' : ''}
+                            {shift.discrepancyAmount.toLocaleString('fr-FR')} F
+                          </strong>
+                          )
+                        </span>
+                        <span className="text-[10px] text-gray-400">
+                          {new Date(shift.createdAt).toLocaleString('fr-FR')}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Ventilation par Catégorie de Billets (Liquid Glass & Jauges Épurées) */}
@@ -2490,13 +2686,19 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                         >
                           <div className="flex items-start justify-between gap-2">
                             <div>
-                              <div className="flex items-center gap-2">
+                              <div className="flex flex-wrap items-center gap-2">
                                 <h4 className="font-heading font-extrabold text-white text-base">
                                   {agent.pointDeVente}
                                 </h4>
                                 <span className="bg-white/10 text-gray-300 text-[10px] font-semibold px-2 py-0.5 rounded-full border border-white/10">
                                   📍 {agent.quartier}
                                 </span>
+                                {(liveStats?.manualCount || 0) > 0 && (
+                                  <span className="inline-flex items-center gap-1 bg-amber-500/20 text-amber-300 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-500/40">
+                                    <AlertTriangle className="w-3 h-3" />
+                                    {liveStats?.manualCount} manuel{(liveStats?.manualCount || 0) > 1 ? 's' : ''}
+                                  </span>
+                                )}
                               </div>
                               <p className="text-xs text-gray-400 mt-1">
                                 Gérant : <strong className="text-gray-200">{agent.gerantName}</strong>
@@ -2626,6 +2828,13 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                                   <span className="inline-block bg-white/10 text-gray-300 text-[10px] font-semibold px-2 py-0.5 rounded-full border border-white/10">
                                     📍 {agent.quartier}
                                   </span>
+
+                                  {(liveStats?.manualCount || 0) > 0 && (
+                                    <span className="inline-flex items-center gap-1 bg-amber-500/20 text-amber-300 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-500/40">
+                                      <AlertTriangle className="w-3 h-3" />
+                                      {liveStats?.manualCount} manuel{(liveStats?.manualCount || 0) > 1 ? 's' : ''}
+                                    </span>
+                                  )}
                                 </div>
                               </td>
 

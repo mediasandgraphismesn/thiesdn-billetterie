@@ -333,6 +333,11 @@ export const SoldTicketsSection: React.FC<SoldTicketsSectionProps> = ({
                                   <Store className="w-3 h-3 shrink-0" /> {agentLabel || 'Guichet POS'}
                                 </span>
                               )}
+                              {ticket.isManualEntry && (
+                                <span className="px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[10px] font-bold">
+                                  Manuel
+                                </span>
+                              )}
                             </div>
                             <p className="text-[11px] font-mono text-gray-500 mt-0.5 truncate max-w-[220px]">
                               {ticket.qrCode}
@@ -433,6 +438,7 @@ export const SoldTicketsSection: React.FC<SoldTicketsSectionProps> = ({
                       <p className="text-xs text-gray-400 truncate">
                         {ticket.holderPhone || 'Tél. non renseigné'} •{' '}
                         {online ? 'En ligne' : agentLabel || 'Guichet POS'}
+                        {ticket.isManualEntry ? ' • Manuel' : ''}
                       </p>
                     </div>
 

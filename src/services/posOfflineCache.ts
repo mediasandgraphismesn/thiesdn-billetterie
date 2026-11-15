@@ -21,6 +21,7 @@ export interface PendingPosOfflineSale {
   price: number;
   holderName: string;
   holderPhone: string;
+  isManualEntry?: boolean;
   soldAt: string;
   attempts: number;
   lastError?: string;
@@ -90,6 +91,7 @@ const applyQueueOverlayToTickets = (
       status: 'sold_valid',
       holderName: queued.holderName,
       holderPhone: queued.holderPhone,
+      isManualEntry: Boolean(queued.isManualEntry),
       soldAt: queued.soldAt,
     };
   });
@@ -162,6 +164,7 @@ export const recordOfflinePosSale = (params: {
   ticket: UserTicket;
   holderName: string;
   holderPhone: string;
+  isManualEntry?: boolean;
 }): {
   success: boolean;
   message: string;
@@ -169,7 +172,7 @@ export const recordOfflinePosSale = (params: {
   updatedAgent?: SalesAgent;
   queuedCount: number;
 } => {
-  const { agent, ticket, holderName, holderPhone } = params;
+  const { agent, ticket, holderName, holderPhone, isManualEntry = false } = params;
   const cleanName = holderName.trim();
   const cleanPhone = holderPhone.trim();
   const cleanQr = ticket.qrCode.trim().toUpperCase();
@@ -208,6 +211,7 @@ export const recordOfflinePosSale = (params: {
     price,
     holderName: cleanName,
     holderPhone: cleanPhone,
+    isManualEntry: Boolean(isManualEntry),
     soldAt: nowIso,
     attempts: 0,
   };
@@ -220,6 +224,7 @@ export const recordOfflinePosSale = (params: {
     status: 'sold_valid',
     holderName: cleanName,
     holderPhone: cleanPhone,
+    isManualEntry: Boolean(isManualEntry),
     soldAt: nowIso,
     agentId: agent.id,
     agentName: agent.pointDeVente,
@@ -314,13 +319,33 @@ export const syncPendingOfflinePosSales = async (
 
       try {
         // 1. Validation prioritaire via RPC atomique SECURITY DEFINER
-        const { data: rpcData, error: rpcErr } = await client.rpc('activate_physical_ticket_sale', {
+        const isManualEntry = Boolean(item.isManualEntry);
+        let { data: rpcData, error: rpcErr } = await client.rpc('activate_physical_ticket_sale', {
           p_agent_id: item.agentId,
           p_ticket_code: item.qrCode,
           p_holder_name: item.holderName,
           p_holder_phone: item.holderPhone,
           p_holder_email: null,
+          p_is_manual_entry: isManualEntry,
         });
+
+        // Compatibilité transitoire si la RPC côté DB n'a pas encore p_is_manual_entry
+        if (rpcErr && /p_is_manual_entry|function.*activate_physical_ticket_sale|PGRST202/i.test(rpcErr.message || '')) {
+          ({ data: rpcData, error: rpcErr } = await client.rpc('activate_physical_ticket_sale', {
+            p_agent_id: item.agentId,
+            p_ticket_code: item.qrCode,
+            p_holder_name: item.holderName,
+            p_holder_phone: item.holderPhone,
+            p_holder_email: null,
+          }));
+          const fallbackRpcRes = rpcData as { success?: boolean } | null;
+          if (!rpcErr && fallbackRpcRes?.success && isManualEntry) {
+            await client
+              .from('tickets')
+              .update({ is_manual_entry: true })
+              .eq('qr_code', item.qrCode);
+          }
+        }
 
         const rpcResult = rpcData as { success?: boolean; message?: string } | null;
 
@@ -343,6 +368,7 @@ export const syncPendingOfflinePosSales = async (
             status: 'sold_valid',
             holder_name: item.holderName,
             holder_phone: item.holderPhone,
+            is_manual_entry: isManualEntry,
             sold_at: item.soldAt,
             agent_id: item.agentId,
             agent_name: item.agentName,
