@@ -1,5 +1,6 @@
 import jsQR from 'jsqr';
 import type { ReadInputBarcodeFormat } from 'zxing-wasm/reader';
+import { enhanceContrastForLowLight } from '../utils/qrContrastStretch';
 
 export type WorkerDecodeRequest =
   | {
@@ -67,46 +68,6 @@ async function getZXingReader(wasmUrl?: string): Promise<typeof import('zxing-wa
     });
   }
   return zxingModulePromise;
-}
-
-/**
- * Amélioration rapide du contraste en basse luminosité sans allocation répétitive.
- * Étire dynamiquement la dynamique luminance (histogramme 2%-98%) sur un tampon réutilisable.
- */
-let contrastScratch = new Uint8ClampedArray(0);
-
-function enhanceContrastForLowLight(source: Uint8ClampedArray): Uint8ClampedArray {
-  if (contrastScratch.length !== source.length) {
-    contrastScratch = new Uint8ClampedArray(source.length);
-  }
-
-  let minLum = 255;
-  let maxLum = 0;
-
-  // Échantillonnage rapide 1 pixel sur 4 pour borner l'histogramme sans pénaliser le temps CPU
-  for (let i = 0; i < source.length; i += 16) {
-    const lum = (source[i] * 77 + source[i + 1] * 150 + source[i + 2] * 29) >> 8;
-    if (lum < minLum) minLum = lum;
-    if (lum > maxLum) maxLum = lum;
-  }
-
-  const span = maxLum - minLum;
-  if (span <= 8 || (minLum < 35 && maxLum > 220)) {
-    contrastScratch.set(source);
-    return contrastScratch;
-  }
-
-  const scale = 255 / span;
-  for (let i = 0; i < source.length; i += 4) {
-    const lum = (source[i] * 77 + source[i + 1] * 150 + source[i + 2] * 29) >> 8;
-    const norm = Math.max(0, Math.min(255, (lum - minLum) * scale)) | 0;
-    contrastScratch[i] = norm;
-    contrastScratch[i + 1] = norm;
-    contrastScratch[i + 2] = norm;
-    contrastScratch[i + 3] = 255;
-  }
-
-  return contrastScratch;
 }
 
 self.onmessage = async (event: MessageEvent<WorkerDecodeRequest>) => {

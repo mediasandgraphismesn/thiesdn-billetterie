@@ -36,11 +36,15 @@ import {
   ChevronRight,
   AlertTriangle,
   Lock,
+  Upload,
 } from 'lucide-react';
 import { SalesAgent, UserTicket, EventItem, UserProfile } from '../types';
 import { usePushNotifications } from '../hooks/usePushNotifications';
 import {
   startOptimizedScanner,
+  preloadScannerEngine,
+  scanTicketImageFile,
+  formatFriendlyCameraError,
   OptimizedScannerHandle,
   ScannerMetrics,
 } from '../utils/scannerEngine';
@@ -197,13 +201,15 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
   const [saleErrorMessage, setSaleErrorMessage] = useState<string | null>(null);
   const [isCameraScanning, setIsCameraScanning] = useState(false);
   const [isStartingCamera, setIsStartingCamera] = useState(false);
-  const [cameraRequested, setCameraRequested] = useState(false);
+  const [isScanningImageFile, setIsScanningImageFile] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [torchSupported, setTorchSupported] = useState(false);
   const [isTorchOn, setIsTorchOn] = useState(false);
   const [scannerMetrics, setScannerMetrics] = useState<ScannerMetrics | null>(null);
   const scannerHandleRef = useRef<OptimizedScannerHandle | null>(null);
   const scannerRunIdRef = useRef<number>(0);
+  const isStartingCameraRef = useRef<boolean>(false);
+  const qrFileInputRef = useRef<HTMLInputElement | null>(null);
   const lastScannedTimeRef = useRef<number>(0);
   const buyerNameInputRef = useRef<HTMLInputElement | null>(null);
   const pendingSaleEntryMethodRef = useRef<'camera' | 'manual'>('manual');
@@ -211,6 +217,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
 
   const stopCameraScanner = useCallback(async () => {
     scannerRunIdRef.current += 1;
+    isStartingCameraRef.current = false;
     const handle = scannerHandleRef.current;
     scannerHandleRef.current = null;
     if (handle) {
@@ -220,7 +227,11 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
         // Ignorer les erreurs de nettoyage caméra si le nœud DOM est déjà démonté
       }
     }
-    setCameraRequested(false);
+    const viewfinderEl =
+      typeof document !== 'undefined' ? document.getElementById('pos-camera-viewfinder') : null;
+    if (viewfinderEl) {
+      viewfinderEl.innerHTML = '';
+    }
     setIsCameraScanning(false);
     setIsStartingCamera(false);
     setTorchSupported(false);
@@ -642,35 +653,43 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
   }, [isConnected]);
 
   const startCameraScanner = useCallback(async () => {
+    if (isStartingCameraRef.current) return;
+    isStartingCameraRef.current = true;
+
+    const elementId = 'pos-camera-viewfinder';
+    const el = typeof document !== 'undefined' ? document.getElementById(elementId) : null;
+    if (!el) {
+      isStartingCameraRef.current = false;
+      setCameraError('Conteneur du viseur caméra introuvable. Fermez puis rouvrez la modale.');
+      return;
+    }
+
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      isStartingCameraRef.current = false;
+      setCameraError(formatFriendlyCameraError('Camera streaming not supported'));
+      setIsCameraScanning(false);
+      setIsStartingCamera(false);
+      return;
+    }
+
+    setCameraError(null);
+    setIsStartingCamera(true);
+    setIsTorchOn(false);
+    setTorchSupported(false);
+
     const prevHandle = scannerHandleRef.current;
     scannerHandleRef.current = null;
     if (prevHandle) {
       try {
         await prevHandle.stop();
       } catch {
-        // Ignorer
+        // Ignorer les erreurs d'arrêt précédent
       }
     }
+    el.innerHTML = '';
 
     scannerRunIdRef.current += 1;
     const runId = scannerRunIdRef.current;
-    setCameraError(null);
-    setIsStartingCamera(true);
-    setIsTorchOn(false);
-    setTorchSupported(false);
-
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    if (runId !== scannerRunIdRef.current) {
-      setIsStartingCamera(false);
-      return;
-    }
-
-    const elementId = 'pos-camera-viewfinder';
-    const el = document.getElementById(elementId);
-    if (!el) {
-      setIsStartingCamera(false);
-      return;
-    }
 
     try {
       const handle = await startOptimizedScanner({
@@ -678,9 +697,8 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
         formats: ['QR_CODE', 'CODE_128', 'CODE_39', 'EAN_13', 'EAN_8', 'DATA_MATRIX'],
         fps: 18,
         fpsDecimation: 3,
-        aspectRatio: 1.0,
         debounceMs: 2500,
-        qrboxRatio: { widthRatio: 0.84, heightRatio: 0.72, minWidth: 180, minHeight: 150 },
+        qrboxRatio: { widthRatio: 0.82, heightRatio: 0.72, minWidth: 160, minHeight: 150 },
         onReady: (metrics) => {
           if (runId !== scannerRunIdRef.current) return;
           setScannerMetrics(metrics);
@@ -710,26 +728,65 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
     } catch (err: unknown) {
       console.warn('Erreur activation camera POS:', err);
       if (runId === scannerRunIdRef.current) {
-        setCameraError(
-          "Impossible d'activer l'appareil photo. Vérifiez les permissions caméra ou saisissez le code ci-dessous."
-        );
-        setCameraRequested(false);
+        setCameraError(formatFriendlyCameraError(err));
         setIsCameraScanning(false);
         setIsStartingCamera(false);
       }
+    } finally {
+      isStartingCameraRef.current = false;
     }
   }, [handleCheckTicketForSale, stopCameraScanner]);
 
+  const handleUploadQrImage = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      event.target.value = '';
+      if (!file) return;
+
+      setSaleErrorMessage(null);
+      setCameraError(null);
+      setIsScanningImageFile(true);
+
+      try {
+        await stopCameraScanner();
+        const decodedText = await scanTicketImageFile(file);
+        const clean = extractScannedTicketCode(decodedText);
+        if (!clean) {
+          throw new Error("Aucun code billet exploitable détecté dans cette image.");
+        }
+        setManualTicketCode(clean);
+        const matched = handleCheckTicketForSale(clean, true);
+        if (!matched) {
+          playPosFeedbackTone('error');
+        }
+      } catch (err: unknown) {
+        const message =
+          err instanceof Error && err.message
+            ? err.message
+            : "Aucun QR Code lisible détecté dans cette image. Essayez une capture plus nette ou saisissez le code manuellement.";
+        setCameraError(message);
+        setSaleErrorMessage(message);
+        playPosFeedbackTone('error');
+      } finally {
+        setIsScanningImageFile(false);
+      }
+    },
+    [handleCheckTicketForSale, stopCameraScanner]
+  );
+
+  // Préchargement silencieux du moteur caméra à l'ouverture (aucun auto-start pour respecter iOS)
   useEffect(() => {
-    if (showSaleModal && saleMode === 'scan' && cameraRequested && !pendingTicketForConfirm) {
-      void startCameraScanner();
-    } else if (!showSaleModal || saleMode !== 'scan' || Boolean(pendingTicketForConfirm)) {
+    if (showSaleModal && saleMode === 'scan' && !pendingTicketForConfirm) {
+      preloadScannerEngine();
+    }
+  }, [showSaleModal, saleMode, pendingTicketForConfirm]);
+
+  // Nettoyage strict du flux vidéo lors de la fermeture, du changement d'onglet ou de confirmation
+  useEffect(() => {
+    if (!showSaleModal || saleMode !== 'scan' || Boolean(pendingTicketForConfirm)) {
       void stopCameraScanner();
     }
-    return () => {
-      void stopCameraScanner();
-    };
-  }, [showSaleModal, saleMode, cameraRequested, pendingTicketForConfirm, startCameraScanner, stopCameraScanner]);
+  }, [showSaleModal, saleMode, pendingTicketForConfirm, stopCameraScanner]);
 
   // Nettoyage strict si le composant POS est démonté lors d'un changement de page
   useEffect(() => {
@@ -1356,7 +1413,6 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
             setManualTicketCode('');
             setBuyerName('');
             setBuyerPhone('');
-            setCameraRequested(true);
             setShowSaleModal(true);
           }}
           disabled={remainingTickets <= 0}
@@ -1375,7 +1431,6 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
             setSaleMode('manual');
             pendingSaleEntryMethodRef.current = 'manual';
             setPendingSaleIsManual(true);
-            setCameraRequested(false);
             setPendingTicketForConfirm(null);
             setManualTicketCode('');
             setBuyerName('');
@@ -1456,7 +1511,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                 type="button"
                 onClick={() => {
                   setSaleMode('scan');
-                  setCameraRequested(true);
+                  setCameraError(null);
                   setSaleErrorMessage(null);
                   setSaleSuccessMessage(null);
                 }}
@@ -1530,10 +1585,10 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                             if (isCameraScanning || isStartingCamera) {
                               void stopCameraScanner();
                             } else {
-                              setCameraRequested(true);
+                              void startCameraScanner();
                             }
                           }}
-                          className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-[11px] font-bold text-white flex items-center gap-1 transition-colors"
+                          className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-[11px] font-bold text-white flex items-center gap-1 transition-colors cursor-pointer"
                         >
                           {isCameraScanning || isStartingCamera ? (
                             <>
@@ -1550,42 +1605,104 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                       </div>
                     </div>
 
-                    <div className="relative">
-                      <div id="pos-camera-viewfinder" className="w-full min-h-[210px] bg-black" />
-                      {!isCameraScanning && !isStartingCamera && !cameraError && (
-                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/75 p-4 text-center">
-                          <Camera className="w-7 h-7 text-[#E9C349]" />
-                          <button
-                            type="button"
-                            onClick={() => setCameraRequested(true)}
-                            className="px-4 py-2 rounded-xl bg-[#E9C349] text-[#241A00] text-xs font-heading font-extrabold uppercase tracking-wider"
-                          >
-                            Démarrer la Caméra
-                          </button>
+                    <div className="relative w-full h-64 bg-black overflow-hidden">
+                      {/* Conteneur DOM exclusivement réservé à html5-qrcode : zéro enfant React à l'intérieur */}
+                      <div
+                        id="pos-camera-viewfinder"
+                        className="w-full h-64 bg-black overflow-hidden [&>video]:!w-full [&>video]:!h-full [&>video]:object-cover [&>canvas]:max-w-full [&>canvas]:max-h-full"
+                      />
+
+                      {/* Overlay frère (hors #pos-camera-viewfinder) visible tant que le flux vidéo n'est pas actif */}
+                      {!isCameraScanning && (
+                        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black/80 p-4 text-center">
+                          {isStartingCamera ? (
+                            <div className="flex flex-col items-center gap-2 text-[#E9C349]">
+                              <RefreshCw className="w-7 h-7 animate-spin" />
+                              <p className="text-xs font-bold uppercase tracking-wider">
+                                Ouverture de la caméra arrière...
+                              </p>
+                              <p className="text-[11px] text-gray-400 max-w-xs">
+                                Acceptez la demande d&apos;autorisation caméra si votre navigateur l&apos;affiche.
+                              </p>
+                            </div>
+                          ) : cameraError ? (
+                            <div className="max-w-xs space-y-2.5">
+                              <CameraOff className="w-7 h-7 text-rose-400 mx-auto" />
+                              <p className="text-xs font-semibold text-rose-200 leading-relaxed">
+                                {cameraError}
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  void startCameraScanner();
+                                }}
+                                className="px-4 py-2 rounded-xl bg-[#E9C349] hover:bg-[#f1ce5d] text-[#241A00] text-xs font-heading font-extrabold uppercase tracking-wider cursor-pointer shadow-lg"
+                              >
+                                Réessayer la caméra
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              <Camera className="w-7 h-7 text-[#E9C349]" />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  void startCameraScanner();
+                                }}
+                                className="px-4 py-2.5 rounded-xl bg-[#E9C349] hover:bg-[#f1ce5d] text-[#241A00] text-xs font-heading font-extrabold uppercase tracking-wider cursor-pointer shadow-lg"
+                              >
+                                Démarrer la caméra
+                              </button>
+                              <p className="text-[11px] text-gray-400">
+                                Démarre directement la caméra arrière (iOS / Android)
+                              </p>
+                            </>
+                          )}
                         </div>
                       )}
-                      {isCameraScanning && scannerMetrics && (
-                        <div className="px-3 py-1 bg-black/80 border-t border-white/10 flex items-center justify-between text-[10px] text-gray-400 font-mono">
-                          <span>{scannerMetrics.engineLabel}</span>
-                          <span>
-                            {scannerMetrics.fps} FPS (1/{scannerMetrics.fpsDecimation}) • Prêt en {scannerMetrics.cameraStartMs} ms
-                          </span>
-                        </div>
-                      )}
-                      {cameraError && (
-                        <div className="p-3 bg-rose-950/70 border-t border-rose-500/30 text-[11px] text-rose-200 flex items-center justify-between gap-2">
-                          <span>{cameraError}</span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setCameraRequested(true);
-                            }}
-                            className="shrink-0 px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-white font-bold"
-                          >
-                            Réessayer
-                          </button>
-                        </div>
-                      )}
+                    </div>
+
+                    {isCameraScanning && scannerMetrics && (
+                      <div className="px-3 py-1 bg-black/80 border-t border-white/10 flex items-center justify-between text-[10px] text-gray-400 font-mono">
+                        <span>{scannerMetrics.engineLabel}</span>
+                        <span>
+                          {scannerMetrics.fps} FPS (1/{scannerMetrics.fpsDecimation}) • Prêt en {scannerMetrics.cameraStartMs} ms
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Secours si caméra bloquée/cassée : upload d'une photo ou capture QR Code */}
+                    <div className="px-3 py-2.5 bg-white/[0.03] border-t border-white/10 flex flex-wrap items-center justify-between gap-2">
+                      <input
+                        ref={qrFileInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          void handleUploadQrImage(e);
+                        }}
+                        className="hidden"
+                      />
+                      <span className="text-[11px] text-gray-400">
+                        Caméra bloquée ou hors service ?
+                      </span>
+                      <button
+                        type="button"
+                        disabled={isScanningImageFile}
+                        onClick={() => qrFileInputRef.current?.click()}
+                        className="px-3 py-1.5 rounded-xl bg-[#8A2BE2]/25 hover:bg-[#8A2BE2]/40 border border-[#8A2BE2]/50 text-[#DCB8FF] hover:text-white text-[11px] font-bold flex items-center gap-1.5 transition-colors disabled:opacity-60 cursor-pointer shrink-0"
+                      >
+                        {isScanningImageFile ? (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            <span>Analyse...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="w-3.5 h-3.5" />
+                            <span>Uploader une image de QR Code</span>
+                          </>
+                        )}
+                      </button>
                     </div>
                   </div>
                 )}

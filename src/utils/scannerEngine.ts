@@ -1,5 +1,7 @@
 import type { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import zxingReaderWasmUrl from 'zxing-wasm/reader/zxing_reader.wasm?url';
+import type { ReadInputBarcodeFormat } from 'zxing-wasm/reader';
+import { enhanceContrastForLowLight } from './qrContrastStretch';
 import type { WorkerDecodeRequest, WorkerDecodeResponse } from '../workers/qrScannerWorker';
 
 export type ScannerFormatKey =
@@ -53,6 +55,117 @@ export interface OptimizedScannerHandle {
 
 const activeScannerStopHandlers = new Set<() => Promise<void>>();
 let lifecycleListenersRegistered = false;
+let html5QrcodeModulePromise: Promise<typeof import('html5-qrcode')> | null = null;
+
+function loadHtml5QrcodeModule(): Promise<typeof import('html5-qrcode')> {
+  if (!html5QrcodeModulePromise) {
+    html5QrcodeModulePromise = import('html5-qrcode').catch((err) => {
+      html5QrcodeModulePromise = null;
+      throw err;
+    });
+  }
+  return html5QrcodeModulePromise;
+}
+
+/**
+ * Précharge le module html5-qrcode en mémoire sans solliciter la caméra,
+ * afin que le clic sur "Démarrer la caméra" reste dans la fenêtre d'activation iOS.
+ */
+export function preloadScannerEngine(): void {
+  if (typeof window === 'undefined') return;
+  void loadHtml5QrcodeModule().catch(() => {
+    // Préchargement opportuniste silencieux
+  });
+}
+
+function extractRawCameraErrorText(err: unknown): string {
+  if (typeof err === 'string') return err;
+  if (err instanceof Error) {
+    return `${err.name || ''} ${err.message || ''}`.trim();
+  }
+  if (err && typeof err === 'object') {
+    const record = err as { name?: unknown; message?: unknown };
+    return `${String(record.name ?? '')} ${String(record.message ?? '')}`.trim();
+  }
+  return '';
+}
+
+function isCameraPermissionOrContextError(err: unknown): boolean {
+  if (typeof window !== 'undefined' && window.isSecureContext === false) {
+    return true;
+  }
+  if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+    return true;
+  }
+  const text = extractRawCameraErrorText(err).toLowerCase();
+  return (
+    text.includes('notallowederror') ||
+    text.includes('permissiondenied') ||
+    text.includes('permission denied') ||
+    text.includes('permission dismissed') ||
+    text.includes('securityerror') ||
+    text.includes('secure context') ||
+    text.includes('not supported') ||
+    text.includes('denied by user') ||
+    text.includes('denied')
+  );
+}
+
+/**
+ * Traduit les erreurs natives (DOMException) et chaînes rejetées par html5-qrcode
+ * en message français clair et actionnable pour l'opérateur terrain.
+ */
+export function formatFriendlyCameraError(err: unknown): string {
+  if (typeof window !== 'undefined' && window.isSecureContext === false) {
+    return "L'accès caméra nécessite une connexion sécurisée (HTTPS).";
+  }
+  if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+    return "Ce navigateur ne permet pas l'accès caméra en direct. Utilisez « Uploader une image de QR Code » ci-dessous.";
+  }
+
+  const text = extractRawCameraErrorText(err).toLowerCase();
+
+  if (
+    text.includes('notallowederror') ||
+    text.includes('permissiondenied') ||
+    text.includes('permission denied') ||
+    text.includes('permission dismissed') ||
+    text.includes('denied')
+  ) {
+    return "Accès caméra refusé. Autorisez l'appareil photo dans les réglages du navigateur (icône cadenas ou Réglages Safari), puis cliquez sur Réessayer ou importez une image.";
+  }
+
+  if (
+    text.includes('notfounderror') ||
+    text.includes('devicesnotfound') ||
+    text.includes('requested device not found') ||
+    text.includes('no camera')
+  ) {
+    return "Aucune caméra détectée sur cet appareil. Utilisez « Uploader une image de QR Code » ou la saisie manuelle.";
+  }
+
+  if (
+    text.includes('notreadableerror') ||
+    text.includes('trackstarterror') ||
+    text.includes('could not start video source')
+  ) {
+    return "La caméra est déjà utilisée par une autre application ou momentanément bloquée. Fermez les autres applis caméra et réessayez.";
+  }
+
+  if (
+    text.includes('overconstrainederror') ||
+    text.includes('constraintnotsatisfied') ||
+    text.includes('overconstrained')
+  ) {
+    return "Le capteur vidéo ne supporte pas les contraintes demandées. Cliquez sur Réessayer ou importez une image de QR Code.";
+  }
+
+  if (text.includes('securityerror') || text.includes('insecure') || text.includes('secure context')) {
+    return "L'accès caméra est bloqué par la politique de sécurité du navigateur (HTTPS requis).";
+  }
+
+  return "Impossible d'activer l'appareil photo. Vérifiez les permissions caméra ou importez une image de QR Code ci-dessous.";
+}
 
 /**
  * Arrête toutes les instances caméra actives (changement de page, mise en arrière-plan ou fermeture).
@@ -95,6 +208,11 @@ function stopMediaTracksInsideElement(elementId: string): void {
   if (!container) return;
   const videos = container.querySelectorAll('video');
   videos.forEach((video) => {
+    try {
+      video.pause();
+    } catch {
+      // Ignorer
+    }
     const stream = video.srcObject as MediaStream | null;
     if (stream) {
       stream.getTracks().forEach((track) => {
@@ -107,6 +225,15 @@ function stopMediaTracksInsideElement(elementId: string): void {
       video.srcObject = null;
     }
   });
+}
+
+function clearScannerContainer(elementId: string): void {
+  stopMediaTracksInsideElement(elementId);
+  if (typeof document === 'undefined') return;
+  const container = document.getElementById(elementId);
+  if (container) {
+    container.innerHTML = '';
+  }
 }
 
 /**
@@ -126,7 +253,6 @@ export async function startOptimizedScanner(
     formats = ['QR_CODE', 'CODE_128', 'CODE_39', 'EAN_13', 'EAN_8', 'DATA_MATRIX'],
     fps: rawFps = 18,
     fpsDecimation: rawDecimation = 3,
-    aspectRatio = 1.0,
     debounceMs = 2500,
     qrboxRatio = { widthRatio: 0.78, heightRatio: 0.72, minWidth: 160, minHeight: 150 },
     onDecode,
@@ -206,17 +332,21 @@ export async function startOptimizedScanner(
       html5Qr = null;
     }
 
-    stopMediaTracksInsideElement(elementId);
+    clearScannerContainer(elementId);
   };
 
   activeScannerStopHandlers.add(stop);
 
   try {
-    // 1. Chargement paresseux du moteur caméra html5-qrcode
+    if (activeScannerStopHandlers.size > 1) {
+      const otherStoppers = Array.from(activeScannerStopHandlers).filter((fn) => fn !== stop);
+      await Promise.allSettled(otherStoppers.map((fn) => fn()));
+    }
+
+    // 1. Chargement paresseux (ou déjà préchargé) de html5-qrcode avant toute manipulation DOM
     const tModuleStart = performance.now();
-    const { Html5Qrcode: Html5QrcodeClass, Html5QrcodeSupportedFormats: FormatsEnum } = await import(
-      'html5-qrcode'
-    );
+    const { Html5Qrcode: Html5QrcodeClass, Html5QrcodeSupportedFormats: FormatsEnum } =
+      await loadHtml5QrcodeModule();
     const moduleLoadMs = Math.max(1, Math.round(performance.now() - tModuleStart));
 
     if (stopped) {
@@ -233,11 +363,156 @@ export async function startOptimizedScanner(
       throw new Error(`Conteneur scanner introuvable (#${elementId}).`);
     }
 
+    // Nettoyer le conteneur DOM avant injection vidéo (éviter flux ou nœuds résiduels)
+    clearScannerContainer(elementId);
+
     const mappedFormats: Html5QrcodeSupportedFormats[] = formats
       .map((key) => FormatsEnum[key] as Html5QrcodeSupportedFormats)
       .filter((val) => typeof val === 'number');
 
-    // 2. Initialisation du Web Worker en parallèle du démarrage caméra
+    // Sur iOS ou appareils sans BarcodeDetector natif, abaisser le scan JS interne à ~fps/décimation
+    // afin que le Web Worker (+ WASM ZXing) fasse le gros du travail hors thread principal.
+    const html5ScanFps = preferWasm
+      ? Math.max(5, Math.round(targetFps / fpsDecimation))
+      : targetFps;
+
+    const computeQrBox = (viewfinderWidth: number, viewfinderHeight: number) => {
+      const safeMaxW = Math.max(60, viewfinderWidth - 16);
+      const safeMaxH = Math.max(60, viewfinderHeight - 16);
+      const desiredW = Math.max(
+        qrboxRatio.minWidth ?? 160,
+        Math.floor(viewfinderWidth * qrboxRatio.widthRatio)
+      );
+      const desiredH = Math.max(
+        qrboxRatio.minHeight ?? 150,
+        Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * qrboxRatio.heightRatio)
+      );
+      return {
+        width: Math.min(safeMaxW, Math.max(60, desiredW)),
+        height: Math.min(safeMaxH, Math.max(60, desiredH)),
+      };
+    };
+
+    const createCleanScannerInstance = (): Html5Qrcode => {
+      clearScannerContainer(elementId);
+      return new Html5QrcodeClass(elementId, {
+        formatsToSupport: mappedFormats.length > 0 ? mappedFormats : undefined,
+        useBarCodeDetectorIfSupported: true,
+        verbose: false,
+      });
+    };
+
+    const resetAttemptInstance = async (instance: Html5Qrcode | null): Promise<void> => {
+      if (instance) {
+        try {
+          if (instance.isScanning) {
+            await instance.stop();
+          }
+          instance.clear();
+        } catch {
+          // Ignorer
+        }
+      }
+      clearScannerContainer(elementId);
+    };
+
+    // 2. Ouverture immédiate du flux caméra (sans aspectRatio contraignant sur track.applyConstraints)
+    html5Qr = createCleanScannerInstance();
+
+    try {
+      await html5Qr.start(
+        { facingMode: 'environment' },
+        {
+          fps: html5ScanFps,
+          qrbox: computeQrBox,
+          videoConstraints: {
+            facingMode: 'environment',
+            width: { ideal: 640, max: 1280 },
+            height: { ideal: 480, max: 720 },
+            frameRate: { ideal: targetFps, max: 24 },
+          },
+        },
+        (decodedText) => {
+          emitDecode(decodedText, 'html5-native');
+        },
+        () => {
+          // Frames sans QR ignorées silencieusement
+        }
+      );
+    } catch (firstErr) {
+      if (stopped || isCameraPermissionOrContextError(firstErr)) {
+        throw firstErr;
+      }
+
+      // Repli 1 : { facingMode: "environment" } pur sans videoConstraints ni aspectRatio
+      await resetAttemptInstance(html5Qr);
+      if (stopped) throw firstErr;
+      html5Qr = createCleanScannerInstance();
+
+      try {
+        await html5Qr.start(
+          { facingMode: 'environment' },
+          {
+            fps: html5ScanFps,
+            qrbox: computeQrBox,
+          },
+          (decodedText) => {
+            emitDecode(decodedText, 'html5-native');
+          },
+          () => {
+            // Frames sans QR ignorées silencieusement
+          }
+        );
+      } catch (secondErr) {
+        if (stopped || isCameraPermissionOrContextError(secondErr)) {
+          throw secondErr;
+        }
+
+        // Repli 2 : appareil sans caméra arrière (ex. webcam PC / iPad frontal)
+        await resetAttemptInstance(html5Qr);
+        if (stopped) throw secondErr;
+        html5Qr = createCleanScannerInstance();
+
+        let fallbackCameraTarget: string | MediaTrackConstraints = { facingMode: 'user' };
+        try {
+          const cameras = await Html5QrcodeClass.getCameras();
+          if (cameras && cameras.length > 0) {
+            const preferred =
+              cameras.find((cam) => /back|rear|environment|arrière/i.test(cam.label || '')) ||
+              cameras[0];
+            fallbackCameraTarget = preferred.id;
+          }
+        } catch {
+          fallbackCameraTarget = { facingMode: 'user' };
+        }
+
+        await html5Qr.start(
+          fallbackCameraTarget,
+          {
+            fps: html5ScanFps,
+            qrbox: computeQrBox,
+          },
+          (decodedText) => {
+            emitDecode(decodedText, 'html5-native');
+          },
+          () => {
+            // Frames sans QR ignorées silencieusement
+          }
+        );
+      }
+    }
+
+    if (stopped) {
+      await stop();
+      return {
+        stop,
+        setTorch: async () => false,
+        isTorchSupported: () => false,
+        getMetrics: () => null,
+      };
+    }
+
+    // 3. Démarrage du Web Worker (jsQR basse lumière + ZXing WASM iOS) une fois le flux vidéo ouvert
     if (typeof Worker !== 'undefined') {
       try {
         worker = new Worker(new URL('../workers/qrScannerWorker.ts', import.meta.url), {
@@ -273,7 +548,6 @@ export async function startOptimizedScanner(
         };
         worker.postMessage(initMsg);
 
-        // Boucle rAF décimée (fpsDecimation = 3 => 1 frame sur 3 envoyée au Worker)
         const offscreenCanvas = document.createElement('canvas');
         const offscreenCtx = offscreenCanvas.getContext('2d', { willReadFrequently: true });
         let frameCounter = 0;
@@ -290,7 +564,6 @@ export async function startOptimizedScanner(
               video.videoWidth > 0 &&
               video.videoHeight > 0
             ) {
-              // Borner le traitement Canvas à 640x480 maximum pour la vitesse
               const scale = Math.min(1, 640 / video.videoWidth, 480 / video.videoHeight);
               const w = Math.max(160, Math.round(video.videoWidth * scale));
               const h = Math.max(120, Math.round(video.videoHeight * scale));
@@ -332,87 +605,6 @@ export async function startOptimizedScanner(
       }
     }
 
-    // 3. Ouverture du flux vidéo avec résolution bridée (640x480 idéal / 720p max) et FPS limité
-    html5Qr = new Html5QrcodeClass(elementId, {
-      formatsToSupport: mappedFormats.length > 0 ? mappedFormats : undefined,
-      useBarCodeDetectorIfSupported: true,
-      verbose: false,
-    });
-
-    const videoConstraints: MediaTrackConstraints = {
-      facingMode: 'environment',
-      width: { ideal: 640, max: 1280 },
-      height: { ideal: 480, max: 720 },
-      frameRate: { ideal: targetFps, max: 24 },
-    };
-
-    // Sur iOS ou appareils sans BarcodeDetector natif, abaisser le scan JS interne à ~fps/décimation
-    // afin que le Web Worker (+ WASM ZXing) fasse le gros du travail hors thread principal.
-    const html5ScanFps = preferWasm
-      ? Math.max(5, Math.round(targetFps / fpsDecimation))
-      : targetFps;
-
-    const scanConfig = {
-      fps: html5ScanFps,
-      videoConstraints,
-      aspectRatio,
-      qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
-        const boxW = Math.max(
-          qrboxRatio.minWidth ?? 160,
-          Math.floor(viewfinderWidth * qrboxRatio.widthRatio)
-        );
-        const boxH = Math.max(
-          qrboxRatio.minHeight ?? 150,
-          Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * qrboxRatio.heightRatio)
-        );
-        return { width: boxW, height: boxH };
-      },
-    };
-
-    try {
-      await html5Qr.start(
-        { facingMode: 'environment' },
-        scanConfig,
-        (decodedText) => {
-          emitDecode(decodedText, 'html5-native');
-        },
-        () => {
-          // Frames sans QR ignorées silencieusement
-        }
-      );
-    } catch (startErr) {
-      // Secours pour capteurs Android anciens rejetant max/frameRate stricts
-      const fallbackConstraints: MediaTrackConstraints = {
-        facingMode: 'environment',
-        width: { ideal: 640 },
-        height: { ideal: 480 },
-      };
-      if (stopped) throw startErr;
-      await html5Qr.start(
-        { facingMode: 'environment' },
-        {
-          ...scanConfig,
-          videoConstraints: fallbackConstraints,
-        },
-        (decodedText) => {
-          emitDecode(decodedText, 'html5-native');
-        },
-        () => {
-          // Frames sans QR ignorées silencieusement
-        }
-      );
-    }
-
-    if (stopped) {
-      await stop();
-      return {
-        stop,
-        setTorch: async () => false,
-        isTorchSupported: () => false,
-        getMetrics: () => null,
-      };
-    }
-
     try {
       const torch = html5Qr.getRunningTrackCameraCapabilities().torchFeature();
       torchSupported = torch.isSupported();
@@ -427,7 +619,7 @@ export async function startOptimizedScanner(
       cameraStartMs,
       fps: targetFps,
       fpsDecimation,
-      maxResolution: '640x480 / max 720p',
+      maxResolution: '640x480 / flux natif',
       torchSupported,
       wasmFallbackActive: preferWasm,
       engineLabel: preferWasm
@@ -464,11 +656,155 @@ export async function startOptimizedScanner(
     };
   } catch (err: unknown) {
     await stop();
-    const message =
-      err instanceof Error && err.message
-        ? err.message
-        : "Impossible d'activer l'appareil photo. Vérifiez les permissions de votre navigateur.";
+    const message = formatFriendlyCameraError(err);
     onError?.(message, err);
-    throw err;
+    throw new Error(message);
+  }
+}
+
+const IMAGE_SCAN_ZXING_FORMATS: ReadInputBarcodeFormat[] = [
+  'QRCode',
+  'Code128',
+  'Code39',
+  'EAN-13',
+  'EAN-8',
+  'DataMatrix',
+];
+
+function loadImageFileElement(file: File): Promise<{ img: HTMLImageElement; cleanup: () => void }> {
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => resolve({ img, cleanup: () => URL.revokeObjectURL(objectUrl) });
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("Impossible de charger ce fichier image."));
+    };
+    img.src = objectUrl;
+  });
+}
+
+/**
+ * Décode un QR Code ou Code-Barres à partir d'une image ou capture d'écran (secours si caméra HS).
+ * 1) Arrête tout flux caméra actif (contrainte html5-qrcode)
+ * 2) Tente Html5Qrcode.scanFile() dans un conteneur hors-écran isolé
+ * 3) Bascule automatiquement sur Canvas + jsQR (contraste basse lumière) puis ZXing WASM
+ */
+export async function scanTicketImageFile(file: File): Promise<string> {
+  if (!file || typeof document === 'undefined') {
+    throw new Error('Fichier image invalide.');
+  }
+
+  if (activeScannerStopHandlers.size > 0) {
+    await stopAllActiveScanners();
+  }
+
+  const { Html5Qrcode: Html5QrcodeClass, Html5QrcodeSupportedFormats: FormatsEnum } =
+    await loadHtml5QrcodeModule();
+
+  const tempId = `thiesdn-qr-file-scan-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const tempContainer = document.createElement('div');
+  tempContainer.id = tempId;
+  tempContainer.style.position = 'fixed';
+  tempContainer.style.left = '-9999px';
+  tempContainer.style.top = '-9999px';
+  tempContainer.style.width = '400px';
+  tempContainer.style.height = '400px';
+  tempContainer.style.pointerEvents = 'none';
+  tempContainer.style.opacity = '0';
+  document.body.appendChild(tempContainer);
+
+  const formatsToSupport = (
+    ['QR_CODE', 'CODE_128', 'CODE_39', 'EAN_13', 'EAN_8', 'DATA_MATRIX'] as ScannerFormatKey[]
+  )
+    .map((key) => FormatsEnum[key] as Html5QrcodeSupportedFormats)
+    .filter((val) => typeof val === 'number');
+
+  const fileScanner = new Html5QrcodeClass(tempId, {
+    formatsToSupport: formatsToSupport.length > 0 ? formatsToSupport : undefined,
+    useBarCodeDetectorIfSupported: true,
+    verbose: false,
+  });
+
+  try {
+    const decoded = await fileScanner.scanFile(file, false);
+    if (decoded && decoded.trim()) {
+      return decoded.trim();
+    }
+  } catch {
+    // Repli automatique ci-dessous via jsQR + contraste basse lumière + ZXing WASM
+  } finally {
+    try {
+      fileScanner.clear();
+    } catch {
+      // Ignorer
+    }
+    tempContainer.remove();
+  }
+
+  const { img, cleanup } = await loadImageFileElement(file);
+  try {
+    const maxDim = 1280;
+    const rawW = img.naturalWidth || img.width;
+    const rawH = img.naturalHeight || img.height;
+    if (!rawW || !rawH) {
+      throw new Error("Dimensions de l'image invalides.");
+    }
+    const scale = Math.min(1, maxDim / Math.max(rawW, rawH));
+    const width = Math.max(1, Math.round(rawW * scale));
+    const height = Math.max(1, Math.round(rawH * scale));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) {
+      throw new Error('Contexte graphique indisponible.');
+    }
+
+    ctx.drawImage(img, 0, 0, width, height);
+    const imgData = ctx.getImageData(0, 0, width, height);
+
+    const { default: jsQR } = await import('jsqr');
+    const directMatch = jsQR(imgData.data, width, height, {
+      inversionAttempts: 'attemptBoth',
+    });
+    if (directMatch?.data?.trim()) {
+      return directMatch.data.trim();
+    }
+
+    const boosted = enhanceContrastForLowLight(imgData.data);
+    const lowLightMatch = jsQR(boosted, width, height, {
+      inversionAttempts: 'attemptBoth',
+    });
+    if (lowLightMatch?.data?.trim()) {
+      return lowLightMatch.data.trim();
+    }
+
+    const zxing = await import('zxing-wasm/reader');
+    zxing.prepareZXingModule({
+      overrides: {
+        locateFile: (path: string, prefix: string) =>
+          path.endsWith('.wasm') ? zxingReaderWasmUrl : `${prefix}${path}`,
+      },
+    });
+
+    const results = await zxing.readBarcodes(imgData, {
+      formats: IMAGE_SCAN_ZXING_FORMATS,
+      tryHarder: true,
+      tryInvert: true,
+      tryRotate: true,
+      maxNumberOfSymbols: 1,
+    });
+    const first = results.find((r) => r.isValid && Boolean(r.text?.trim()));
+    if (first?.text?.trim()) {
+      return first.text.trim();
+    }
+
+    throw new Error(
+      "Aucun QR Code ou code-barres lisible détecté sur cette image. Essayez une photo plus nette ou utilisez la saisie manuelle."
+    );
+  } finally {
+    cleanup();
   }
 }
