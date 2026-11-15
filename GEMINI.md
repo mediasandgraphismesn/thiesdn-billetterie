@@ -20,3 +20,8 @@
 ## 4. Paiement Manuel
 - Le flux Wave/OM est manuel. Ne jamais simuler un webhook de paiement réel sans confirmation administrative.
 - Aucun billet ne doit être émis avant que l'admin ait validé la commande.
+
+## 5. Livraison Git & Déploiement Vercel
+- Après chaque modification validée (hors attente de confirmation en mode `/plan`), vérifier `npx tsc --noEmit` et `npm run build` (0 erreur), puis exécuter systématiquement un `git commit` et `git push origin main`.
+- Toujours indexer uniquement les fichiers modifiés par la tâche (`git add <fichiers>`) : ne JAMAIS exécuter `git add -A` afin d'exclure les fichiers locaux non suivis, volumineux ou sensibles (`video/`, `out/`, `*.psd`, notes `.md` locales, `test-results/PREUVE_BILLETS_PHYSIQUES.pdf`).
+- Suivre le déploiement Vercel jusqu'au statut `● Ready` et vérifier le code `HTTP 200` sur `https://billetterie.thiesdn.site`.

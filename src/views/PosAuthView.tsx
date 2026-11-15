@@ -163,16 +163,11 @@ export const PosAuthView: React.FC<PosAuthViewProps> = ({
           <div className="inline-flex p-3.5 rounded-2xl bg-[#8A2BE2]/20 border border-[#8A2BE2]/40 text-[#DCB8FF] mb-1 shadow-lg shadow-[#8A2BE2]/25">
             <Store className="w-8 h-8 text-[#E9C349]" />
           </div>
-          <div className="inline-block">
-            <span className="bg-[#241A00] text-[#E9C349] border border-[#E9C349]/40 text-[10px] font-mono font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full">
-              Terminal POS Vendeur
-            </span>
-          </div>
           <h2 className="font-heading font-extrabold text-2xl text-white tracking-tight">
             Guichet Point de Vente
           </h2>
           <p className="text-xs text-gray-300 max-w-xs mx-auto leading-relaxed">
-            Connectez-vous pour accéder à votre caisse mobile, déclarer vos ventes physiques et suivre vos commissions.
+            Connectez-vous pour accéder à votre caisse mobile.
           </p>
         </div>
 
