@@ -52,8 +52,8 @@ export default async function handler(_req: any, res: any) {
 
     const { data, error } = await supabase
       .from('events')
-      .select('id, title, updated_at, created_at, status, is_deleted, deleted_at')
-      .eq('status', 'approved')
+      .select('*')
+      .ilike('status', 'approved')
       .order('created_at', { ascending: false })
       .limit(200);
 
@@ -64,7 +64,7 @@ export default async function handler(_req: any, res: any) {
         const path = slug
           ? `/evenement/${slug}--${encodeURIComponent(row.id)}`
           : `/evenement/${encodeURIComponent(row.id)}`;
-        const lastmodRaw = row.updated_at || row.created_at;
+        const lastmodRaw = row.created_at;
         const lastmod = lastmodRaw ? new Date(lastmodRaw).toISOString().split('T')[0] : undefined;
         eventUrls.push({
           loc: `${SITE_URL}${path}`,
