@@ -5987,6 +5987,32 @@ export const mapDbEventToItem = (db: any): EventItem => {
   };
 };
 
+const PUBLIC_EVENTS_RAW_CACHE_KEY = 'thiesdn_public_events_raw_v1';
+
+export const readCachedPublicEvents = (): EventItem[] => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(PUBLIC_EVENTS_RAW_CACHE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map(mapDbEventToItem)
+      .filter((e): e is EventItem => Boolean(e) && !e.isDeleted && !e.deletedAt);
+  } catch {
+    return [];
+  }
+};
+
+const writeCachedPublicEventsRaw = (rows: any[]) => {
+  if (typeof window === 'undefined' || !Array.isArray(rows)) return;
+  try {
+    localStorage.setItem(PUBLIC_EVENTS_RAW_CACHE_KEY, JSON.stringify(rows));
+  } catch {
+    // Ignore si quota localStorage atteint
+  }
+};
+
 export const fetchEventsFromSupabase = async (
   options?: { includeDeleted?: boolean; publicOnly?: boolean }
 ): Promise<{ events: EventItem[]; error: string | null }> => {
@@ -5996,6 +6022,35 @@ export const fetchEventsFromSupabase = async (
   }
 
   try {
+    // Consommer le fetch précoce lancé dans index.html pour éviter toute requête réseau dupliquée au démarrage
+    if (typeof window !== 'undefined') {
+      const win = window as Window & { __THIESDN_EARLY_EVENTS__?: Promise<any[] | null> };
+      if (win.__THIESDN_EARLY_EVENTS__) {
+        const earlyPromise = win.__THIESDN_EARLY_EVENTS__;
+        delete win.__THIESDN_EARLY_EVENTS__;
+        const earlyRows = await earlyPromise;
+        if (Array.isArray(earlyRows)) {
+          writeCachedPublicEventsRaw(earlyRows);
+          const mappedEarly = earlyRows
+            .map(mapDbEventToItem)
+            .filter((e): e is EventItem => Boolean(e));
+          if (options?.publicOnly) {
+            return {
+              events: mappedEarly.filter((e) => {
+                const s = String(e.status || '').toLowerCase();
+                return s === 'approved' && !e.deletedAt && !e.isDeleted;
+              }),
+              error: null,
+            };
+          }
+          const filteredEarly = options?.includeDeleted
+            ? mappedEarly
+            : mappedEarly.filter((e) => !e.isDeleted && !e.deletedAt);
+          return { events: filteredEarly, error: null };
+        }
+      }
+    }
+
     let query = client.from('events').select('*');
 
     // Requête côté billetterie publique : status = 'approved' AND deleted_at IS NULL AND is_deleted IS NOT TRUE
@@ -6040,6 +6095,10 @@ export const fetchEventsFromSupabase = async (
         ? mapped
         : mapped.filter((e) => !e.isDeleted && !e.deletedAt);
       return { events: filtered, error: null };
+    }
+
+    if (!options?.publicOnly && Array.isArray(data)) {
+      writeCachedPublicEventsRaw(data);
     }
 
     const mapped = (data || [])

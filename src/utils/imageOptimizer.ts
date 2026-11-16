@@ -9,7 +9,7 @@
  * - Les autres URLs distantes sont optimisées en WebP via weserv.
  * - Les Data URLs et assets locaux sont toujours servis directement.
  */
-export function getOptimizedImageUrl(url?: string, width = 800, quality = 80): string {
+export function getOptimizedImageUrl(url?: string, width = 800, quality = 78): string {
   if (!url) return '';
 
   const cleanUrl = url.trim();
@@ -24,41 +24,40 @@ export function getOptimizedImageUrl(url?: string, width = 800, quality = 80): s
     return cleanUrl;
   }
 
-  // 3. Spécificité Imgur : BANNIR WESERV, utiliser les suffixes natifs Imgur
+  // 3. Spécificité Imgur : BANNIR WESERV, utiliser les suffixes natifs Imgur en WebP
   const imgurMatch = cleanUrl.match(/^https?:\/\/(?:i\.)?imgur\.com\/([a-zA-Z0-9]+)(\.[a-zA-Z0-9]+)?$/i);
   if (imgurMatch) {
     const rawId = imgurMatch[1];
-    const ext = imgurMatch[2] || '.jpg';
 
     // Déterminer le suffixe de miniature selon la largeur demandée
     let suffix = 'l'; // large par défaut (640px)
     if (width <= 320) {
-      suffix = 'm'; // medium (320px, ~17 Ko)
+      suffix = 'm'; // medium (320px, ~13 Ko en WebP)
     } else if (width <= 640) {
-      suffix = 'l'; // large (640px, ~52 Ko)
+      suffix = 'l'; // large (640px, ~38 Ko en WebP)
     } else {
-      suffix = 'h'; // huge (1024px, ~113 Ko)
+      suffix = 'h'; // huge (1024px)
     }
 
     // Si l'ID a déjà un suffixe (s, m, l, h, t, b), le remplacer par le suffixe adapté
     const baseId = rawId.length === 8 && /[smlhtb]$/i.test(rawId) ? rawId.slice(0, 7) : rawId;
-    return `https://i.imgur.com/${baseId}${suffix}${ext}`;
+    return `https://i.imgur.com/${baseId}${suffix}.webp`;
   }
 
-  // 4. Spécificité Unsplash : Paramètres natifs Unsplash CDN
+  // 4. Spécificité Unsplash : Paramètres natifs Unsplash CDN en WebP
   if (cleanUrl.includes('images.unsplash.com')) {
     const baseUrl = cleanUrl.split('?')[0];
-    return `${baseUrl}?w=${width}&q=${quality}&auto=format&fit=crop`;
+    return `${baseUrl}?w=${width}&q=${quality}&fm=webp&auto=format&fit=crop`;
   }
 
-  // 5. Déjà optimisé via weserv
+  // 5. Déjà optimisé via weserv -> garantir output=webp
   if (cleanUrl.includes('images.weserv.nl') || cleanUrl.includes('wsrv.nl')) {
-    return cleanUrl;
+    return cleanUrl.includes('output=') ? cleanUrl : `${cleanUrl}&output=webp`;
   }
 
   // 6. Autres URL distantes (Supabase Storage, CDN tiers) -> Conversion WebP adaptative
   if (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) {
-    return `https://images.weserv.nl/?url=${encodeURIComponent(cleanUrl)}&w=${width}&q=${quality}&output=webp`;
+    return `https://images.weserv.nl/?url=${encodeURIComponent(cleanUrl)}&w=${width}&q=${quality}&output=webp&we`;
   }
 
   return cleanUrl;

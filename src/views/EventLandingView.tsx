@@ -48,7 +48,7 @@ export const EventLandingView: React.FC<EventLandingViewProps> = ({
   onSelectOtherEvent,
 }) => {
   const heroImageUrl = useMemo(
-    () => (event ? getOptimizedImageUrl(event.posterUrl, 1200, 82) : ''),
+    () => (event ? getOptimizedImageUrl(event.posterUrl, 800, 78) : ''),
     [event]
   );
 
@@ -207,15 +207,14 @@ export const EventLandingView: React.FC<EventLandingViewProps> = ({
 
       {/* En-tête Hero LCP + Answer-First GEO */}
       <header className="glass-panel rounded-3xl overflow-hidden border border-white/10 shadow-2xl">
-        <div className="relative aspect-[16/9] w-full bg-[#121118] overflow-hidden">
+        <div className="relative aspect-[16/9] w-full bg-gradient-to-br from-[#1c122c] via-[#121118] to-[#0A0A0A] overflow-hidden">
           <SafeImage
             src={heroImageUrl}
             rawSrc={event.posterUrl}
             alt={`Affiche officielle ${event.title} à ${cityLabel}`}
-            loading="eager"
-            fetchPriority="high"
-            width={1200}
-            height={675}
+            priority={true}
+            width={800}
+            height={450}
             className="w-full h-full object-cover"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-[#0A0A0A] via-black/40 to-transparent" />

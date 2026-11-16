@@ -80,7 +80,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
   const featuredEvents = displayPool.filter((e) => e && e.featured);
   const upcomingEvents = filteredEvents.slice(0, 8);
   const lcpEvent = featuredEvents[0] || upcomingEvents[0];
-  const lcpImageUrl = lcpEvent ? getOptimizedImageUrl(lcpEvent.posterUrl, 800, 80) : undefined;
+  const lcpWidth = featuredEvents[0] ? 640 : 320;
+  const lcpImageUrl = lcpEvent ? getOptimizedImageUrl(lcpEvent.posterUrl, lcpWidth, 78) : undefined;
 
   useEffect(() => {
     if (isPromoterView) return;

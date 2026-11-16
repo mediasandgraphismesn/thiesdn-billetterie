@@ -50,7 +50,7 @@ export const EventCard: React.FC<EventCardProps> = ({
     !isOngoing && event.salesOpenAt && new Date(event.salesOpenAt).getTime() > now
   );
 
-  const optimizedPoster = getOptimizedImageUrl(event.posterUrl, 800, 80);
+  const optimizedPoster = getOptimizedImageUrl(event.posterUrl, 640, 78);
   const eventPath = getEventUrlPath(event);
 
   const handleLinkNavigation = (e: React.MouseEvent<HTMLAnchorElement>) => {
@@ -143,9 +143,9 @@ export const EventCard: React.FC<EventCardProps> = ({
         onClick={() => onSelect(event)}
         className="glass-panel p-3.5 rounded-2xl flex items-center gap-3 sm:gap-4 cursor-pointer hover:border-[#8A2BE2]/50 hover:bg-[#252328] hover:scale-[1.01] transition-all duration-200 group min-w-0"
       >
-        <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden flex-shrink-0 relative bg-[#121118]">
+        <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden flex-shrink-0 relative bg-gradient-to-br from-[#1c122c] via-[#121118] to-[#0A0A0A]">
           <SafeImage
-            src={getOptimizedImageUrl(event.posterUrl, 400, 80)}
+            src={getOptimizedImageUrl(event.posterUrl, 320, 78)}
             rawSrc={event.posterUrl}
             alt={event.title}
             priority={priority}

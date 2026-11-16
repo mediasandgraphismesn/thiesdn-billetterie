@@ -28,6 +28,98 @@
     <link rel="preconnect" href="https://i.imgur.com" crossorigin />
     <link rel="dns-prefetch" href="https://i.imgur.com" />
 
+    <!-- Bootstrap Fetch Précoce + Preload Image LCP avant chargement de React/Supabase JS -->
+    <script>
+      (function () {
+        try {
+          var path = window.location.pathname || '/';
+          if (path.indexOf('/pos') === 0 || path.indexOf('/admin') === 0 || path.indexOf('/scan/') === 0) return;
+
+          var toWebp = function (raw, w) {
+            if (!raw) return '';
+            var u = String(raw).trim();
+            if (u.indexOf('data:image/') === 0 || u.charAt(0) === '/') return u;
+            var m = u.match(/^https?:\/\/(?:i\.)?imgur\.com\/([a-zA-Z0-9]+)(\.[a-zA-Z0-9]+)?$/i);
+            if (m) {
+              var id = m[1];
+              var sfx = w <= 320 ? 'm' : w <= 640 ? 'l' : 'h';
+              var base = id.length === 8 && /[smlhtb]$/i.test(id) ? id.slice(0, 7) : id;
+              return 'https://i.imgur.com/' + base + sfx + '.webp';
+            }
+            if (u.indexOf('images.unsplash.com') !== -1) {
+              return u.split('?')[0] + '?w=' + w + '&q=78&fm=webp&auto=format&fit=crop';
+            }
+            if (u.indexOf('http') === 0 && u.indexOf('weserv.nl') === -1 && u.indexOf('wsrv.nl') === -1) {
+              return 'https://images.weserv.nl/?url=' + encodeURIComponent(u) + '&w=' + w + '&q=78&output=webp&we';
+            }
+            return u;
+          };
+
+          var injectPreload = function (href) {
+            if (!href || document.head.querySelector('link[data-early-lcp="1"]')) return;
+            var l = document.createElement('link');
+            l.rel = 'preload';
+            l.as = 'image';
+            l.setAttribute('fetchpriority', 'high');
+            l.setAttribute('data-early-lcp', '1');
+            l.href = href;
+            document.head.appendChild(l);
+          };
+
+          var pickTargetPoster = function (rows) {
+            if (!Array.isArray(rows) || !rows.length) return '';
+            var evMatch = path.match(/^\/(?:evenement|event)\/([^/?#]+)/i);
+            var urlEv = new URLSearchParams(window.location.search).get('event');
+            var rawSlug = evMatch ? decodeURIComponent(evMatch[1]) : urlEv;
+            if (rawSlug) {
+              var dd = rawSlug.lastIndexOf('--');
+              var targetId = dd !== -1 ? rawSlug.slice(dd + 2) : rawSlug;
+              for (var i = 0; i < rows.length; i++) {
+                if (rows[i] && rows[i].id === targetId && rows[i].affiche_url) {
+                  return toWebp(rows[i].affiche_url, 800);
+                }
+              }
+            }
+            var approved = rows.filter(function (r) {
+              return r && String(r.status || '').toLowerCase() === 'approved' && !r.is_deleted && !r.deleted_at;
+            });
+            var pool = approved.length ? approved : rows;
+            var feat = pool.filter(function (r) { return r && (r.featured || r.is_featured); });
+            var hero = feat[0] || pool[0];
+            if (!hero || !hero.affiche_url) return '';
+            return toWebp(hero.affiche_url, feat[0] ? 640 : 320);
+          };
+
+          try {
+            var cachedRaw = localStorage.getItem('thiesdn_public_events_raw_v1');
+            if (cachedRaw) {
+              var cachedRows = JSON.parse(cachedRaw);
+              injectPreload(pickTargetPoster(cachedRows));
+            }
+          } catch (e) {}
+
+          var sbUrl = (localStorage.getItem('VITE_SUPABASE_URL') || 'https://jgvuzlchemqcfygsylln.supabase.co').replace(/\/+$/, '');
+          var sbKey = localStorage.getItem('VITE_SUPABASE_ANON_KEY') || 'sb_publishable_TX1CK_Ahwd5hUwTwRAagpg_4c2UwyDj';
+
+          window.__THIESDN_EARLY_EVENTS__ = fetch(sbUrl + '/rest/v1/events?select=*&order=created_at.desc', {
+            headers: {
+              apikey: sbKey,
+              Authorization: 'Bearer ' + sbKey
+            }
+          })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (rows) {
+              if (Array.isArray(rows) && rows.length) {
+                injectPreload(pickTargetPoster(rows));
+                try { localStorage.setItem('thiesdn_public_events_raw_v1', JSON.stringify(rows)); } catch (e) {}
+              }
+              return rows;
+            })
+            .catch(function () { return null; });
+        } catch (e) {}
+      })();
+    </script>
+
     <!-- Schema.org LocalBusiness (SEO Local Sénégal / Google Business Profile) -->
     <script type="application/ld+json">
       {

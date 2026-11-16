@@ -28,12 +28,14 @@ export const SafeImage: React.FC<SafeImageProps> = ({
   const [currentSrc, setCurrentSrc] = useState<string | null | undefined>(src);
   const [hasError, setHasError] = useState<boolean>(!src);
   const [hasTriedRaw, setHasTriedRaw] = useState<boolean>(false);
+  const [isLoaded, setIsLoaded] = useState<boolean>(false);
 
   // Mettre à jour si la prop src change
   React.useEffect(() => {
     setCurrentSrc(src);
     setHasError(!src);
     setHasTriedRaw(false);
+    setIsLoaded(false);
   }, [src]);
 
   const handleError = () => {
@@ -67,8 +69,14 @@ export const SafeImage: React.FC<SafeImageProps> = ({
       loading={priority ? 'eager' : rest.loading || 'lazy'}
       fetchPriority={priority ? 'high' : rest.fetchPriority}
       decoding={priority ? 'sync' : 'async'}
+      onLoad={(e) => {
+        setIsLoaded(true);
+        rest.onLoad?.(e);
+      }}
       onError={handleError}
-      className={`${className} object-cover`}
+      className={`${className} object-cover bg-gradient-to-br from-[#1c122c] via-[#121118] to-[#0A0A0A] transition-opacity duration-300 ${
+        priority || isLoaded ? 'opacity-100' : 'opacity-90'
+      }`}
       {...rest}
     />
   );

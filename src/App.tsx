@@ -79,6 +79,7 @@ import {
   fetchUserProfile,
   fetchLinkedSalesAgentForUser,
   fetchEventsFromSupabase,
+  readCachedPublicEvents,
   updateEventStatusInSupabase,
   fetchUserTicketsFromSupabase,
   fetchOrdersFromSupabase,
@@ -192,7 +193,7 @@ export default function App() {
   const [isCheckingPosAccess, setIsCheckingPosAccess] = useState<boolean>(() => getInitialIsPosRoute());
   const [isAuthenticated, setIsAuthenticated] = useState(authIsAuthenticated);
   const [user, setUser] = useState<UserProfile>(contextUser || INITIAL_USER);
-  const [events, setEvents] = useState<EventItem[]>([]);
+  const [events, setEvents] = useState<EventItem[]>(() => readCachedPublicEvents());
 
   // Liste sécurisée garantie non-nulle
   const safeEvents = useMemo(() => (Array.isArray(events) ? events.filter(Boolean) : []), [events]);
@@ -221,7 +222,9 @@ export default function App() {
   }, [safeEvents, user?.id, user?.name, user?.email]);
 
   const myEventsCount = myEvents.length;
-  const [isLoadingEvents, setIsLoadingEvents] = useState<boolean>(true);
+  const [isLoadingEvents, setIsLoadingEvents] = useState<boolean>(
+    () => readCachedPublicEvents().length === 0
+  );
   const [eventsError, setEventsError] = useState<string | null>(null);
   const [paymentBannerMessage, setPaymentBannerMessage] = useState<string | null>(null);
   const [tickets, setTickets] = useState<UserTicket[]>(INITIAL_TICKETS);
@@ -848,18 +851,20 @@ export default function App() {
   // Chargement des événements réels depuis Supabase (Source Unique de Vérité avec Résilience Totale)
   const refreshEvents = async () => {
     try {
-      setIsLoadingEvents(true);
+      if (events.length === 0) {
+        setIsLoadingEvents(true);
+      }
       setEventsError(null);
       const { events: dbEvents, error } = await fetchEventsFromSupabase({ includeDeleted: true });
       if (error) {
         console.warn('Erreur Supabase events (mode repli résilient):', error);
-        setEvents([]);
+        if (events.length === 0) setEvents([]);
       } else {
         setEvents(Array.isArray(dbEvents) ? dbEvents.filter(Boolean) : []);
       }
     } catch (err: any) {
       console.error('Exception lors du chargement des événements:', err);
-      setEvents([]);
+      if (events.length === 0) setEvents([]);
     } finally {
       setIsLoadingEvents(false);
     }
