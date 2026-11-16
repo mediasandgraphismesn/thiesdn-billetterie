@@ -49,7 +49,6 @@ import {
   scanTicketImageFile,
   formatFriendlyCameraError,
   OptimizedScannerHandle,
-  ScannerMetrics,
 } from '../utils/scannerEngine';
 import {
   savePosAgentSnapshot,
@@ -211,7 +210,6 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [torchSupported, setTorchSupported] = useState(false);
   const [isTorchOn, setIsTorchOn] = useState(false);
-  const [scannerMetrics, setScannerMetrics] = useState<ScannerMetrics | null>(null);
   const scannerHandleRef = useRef<OptimizedScannerHandle | null>(null);
   const scannerRunIdRef = useRef<number>(0);
   const isStartingCameraRef = useRef<boolean>(false);
@@ -707,7 +705,6 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
         qrboxRatio: { widthRatio: 0.82, heightRatio: 0.72, minWidth: 160, minHeight: 150 },
         onReady: (metrics) => {
           if (runId !== scannerRunIdRef.current) return;
-          setScannerMetrics(metrics);
           setTorchSupported(metrics.torchSupported);
         },
         onDecode: (decodedText) => {
@@ -1728,12 +1725,9 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                       )}
                     </div>
 
-                    {isCameraScanning && scannerMetrics && (
-                      <div className="px-3 py-1 bg-black/80 border-t border-white/10 flex items-center justify-between text-[10px] text-gray-300 font-mono">
-                        <span>{scannerMetrics.engineLabel}</span>
-                        <span>
-                          {scannerMetrics.fps} FPS (1/{scannerMetrics.fpsDecimation}) • Prêt en {scannerMetrics.cameraStartMs} ms
-                        </span>
+                    {isCameraScanning && (
+                      <div className="px-3 py-1.5 bg-black/80 border-t border-white/10 text-center text-[11px] font-semibold text-emerald-300">
+                        📷 Caméra active — Placez le QR code dans le cadre
                       </div>
                     )}
 

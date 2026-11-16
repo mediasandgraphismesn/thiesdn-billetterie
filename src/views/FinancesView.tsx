@@ -2764,10 +2764,11 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                               <button
                                 type="button"
                                 onClick={() => setActiveAgentMenuId(isMenuOpen ? null : agent.id)}
-                                className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 hover:text-white transition-all cursor-pointer"
+                                className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white transition-all cursor-pointer"
                                 title="Plus d'actions"
+                                aria-label="Plus d'actions"
                               >
-                                <MoreVertical className="w-4 h-4" />
+                                <MoreVertical className="w-5 h-5" />
                               </button>
 
                               {isMenuOpen && renderAgentMoreMenu(agent, 'up')}
@@ -2947,10 +2948,11 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                                     <button
                                       type="button"
                                       onClick={() => setActiveAgentMenuId(activeAgentMenuId === agent.id ? null : agent.id)}
-                                      className="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 hover:text-white transition-all cursor-pointer"
+                                      className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white transition-all cursor-pointer"
                                       title="Plus d'actions"
+                                      aria-label="Plus d'actions"
                                     >
-                                      <MoreVertical className="w-4 h-4" />
+                                      <MoreVertical className="w-5 h-5" />
                                     </button>
 
                                     {activeAgentMenuId === agent.id && renderAgentMoreMenu(agent, 'down')}

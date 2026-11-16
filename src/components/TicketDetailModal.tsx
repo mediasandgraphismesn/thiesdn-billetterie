@@ -565,10 +565,10 @@ export const TicketDetailModal: React.FC<TicketDetailModalProps> = ({
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-sm sm:max-w-md bg-gradient-to-b from-[#1C1824] via-[#0A0A0A] to-[#121118] border border-[#8A2BE2]/40 rounded-3xl overflow-hidden shadow-2xl my-4 sm:my-6"
+        className="relative w-full max-w-sm sm:max-w-md max-h-[92dvh] overflow-y-auto overscroll-contain bg-gradient-to-b from-[#1C1824] via-[#0A0A0A] to-[#121118] border border-[#8A2BE2]/40 rounded-3xl shadow-2xl my-2 sm:my-6"
       >
-        {/* TOP BAR AVEC LOGO OFFICIEL THIÈSDN */}
-        <div className="p-3.5 sm:p-4 flex items-center justify-between border-b border-white/10 bg-black/50">
+        {/* TOP BAR STICKY AVEC LOGO OFFICIEL THIÈSDN */}
+        <div className="sticky top-0 z-50 p-3.5 sm:p-4 flex items-center justify-between border-b border-white/10 bg-[#0A0A0A]/95 backdrop-blur-md">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="h-8 px-2 py-0.5 rounded-lg bg-white/10 border border-white/10 flex items-center justify-center shrink-0">
               <img
@@ -841,16 +841,16 @@ export const TicketDetailModal: React.FC<TicketDetailModalProps> = ({
                   type="button"
                   onClick={handleDownloadPassPng}
                   disabled={!isQrReady}
-                  className="h-11 min-h-[44px] px-3 rounded-xl bg-[#8A2BE2] hover:bg-[#7822c9] disabled:opacity-50 text-white font-heading font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md shadow-[#8A2BE2]/30 cursor-pointer"
+                  className="h-11 min-h-[44px] px-3 rounded-xl btn-gold-glow disabled:opacity-50 font-heading font-extrabold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md cursor-pointer"
                 >
-                  <Download className="w-4 h-4 text-[#E9C349]" />
-                  <span>QR PNG HD</span>
+                  <Download className="w-4 h-4 text-[#241A00]" />
+                  <span>Télécharger QR (PNG)</span>
                 </button>
                 <button
                   type="button"
                   onClick={handleDownloadTicketPdf}
                   disabled={!isQrReady}
-                  className="h-11 min-h-[44px] px-3 rounded-xl bg-[#E9C349] hover:bg-[#d8b33c] disabled:opacity-50 text-[#241A00] font-heading font-extrabold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md cursor-pointer"
+                  className="h-11 min-h-[44px] px-3 rounded-xl bg-transparent hover:bg-white/5 border border-white/20 disabled:opacity-50 text-white font-heading font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                 >
                   <FileText className="w-4 h-4" />
                   <span>Billet PDF A4</span>
@@ -889,20 +889,21 @@ export const TicketDetailModal: React.FC<TicketDetailModalProps> = ({
                 type="button"
                 onClick={handleDownloadPassPng}
                 disabled={!isQrReady}
-                className="flex-1 h-11 min-h-[44px] px-4 rounded-xl bg-[#8A2BE2] hover:bg-[#7822c9] disabled:opacity-50 text-white font-heading font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-[#8A2BE2]/30 active:scale-95 cursor-pointer"
+                className="flex-1 h-11 min-h-[44px] px-4 rounded-xl btn-gold-glow disabled:opacity-50 font-heading font-extrabold text-xs flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 cursor-pointer"
               >
-                <Download className="w-4 h-4" />
-                <span>Télécharger Pass (PNG)</span>
+                <Download className="w-4 h-4 text-[#241A00]" />
+                <span>Télécharger QR (PNG)</span>
               </button>
               <button
                 type="button"
                 onClick={handleDownloadTicketPdf}
                 disabled={!isQrReady}
-                title="Télécharger en PDF A4"
-                aria-label="Télécharger le billet en PDF"
-                className="w-11 h-11 min-h-[44px] min-w-[44px] rounded-xl bg-[#E9C349]/15 hover:bg-[#E9C349]/25 text-[#E9C349] border border-[#E9C349]/40 flex items-center justify-center transition-all cursor-pointer shrink-0 disabled:opacity-50"
+                title="Billet PDF A4"
+                aria-label="Télécharger le billet PDF A4"
+                className="h-11 min-h-[44px] px-3 rounded-xl bg-transparent hover:bg-white/5 text-white border border-white/20 font-heading font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer shrink-0 disabled:opacity-50"
               >
                 <FileText className="w-4 h-4" />
+                <span className="hidden min-[380px]:inline">PDF A4</span>
               </button>
               <button
                 type="button"
