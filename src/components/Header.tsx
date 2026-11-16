@@ -67,7 +67,7 @@ export const Header: React.FC<HeaderProps> = ({
               Days and Nights
             </span>
           </h1>
-          <p className="text-[10px] uppercase font-semibold tracking-wider text-gray-400 -mt-0.5 sm:-mt-1 hidden sm:block">
+          <p className="text-[10px] uppercase font-semibold tracking-wider text-gray-300 -mt-0.5 sm:-mt-1 hidden sm:block">
             {currentRole === 'admin' && !isAdminPreview ? 'Console Back-Office' : 'Plateforme Officielle'}
           </p>
         </div>
@@ -91,10 +91,10 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Bouton Discret Partenariat (Accès Showcase Motion Design) */}
         <button
           onClick={() => onNavigate('showcase')}
-          className="group flex items-center justify-center gap-1.5 h-10 px-2 sm:px-2.5 text-xs sm:text-sm font-medium text-gray-400 hover:text-white transition-colors rounded-xl hover:bg-white/5 cursor-pointer flex-shrink-0 min-w-[40px]"
+          className="group flex items-center justify-center gap-1.5 h-10 px-2 sm:px-2.5 text-xs sm:text-sm font-medium text-[#E5E2E1] hover:text-white transition-colors rounded-xl hover:bg-white/5 cursor-pointer flex-shrink-0 min-w-[40px]"
           title="Partenariat & Espace Promoteur / Artiste"
         >
-          <Handshake className="w-4 h-4 text-gray-400 group-hover:text-white transition-colors flex-shrink-0" />
+          <Handshake className="w-4 h-4 text-gray-300 group-hover:text-white transition-colors flex-shrink-0" />
           <span className="hidden sm:inline">Partenariat</span>
         </button>
 
@@ -128,7 +128,7 @@ export const Header: React.FC<HeaderProps> = ({
           className={`hidden sm:flex w-10 h-10 min-w-[40px] min-h-[40px] items-center justify-center rounded-xl border transition-all ${
             ambientShader
               ? 'bg-[#8A2BE2]/20 border-[#8A2BE2]/50 text-[#DCB8FF]'
-              : 'bg-[#1C1B1B] border-white/5 text-gray-400 hover:text-white'
+              : 'bg-[#1C1B1B] border-white/5 text-gray-300 hover:text-white'
           }`}
         >
           <Sliders className="w-4 h-4" />

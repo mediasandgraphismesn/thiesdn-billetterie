@@ -81,18 +81,18 @@ export const HomeView: React.FC<HomeViewProps> = ({
       {/* Search Bar matching Image 2 */}
       <div className="relative">
         <div className="relative flex items-center bg-[#1A1A1A] border border-white/10 rounded-2xl px-4 py-3.5 focus-within:border-[#8A2BE2] focus-within:shadow-[0_0_15px_rgba(138,43,226,0.25)] transition-all">
-          <Search className="w-5 h-5 text-gray-400 mr-3 flex-shrink-0" />
+          <Search className="w-5 h-5 text-gray-300 mr-3 flex-shrink-0" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Rechercher un événement, artiste, lieu..."
-            className="w-full bg-transparent border-none outline-none text-sm text-white placeholder-gray-500 focus:ring-0 p-0"
+            className="w-full bg-transparent border-none outline-none text-sm text-white placeholder:text-gray-300/75 focus:ring-0 p-0"
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
-              className="text-xs text-gray-400 hover:text-white px-2"
+              className="text-xs text-gray-300 hover:text-white px-2"
             >
               Effacer
             </button>
@@ -168,7 +168,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
           <h2 className="font-heading text-xl sm:text-2xl font-bold text-white tracking-tight">
             {isPromoterView ? 'Mes Événements Organisés' : 'Événements à Venir'}
           </h2>
-          <span className="text-xs text-gray-400 font-medium">
+          <span className="text-xs text-gray-300 font-medium">
             {isLoading
               ? 'Chargement...'
               : `${upcomingEvents.length} événement${upcomingEvents.length > 1 ? 's' : ''}`}
@@ -191,7 +191,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 <h3 className="font-heading font-bold text-lg text-white">
                   Vous n'avez pas encore d'événement organisé
                 </h3>
-                <p className="text-gray-400 text-xs max-w-md mx-auto">
+                <p className="text-[#E5E2E1] text-xs max-w-md mx-auto">
                   Créez votre premier événement pour débloquer la vente de vos billets en ligne, votre réseau de points de vente physiques et vos scanners d'accès.
                 </p>
               </div>
@@ -210,14 +210,14 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 <Calendar className="w-6 h-6" />
               </div>
               <h3 className="font-heading font-bold text-base text-white">Aucun événement disponible pour le moment</h3>
-              <p className="text-gray-400 text-xs max-w-md mx-auto">
+              <p className="text-[#E5E2E1] text-xs max-w-md mx-auto">
                 Revenez bientôt pour découvrir les prochains événements officiels à Thiès, Mbour, Saly et Dakar.
               </p>
             </div>
           )
         ) : upcomingEvents.length === 0 ? (
           <div className="glass-panel p-10 rounded-2xl text-center space-y-3">
-            <p className="text-gray-400 text-sm">
+            <p className="text-[#E5E2E1] text-sm">
               Aucun événement ne correspond à votre recherche.
             </p>
             <button

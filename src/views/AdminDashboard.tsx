@@ -224,7 +224,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   return (
-    <div className="space-y-8 pb-16 animate-in fade-in duration-300">
+    <div className="space-y-8 pb-[calc(80px+env(safe-area-inset-bottom))] animate-in fade-in duration-300">
       {/* Notifications Toasts */}
       {actionSuccessToast && (
         <div className="fixed top-20 right-6 z-50 p-4 rounded-2xl bg-[#1C1B1B] border border-emerald-500 shadow-2xl text-white flex items-center gap-3 animate-in slide-in-from-top-4 duration-300">
@@ -357,7 +357,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </span>
             </div>
             <span className="text-xs font-bold text-white">Tous les Événements</span>
-            <span className="text-[10px] text-gray-400">{events.length} au total</span>
+            <span className="text-[10px] text-gray-300">{events.length} au total</span>
           </button>
 
           <button
@@ -373,7 +373,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               )}
             </div>
             <span className="text-xs font-bold text-white">Modération</span>
-            <span className="text-[10px] text-gray-400">{pendingEventsCount} en attente</span>
+            <span className="text-[10px] text-gray-300">{pendingEventsCount} en attente</span>
           </button>
 
           <button
@@ -389,7 +389,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               )}
             </div>
             <span className="text-xs font-bold text-white">Validation Paiements</span>
-            <span className="text-[10px] text-gray-400">{pendingOrdersCount} à vérifier</span>
+            <span className="text-[10px] text-gray-300">{pendingOrdersCount} à vérifier</span>
           </button>
 
           <button
@@ -400,7 +400,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <Users className="w-5 h-5" />
             </div>
             <span className="text-xs font-bold text-white">Gestion Utilisateurs</span>
-            <span className="text-[10px] text-gray-400">{profiles.length || 'Comptes'} inscrits</span>
+            <span className="text-[10px] text-gray-300">{profiles.length || 'Comptes'} inscrits</span>
           </button>
 
           <button
@@ -411,7 +411,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <Wallet className="w-5 h-5" />
             </div>
             <span className="text-xs font-bold text-white">Finances & CA</span>
-            <span className="text-[10px] text-gray-400">{totalRevenue.toLocaleString('fr-FR')} F</span>
+            <span className="text-[10px] text-gray-300">{totalRevenue.toLocaleString('fr-FR')} F</span>
           </button>
 
           <button
@@ -422,18 +422,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <QrCode className="w-5 h-5" />
             </div>
             <span className="text-xs font-bold text-white">Scanner d'Accès</span>
-            <span className="text-[10px] text-gray-400">Guichet QR Code</span>
+            <span className="text-[10px] text-gray-300">Guichet QR Code</span>
           </button>
 
           <button
             onClick={() => onNavigateTab('settings')}
             className="p-4 rounded-2xl bg-[#1C1B1B] hover:bg-[#252427] border border-white/5 hover:border-white/20 transition-all flex flex-col items-center text-center gap-2 group"
           >
-            <div className="w-10 h-10 rounded-xl bg-gray-500/20 text-gray-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+            <div className="w-10 h-10 rounded-xl bg-gray-500/20 text-gray-300 flex items-center justify-center group-hover:scale-110 transition-transform">
               <Settings className="w-5 h-5" />
             </div>
             <span className="text-xs font-bold text-white">Paramètres</span>
-            <span className="text-[10px] text-gray-400">Configuration</span>
+            <span className="text-[10px] text-gray-300">Configuration</span>
           </button>
         </div>
       </section>
@@ -446,7 +446,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <Clock className="w-5 h-5 text-[#E9C349]" />
               <span>Toutes les Commandes de la Table `orders` ({orders.length})</span>
             </h2>
-            <p className="text-xs text-gray-400 mt-0.5">
+            <p className="text-xs text-[#E5E2E1] mt-0.5">
               Historique complet de toutes les commandes enregistrées dans Supabase pour l'ensemble des événements.
             </p>
           </div>
@@ -496,7 +496,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <ShieldCheck className="w-5 h-5 text-amber-400" />
                 <span>Événements en Attente de Modération ({pendingEvents.length})</span>
               </h2>
-              <p className="text-xs text-gray-400 mt-0.5">
+              <p className="text-xs text-[#E5E2E1] mt-0.5">
                 Vérifiez les 3 liens de paiement Wave obligatoires avant d'autoriser la vente.
               </p>
             </div>
@@ -528,7 +528,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <p className="text-xs text-[#DCB8FF]">
                       Promoteur : <span className="font-semibold text-white">{evt.promoter.name}</span>
                     </p>
-                    <p className="text-[11px] text-gray-400 mt-1 flex items-center gap-1.5">
+                    <p className="text-[11px] text-gray-300 mt-1 flex items-center gap-1.5">
                       <MapPin className="w-3 h-3 text-[#E9C349]" />
                       <span>{evt.venue}{evt.quartier ? ` (${evt.quartier})` : ''}, {evt.city}</span>
                       <span>•</span>

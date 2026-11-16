@@ -159,7 +159,7 @@ export const SpotifyVinylPlayer: React.FC<SpotifyVinylPlayerProps> = ({
               <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#121118]">
                 <div className="flex flex-col items-center gap-2">
                   <span className="w-6 h-6 border-2 border-[#1DB954] border-t-transparent rounded-full animate-spin" />
-                  <span className="text-xs text-gray-400">Chargement de Spotify...</span>
+                  <span className="text-xs text-gray-300">Chargement de Spotify...</span>
                 </div>
               </div>
             )}

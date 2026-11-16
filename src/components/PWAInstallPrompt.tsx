@@ -122,7 +122,7 @@ export const PWAInstallPrompt: React.FC = () => {
           <button
             onClick={handleDismiss}
             aria-label="Fermer la bannière"
-            className="p-1 rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition-colors flex-shrink-0"
+            className="p-1 rounded-full text-gray-300 hover:text-white hover:bg-white/10 transition-colors flex-shrink-0"
           >
             <X className="w-4 h-4" />
           </button>
@@ -132,7 +132,7 @@ export const PWAInstallPrompt: React.FC = () => {
         <div className="mt-2.5 pt-2 border-t border-white/10 flex items-center justify-end gap-2">
           <button
             onClick={handleDismiss}
-            className="px-3 py-1.5 text-xs font-medium text-gray-400 hover:text-white transition-colors"
+            className="px-3 py-1.5 text-xs font-medium text-gray-300 hover:text-white transition-colors"
           >
             Plus tard
           </button>

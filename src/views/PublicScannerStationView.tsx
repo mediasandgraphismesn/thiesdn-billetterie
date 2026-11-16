@@ -362,7 +362,7 @@ export const PublicScannerStationView: React.FC<PublicScannerStationViewProps> =
           <RefreshCw className="w-8 h-8 text-[#8A2BE2] animate-spin" />
         </div>
         <p className="font-heading text-lg font-bold text-white">Connexion au Poste de Contrôle...</p>
-        <p className="text-xs text-gray-400 font-mono">Code poste : {accessCode}</p>
+        <p className="text-xs text-[#E5E2E1] font-mono">Code poste : {accessCode}</p>
       </div>
     );
   }
@@ -381,7 +381,7 @@ export const PublicScannerStationView: React.FC<PublicScannerStationViewProps> =
           <p className="text-sm font-bold text-red-200">
             {sessionLockError}
           </p>
-          <p className="text-xs text-gray-400 pt-2">
+          <p className="text-xs text-[#E5E2E1] pt-2">
             Contactez l'administrateur ou la régie pour révoquer la session précédente et libérer ce scanner.
           </p>
         </div>
@@ -408,7 +408,7 @@ export const PublicScannerStationView: React.FC<PublicScannerStationViewProps> =
           <p className="text-sm text-red-200">
             {errorMessage || 'Ce poste de contrôle est inactif ou n’existe pas.'}
           </p>
-          <p className="text-xs text-gray-500 pt-2">
+          <p className="text-xs text-[#E5E2E1] pt-2">
             Demandez un nouveau lien ou la réactivation du poste auprès du promoteur ou de la régie.
           </p>
         </div>
@@ -452,7 +452,7 @@ export const PublicScannerStationView: React.FC<PublicScannerStationViewProps> =
             <h1 className="font-heading text-lg font-black text-white leading-tight mt-0.5">
               {station.name}
             </h1>
-            <p className="text-[11px] text-gray-400 truncate max-w-[240px] flex items-center gap-1.5">
+            <p className="text-[11px] text-gray-300 truncate max-w-[240px] flex items-center gap-1.5">
               <span>{station.eventTitle}</span>
               <span className="text-[9px] text-[#DCB8FF] font-bold bg-[#8A2BE2]/20 px-1.5 py-0.2 rounded">
                 24h/24
@@ -475,7 +475,7 @@ export const PublicScannerStationView: React.FC<PublicScannerStationViewProps> =
             )}
 
             <div className="text-right bg-black/50 px-3 py-1.5 rounded-xl border border-white/10">
-              <span className="text-[9px] uppercase tracking-wider text-gray-400 font-bold block">
+              <span className="text-[9px] uppercase tracking-wider text-gray-300 font-bold block">
                 Entrées
               </span>
               <span className="font-mono text-lg font-black text-emerald-400">
@@ -487,7 +487,7 @@ export const PublicScannerStationView: React.FC<PublicScannerStationViewProps> =
 
         {/* Badge Session Sécurisée Vigile */}
         {sessionInfo && (
-          <div className="mt-2.5 pt-2 border-t border-white/5 flex items-center justify-between text-[10px] text-gray-400">
+          <div className="mt-2.5 pt-2 border-t border-white/5 flex items-center justify-between text-[10px] text-gray-300">
             <span className="flex items-center gap-1 text-[#DCB8FF] font-semibold">
               <ShieldCheck className="w-3 h-3 text-[#E9C349]" />
               <span>Session Sécurisée</span>
@@ -517,7 +517,7 @@ export const PublicScannerStationView: React.FC<PublicScannerStationViewProps> =
                   <div className="space-y-2 max-w-xs">
                     <CameraOff className="w-10 h-10 text-amber-400 mx-auto" />
                     <p className="text-xs text-amber-200 font-medium">{cameraError}</p>
-                    <p className="text-[11px] text-gray-400">
+                    <p className="text-[11px] text-gray-300">
                       Vous pouvez utiliser la saisie manuelle ci-dessous.
                     </p>
                   </div>
@@ -584,7 +584,7 @@ export const PublicScannerStationView: React.FC<PublicScannerStationViewProps> =
 
           {/* FORMULAIRE DE SAISIE RAPIDE (MANUELLE OU DOUCHETTE SCANNER) */}
           <div className="glass-panel p-4 rounded-2xl border border-white/10 space-y-2.5 shadow-xl">
-            <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-gray-300 block">
               Saisie du Code Pass / Billet
             </label>
             <div className="flex gap-2">
@@ -759,7 +759,7 @@ export const PublicScannerStationView: React.FC<PublicScannerStationViewProps> =
                           {scanResult.refusedDetails.holderPhone?.trim() || 'Téléphone non renseigné'}
                         </span>
                       </div>
-                      <div className="flex items-center justify-between text-xs text-gray-400 pt-1 border-t border-white/10 font-mono">
+                      <div className="flex items-center justify-between text-xs text-gray-300 pt-1 border-t border-white/10 font-mono">
                         <span>Billet : {scanResult.refusedDetails.qrCode}</span>
                         <span>{scanResult.refusedDetails.tierName}</span>
                       </div>
@@ -781,10 +781,10 @@ export const PublicScannerStationView: React.FC<PublicScannerStationViewProps> =
 
         {/* PIED DE PAGE ISOLÉ (AUCUN LIEN ADMIN / AUCUNE FUITE DE SÉCURITÉ) */}
         <footer className="pt-4 border-t border-white/5 text-center space-y-1">
-          <p className="text-[10px] text-gray-400 uppercase tracking-widest font-black">
+          <p className="text-[10px] text-gray-300 uppercase tracking-widest font-black">
             Thièsdn Billetterie • Sécurité Portes
           </p>
-          <p className="text-[9px] text-gray-400 font-mono">
+          <p className="text-[9px] text-gray-300 font-mono">
             Poste : {station.name} • Code : {station.accessCode} • Cache billets : {cacheTicketsCount}
           </p>
         </footer>

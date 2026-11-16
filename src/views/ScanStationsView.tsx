@@ -212,12 +212,12 @@ export const ScanStationsView: React.FC<ScanStationsViewProps> = ({
               <Smartphone className="w-3.5 h-3.5 text-[#E9C349]" />
               Scanners Multi-Entrées
             </span>
-            <span className="text-xs text-gray-400">• Anti-Files d'Attente</span>
+            <span className="text-xs text-gray-300">• Anti-Files d'Attente</span>
           </div>
           <h1 className="font-heading text-2xl sm:text-3xl font-black text-white tracking-tight">
             Postes de Contrôle & Scanners Mobiles
           </h1>
-          <p className="text-sm text-gray-400 mt-0.5">
+          <p className="text-sm text-[#E5E2E1] mt-0.5">
             Générez des liens sécurisés par poste pour votre équipe de sécurité (sans compte admin)
           </p>
         </div>
@@ -253,16 +253,16 @@ export const ScanStationsView: React.FC<ScanStationsViewProps> = ({
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* Postes Actifs */}
         <div className="glass-panel p-4 sm:p-5 rounded-2xl border border-white/10 relative overflow-hidden">
-          <div className="flex items-center justify-between text-gray-400 mb-2">
+          <div className="flex items-center justify-between text-gray-300 mb-2">
             <span className="text-xs font-bold uppercase tracking-wider">Postes Configurés</span>
             <div className="p-2 rounded-xl bg-[#8A2BE2]/20 text-[#DCB8FF]">
               <Smartphone className="w-4 h-4" />
             </div>
           </div>
           <p className="font-heading text-2xl sm:text-3xl font-black text-white">
-            {stats.activeCount} <span className="text-xs text-gray-400 font-normal">/ {stats.totalStations} actifs</span>
+            {stats.activeCount} <span className="text-xs text-gray-300 font-normal">/ {stats.totalStations} actifs</span>
           </p>
-          <p className="text-[11px] text-gray-400 mt-1">
+          <p className="text-[11px] text-gray-300 mt-1">
             Agents en service aux portes
           </p>
         </div>
@@ -294,7 +294,7 @@ export const ScanStationsView: React.FC<ScanStationsViewProps> = ({
           <p className="font-heading text-2xl sm:text-3xl font-black text-[#E9C349]">
             {stats.fillRate}%
           </p>
-          <p className="text-[11px] text-gray-400 mt-1">
+          <p className="text-[11px] text-gray-300 mt-1">
             Spectateurs déjà à l'intérieur
           </p>
         </div>
@@ -339,10 +339,10 @@ export const ScanStationsView: React.FC<ScanStationsViewProps> = ({
 
         {filteredStations.length === 0 ? (
           <div className="glass-panel p-10 rounded-3xl border border-white/10 text-center space-y-4">
-            <Smartphone className="w-12 h-12 text-gray-500 mx-auto" />
+            <Smartphone className="w-12 h-12 text-gray-300 mx-auto" />
             <div>
               <h3 className="text-base font-bold text-white">Aucun poste de contrôle pour le moment</h3>
-              <p className="text-xs text-gray-400 mt-1 max-w-md mx-auto">
+              <p className="text-xs text-[#E5E2E1] mt-1 max-w-md mx-auto">
                 Créez votre première entrée pour donner à vos agents un lien de scan autonome.
               </p>
             </div>
@@ -387,14 +387,14 @@ export const ScanStationsView: React.FC<ScanStationsViewProps> = ({
                         <h3 className="font-heading font-black text-lg text-white">
                           {sta.name}
                         </h3>
-                        <p className="text-xs text-gray-400 font-medium">
+                        <p className="text-xs text-[#E5E2E1] font-medium">
                           {sta.eventTitle}
                         </p>
                       </div>
 
                       {/* Compteur Scans du Poste */}
                       <div className="text-right bg-black/40 px-3 py-1.5 rounded-xl border border-white/10">
-                        <span className="text-[9px] uppercase font-bold text-gray-400 block">
+                        <span className="text-[9px] uppercase font-bold text-gray-300 block">
                           Scans
                         </span>
                         <span className="font-mono text-xl font-black text-[#E9C349]">
@@ -405,14 +405,14 @@ export const ScanStationsView: React.FC<ScanStationsViewProps> = ({
 
                     {/* Code d'accès court */}
                     <div className="flex items-center gap-2 pt-1">
-                      <span className="text-[10px] text-gray-400 uppercase font-bold">Code :</span>
+                      <span className="text-[10px] text-gray-300 uppercase font-bold">Code :</span>
                       <span className="px-2 py-0.5 rounded-md bg-white/5 border border-white/10 font-mono text-xs text-purple-300 font-bold">
                         {sta.accessCode}
                       </span>
                     </div>
 
                     {sta.notes && (
-                      <p className="text-[11px] text-gray-400 italic">
+                      <p className="text-[11px] text-gray-300 italic">
                         {sta.notes}
                       </p>
                     )}
@@ -420,7 +420,7 @@ export const ScanStationsView: React.FC<ScanStationsViewProps> = ({
 
                   {/* Lien unique de scan */}
                   <div className="p-2.5 rounded-xl bg-black/50 border border-white/5 space-y-1.5">
-                    <span className="text-[9px] uppercase font-bold text-gray-400 block">
+                    <span className="text-[9px] uppercase font-bold text-gray-300 block">
                       Lien Mobile Unique :
                     </span>
                     <div className="flex items-center justify-between gap-2">
@@ -482,7 +482,7 @@ export const ScanStationsView: React.FC<ScanStationsViewProps> = ({
                       {/* Supprimer */}
                       <button
                         onClick={() => handleDeleteStation(sta)}
-                        className="p-1 rounded-lg text-gray-500 hover:text-red-400 transition-all"
+                        className="p-1 rounded-lg text-gray-300 hover:text-red-400 transition-all"
                         title="Supprimer ce poste"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -516,7 +516,7 @@ export const ScanStationsView: React.FC<ScanStationsViewProps> = ({
               <h2 className="font-heading text-2xl font-black text-white mt-0.5">
                 Nouveau Poste de Contrôle
               </h2>
-              <p className="text-xs text-gray-400 mt-1">
+              <p className="text-xs text-[#E5E2E1] mt-1">
                 Génère un lien unique pour permettre à un agent de scanner sans login
               </p>
             </div>
@@ -532,7 +532,7 @@ export const ScanStationsView: React.FC<ScanStationsViewProps> = ({
               {/* Choix Événement */}
               {events.length > 0 && (
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1.5">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-300 mb-1.5">
                     Événement concerné
                   </label>
                   <select
@@ -551,7 +551,7 @@ export const ScanStationsView: React.FC<ScanStationsViewProps> = ({
 
               {/* Nom du Poste */}
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1.5">
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-300 mb-1.5">
                   Nom du Poste de Contrôle *
                 </label>
                 <input
@@ -560,7 +560,7 @@ export const ScanStationsView: React.FC<ScanStationsViewProps> = ({
                   value={newStationName}
                   onChange={(e) => setNewStationName(e.target.value)}
                   placeholder="Ex: Entrée Principale, Porte VIP, Tribune Ouest..."
-                  className="w-full bg-[#1A1A1A] border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#8A2BE2]"
+                  className="w-full bg-[#1A1A1A] border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder:text-gray-300/75 focus:outline-none focus:border-[#8A2BE2]"
                 />
               </div>
 
@@ -580,7 +580,7 @@ export const ScanStationsView: React.FC<ScanStationsViewProps> = ({
 
               {/* Consignes ou Notes pour l'agent */}
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1.5">
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-300 mb-1.5">
                   Consignes pour l'agent (Optionnel)
                 </label>
                 <input
@@ -588,7 +588,7 @@ export const ScanStationsView: React.FC<ScanStationsViewProps> = ({
                   value={newStationNotes}
                   onChange={(e) => setNewStationNotes(e.target.value)}
                   placeholder="Ex: Vérifier le bracelet rouge après le scan"
-                  className="w-full bg-[#1A1A1A] border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#8A2BE2]"
+                  className="w-full bg-[#1A1A1A] border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder:text-gray-300/75 focus:outline-none focus:border-[#8A2BE2]"
                 />
               </div>
 
@@ -596,7 +596,7 @@ export const ScanStationsView: React.FC<ScanStationsViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="w-1/3 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 text-xs font-bold"
+                  className="w-1/3 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 text-xs font-bold"
                 >
                   Annuler
                 </button>

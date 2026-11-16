@@ -166,13 +166,13 @@ export const TicketsWalletView: React.FC<TicketsWalletViewProps> = ({
   const pendingOrders = orders.filter((o) => o.status === 'pending' || o.status === 'payment_signaled');
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6 pb-20 animate-in fade-in duration-300">
+    <div className="max-w-3xl mx-auto space-y-6 pb-[calc(80px+env(safe-area-inset-bottom))] animate-in fade-in duration-300">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
         <div>
           <h1 className="font-heading text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
             Portefeuille Billets & Commandes
           </h1>
-          <p className="text-sm text-gray-400 mt-1">
+          <p className="text-sm text-[#E5E2E1] mt-1">
             Retrouvez tous vos accès exclusifs, pass VIP et suivi de vos paiements Wave/OM
           </p>
         </div>
@@ -182,7 +182,7 @@ export const TicketsWalletView: React.FC<TicketsWalletViewProps> = ({
           <button
             onClick={() => setActiveTab('tickets')}
             className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-              activeTab === 'tickets' ? 'bg-[#8A2BE2] text-white shadow-md' : 'text-gray-400 hover:text-white'
+              activeTab === 'tickets' ? 'bg-[#8A2BE2] text-white shadow-md' : 'text-gray-300 hover:text-white'
             }`}
           >
             <Ticket className="w-3.5 h-3.5" />
@@ -192,7 +192,7 @@ export const TicketsWalletView: React.FC<TicketsWalletViewProps> = ({
           <button
             onClick={() => setActiveTab('orders')}
             className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-              activeTab === 'orders' ? 'bg-[#8A2BE2] text-white shadow-md' : 'text-gray-400 hover:text-white'
+              activeTab === 'orders' ? 'bg-[#8A2BE2] text-white shadow-md' : 'text-gray-300 hover:text-white'
             }`}
           >
             <Clock className="w-3.5 h-3.5" />
@@ -234,7 +234,7 @@ export const TicketsWalletView: React.FC<TicketsWalletViewProps> = ({
               className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
                 ticketFilter === 'upcoming'
                   ? 'bg-[#E9C349] text-[#241A00] shadow-md shadow-[#E9C349]/20'
-                  : 'bg-[#181818] text-gray-400 hover:text-white border border-white/5'
+                  : 'bg-[#181818] text-gray-300 hover:text-white border border-white/5'
               }`}
             >
               <Ticket className="w-3.5 h-3.5" />
@@ -247,7 +247,7 @@ export const TicketsWalletView: React.FC<TicketsWalletViewProps> = ({
               className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
                 ticketFilter === 'past'
                   ? 'bg-[#8A2BE2] text-white shadow-md shadow-[#8A2BE2]/20'
-                  : 'bg-[#181818] text-gray-400 hover:text-white border border-white/5'
+                  : 'bg-[#181818] text-gray-300 hover:text-white border border-white/5'
               }`}
             >
               <History className="w-3.5 h-3.5" />
@@ -267,7 +267,7 @@ export const TicketsWalletView: React.FC<TicketsWalletViewProps> = ({
                     <h3 className="font-heading text-lg font-bold text-white">
                       Aucun billet à venir dans votre portefeuille
                     </h3>
-                    <p className="text-xs text-gray-400 mt-1 max-w-sm mx-auto">
+                    <p className="text-xs text-[#E5E2E1] mt-1 max-w-sm mx-auto">
                       Réservez vos places pour les meilleures soirées et galas exclusifs de Thiès, Saly et Mbour.
                     </p>
                   </div>
@@ -328,12 +328,12 @@ export const TicketsWalletView: React.FC<TicketsWalletViewProps> = ({
                               {ticket.eventTitle}
                             </h3>
 
-                            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-400">
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-300">
                               <span className="inline-flex items-center gap-1">
                                 <Calendar className="w-3 h-3 text-[#DCB8FF]" />
                                 {ticket.eventDate}{ticket.eventTime ? ` • ${ticket.eventTime}` : ''}
                               </span>
-                              <span className="text-[11px] font-mono text-gray-500 hidden sm:inline">
+                              <span className="text-[11px] font-mono text-gray-300 hidden sm:inline">
                                 {ticket.qrCode}
                               </span>
                             </div>
@@ -438,7 +438,7 @@ export const TicketsWalletView: React.FC<TicketsWalletViewProps> = ({
                   })}
 
                   {upcomingTickets.length > WALLET_PAGE_SIZE && (
-                    <div className="flex items-center justify-between pt-2 text-xs text-gray-400">
+                    <div className="flex items-center justify-between pt-2 text-xs text-gray-300">
                       <span>
                         Page {safeUpcomingPage} / {upcomingTotalPages} ({upcomingTickets.length} billets)
                       </span>
@@ -484,7 +484,7 @@ export const TicketsWalletView: React.FC<TicketsWalletViewProps> = ({
                       <h4 className="font-heading font-extrabold text-base text-white">
                         Souvenirs & Aftermovies Thièsdn 🎥
                       </h4>
-                      <p className="text-xs text-gray-400">
+                      <p className="text-xs text-[#E5E2E1]">
                         Revivez la magie de vos soirées passées en vidéo officielle
                       </p>
                     </div>
@@ -515,11 +515,11 @@ export const TicketsWalletView: React.FC<TicketsWalletViewProps> = ({
               {/* Liste des Billets Passés */}
               {pastTickets.length === 0 ? (
                 <div className="p-8 rounded-2xl bg-[#141414] border border-white/5 text-center space-y-2">
-                  <Film className="w-8 h-8 text-gray-500 mx-auto" />
+                  <Film className="w-8 h-8 text-gray-300 mx-auto" />
                   <h4 className="font-heading font-bold text-sm text-white">
                     Aucun événement passé pour le moment
                   </h4>
-                  <p className="text-xs text-gray-400 max-w-sm mx-auto">
+                  <p className="text-xs text-[#E5E2E1] max-w-sm mx-auto">
                     Dès qu'une soirée à laquelle vous avez assisté est terminée, votre pass et son aftermovie s'archiveront automatiquement dans cette section.
                   </p>
                 </div>
@@ -560,7 +560,7 @@ export const TicketsWalletView: React.FC<TicketsWalletViewProps> = ({
                             <h3 className="font-heading text-sm font-bold text-white truncate">
                               {ticket.eventTitle}
                             </h3>
-                            <p className="text-xs text-gray-400 truncate">
+                            <p className="text-xs text-[#E5E2E1] truncate">
                               {ticket.eventDate} • {ticket.eventVenue}
                             </p>
                           </div>
@@ -595,7 +595,7 @@ export const TicketsWalletView: React.FC<TicketsWalletViewProps> = ({
                   })}
 
                   {pastTickets.length > WALLET_PAGE_SIZE && (
-                    <div className="flex items-center justify-between pt-2 text-xs text-gray-400">
+                    <div className="flex items-center justify-between pt-2 text-xs text-gray-300">
                       <span>
                         Page {safePastPage} / {pastTotalPages} ({pastTickets.length} billets)
                       </span>
@@ -637,7 +637,7 @@ export const TicketsWalletView: React.FC<TicketsWalletViewProps> = ({
               <h3 className="font-heading text-base font-bold text-white">
                 Aucune commande enregistrée
               </h3>
-              <p className="text-xs text-gray-400 max-w-sm mx-auto">
+              <p className="text-xs text-[#E5E2E1] max-w-sm mx-auto">
                 Lorsque vous réservez un événement avec Wave ou Orange Money, votre suivi de commande s'affichera ici.
               </p>
             </div>
@@ -678,7 +678,7 @@ export const TicketsWalletView: React.FC<TicketsWalletViewProps> = ({
                               : isRejected
                               ? 'bg-rose-500/20 text-rose-300'
                               : isExpired
-                              ? 'bg-gray-500/20 text-gray-400'
+                              ? 'bg-gray-500/20 text-gray-300'
                               : 'bg-white/10 text-gray-300'
                           }`}>
                             {isSignaled
@@ -710,7 +710,7 @@ export const TicketsWalletView: React.FC<TicketsWalletViewProps> = ({
                       </div>
 
                       <div className="text-left sm:text-right">
-                        <span className="text-[10px] text-gray-400 uppercase font-bold block">Montant</span>
+                        <span className="text-[10px] text-gray-300 uppercase font-bold block">Montant</span>
                         <span className="font-heading font-extrabold text-lg text-[#E9C349] tabular-nums">
                           {order.totalAmount.toLocaleString('fr-FR')} FCFA
                         </span>

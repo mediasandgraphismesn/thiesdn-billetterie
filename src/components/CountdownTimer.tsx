@@ -90,7 +90,7 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({
           <span className={`font-mono font-black text-[#E9C349] tracking-tight ${isLg ? 'text-2xl sm:text-4xl' : 'text-xl sm:text-2xl'}`}>
             {pad(timeLeft.days)}
           </span>
-          <span className="text-[9px] sm:text-[10px] uppercase font-bold text-gray-400 tracking-wider mt-0.5">
+          <span className="text-[9px] sm:text-[10px] uppercase font-bold text-gray-300 tracking-wider mt-0.5">
             Jours
           </span>
         </div>
@@ -100,7 +100,7 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({
           <span className={`font-mono font-black text-[#E9C349] tracking-tight ${isLg ? 'text-2xl sm:text-4xl' : 'text-xl sm:text-2xl'}`}>
             {pad(timeLeft.hours)}
           </span>
-          <span className="text-[9px] sm:text-[10px] uppercase font-bold text-gray-400 tracking-wider mt-0.5">
+          <span className="text-[9px] sm:text-[10px] uppercase font-bold text-gray-300 tracking-wider mt-0.5">
             Heures
           </span>
         </div>
@@ -110,7 +110,7 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({
           <span className={`font-mono font-black text-[#E9C349] tracking-tight ${isLg ? 'text-2xl sm:text-4xl' : 'text-xl sm:text-2xl'}`}>
             {pad(timeLeft.minutes)}
           </span>
-          <span className="text-[9px] sm:text-[10px] uppercase font-bold text-gray-400 tracking-wider mt-0.5">
+          <span className="text-[9px] sm:text-[10px] uppercase font-bold text-gray-300 tracking-wider mt-0.5">
             Minutes
           </span>
         </div>

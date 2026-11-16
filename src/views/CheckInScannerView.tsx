@@ -305,7 +305,7 @@ export const CheckInScannerView: React.FC<CheckInScannerViewProps> = ({
           <h1 className="font-heading text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
             Scanner & Check-in
           </h1>
-          <p className="text-sm text-gray-400 mt-1">
+          <p className="text-sm text-[#E5E2E1] mt-1">
             Contrôle d’accès et validation des pass en temps réel
           </p>
         </div>
@@ -314,7 +314,7 @@ export const CheckInScannerView: React.FC<CheckInScannerViewProps> = ({
           <button
             onClick={() => setActiveTab('scan')}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              activeTab === 'scan' ? 'bg-[#8A2BE2] text-white' : 'text-gray-400'
+              activeTab === 'scan' ? 'bg-[#8A2BE2] text-white' : 'text-gray-300'
             }`}
           >
             Scanner
@@ -322,7 +322,7 @@ export const CheckInScannerView: React.FC<CheckInScannerViewProps> = ({
           <button
             onClick={() => setActiveTab('list')}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              activeTab === 'list' ? 'bg-[#8A2BE2] text-white' : 'text-gray-400'
+              activeTab === 'list' ? 'bg-[#8A2BE2] text-white' : 'text-gray-300'
             }`}
           >
             Liste Pass ({tickets.length})
@@ -369,7 +369,7 @@ export const CheckInScannerView: React.FC<CheckInScannerViewProps> = ({
                   <div className="space-y-2 max-w-xs">
                     <CameraOff className="w-10 h-10 text-amber-400 mx-auto" />
                     <p className="text-xs text-amber-200 font-medium">{cameraError}</p>
-                    <p className="text-[11px] text-gray-400">
+                    <p className="text-[11px] text-gray-300">
                       Vous pouvez utiliser la saisie manuelle ci-dessous.
                     </p>
                   </div>
@@ -436,7 +436,7 @@ export const CheckInScannerView: React.FC<CheckInScannerViewProps> = ({
 
           {/* Manual Input or Quick Test */}
           <div className="glass-panel p-5 rounded-2xl space-y-3">
-            <label className="text-xs font-bold uppercase tracking-wider text-gray-400">
+            <label className="text-xs font-bold uppercase tracking-wider text-gray-300">
               Saisie Manuelle du Code Pass
             </label>
             <div className="flex gap-2">
@@ -526,25 +526,25 @@ export const CheckInScannerView: React.FC<CheckInScannerViewProps> = ({
                       {/* Détails du badge */}
                       <div className="mt-3 p-3.5 rounded-xl bg-black/40 border border-white/10 space-y-1.5 text-xs">
                         <div className="flex justify-between">
-                          <span className="text-gray-400 font-medium">Titulaire :</span>
+                          <span className="text-gray-300 font-medium">Titulaire :</span>
                           <span className="text-white font-bold">{scanResult.accreditation.holderName}</span>
                         </div>
                         {scanResult.accreditation.organization && (
                           <div className="flex justify-between">
-                            <span className="text-gray-400 font-medium">Organisation / Rôle :</span>
+                            <span className="text-gray-300 font-medium">Organisation / Rôle :</span>
                             <span className="text-[#E9C349] font-semibold">{scanResult.accreditation.organization}</span>
                           </div>
                         )}
                         <div className="flex justify-between">
-                          <span className="text-gray-400 font-medium">Téléphone :</span>
+                          <span className="text-gray-300 font-medium">Téléphone :</span>
                           <span className="text-gray-200 font-mono">{scanResult.accreditation.holderPhone}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-400 font-medium">Code Unique :</span>
+                          <span className="text-gray-300 font-medium">Code Unique :</span>
                           <span className="text-purple-300 font-mono font-bold">{scanResult.accreditation.qrCode}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-400 font-medium">Émis par :</span>
+                          <span className="text-gray-300 font-medium">Émis par :</span>
                           <span className="text-gray-300 font-medium">
                             {scanResult.accreditation.createdByName || 'Production'} ({scanResult.accreditation.createdByRole || 'promoteur'})
                           </span>
@@ -665,7 +665,7 @@ export const CheckInScannerView: React.FC<CheckInScannerViewProps> = ({
                       </span>
                     )}
                   </div>
-                  <p className="text-[10px] text-gray-400 font-mono mt-0.5">{tkt.qrCode}</p>
+                  <p className="text-[10px] text-gray-300 font-mono mt-0.5">{tkt.qrCode}</p>
                 </div>
               </div>
 

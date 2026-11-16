@@ -122,7 +122,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
               onClick={() => onTabChange(tab.id)}
               aria-label={tab.label}
               className={`relative flex flex-col items-center justify-center py-1 px-2 min-w-0 flex-1 h-full transition-all cursor-pointer group ${
-                isActive ? 'text-white' : 'text-gray-400 hover:text-gray-200'
+                isActive ? 'text-white' : 'text-gray-300 hover:text-gray-200'
               }`}
             >
               {/* Indicateur de sélection supérieur */}
@@ -135,7 +135,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
                   className={`p-1.5 rounded-xl transition-all ${
                     isActive
                       ? 'bg-gradient-to-br from-[#8A2BE2]/30 to-[#E9C349]/20 text-[#E9C349]'
-                      : 'group-hover:bg-white/5 text-gray-400'
+                      : 'group-hover:bg-white/5 text-gray-300'
                   }`}
                 >
                   <Icon className={`w-5 h-5 ${isActive ? 'stroke-[2.4]' : 'stroke-[1.8]'}`} />
@@ -154,7 +154,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 
               <span
                 className={`text-[10px] font-heading tracking-tight truncate max-w-full text-center mt-0.5 ${
-                  isActive ? 'text-[#E9C349] font-bold' : 'text-gray-400 font-medium'
+                  isActive ? 'text-[#E9C349] font-bold' : 'text-gray-300 font-medium'
                 }`}
               >
                 {tab.label}

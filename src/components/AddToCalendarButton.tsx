@@ -74,7 +74,7 @@ export const AddToCalendarButton: React.FC<AddToCalendarButtonProps> = ({
 
       {isOpen && (
         <div className="absolute right-0 bottom-full mb-2 sm:bottom-auto sm:top-full sm:mt-2 w-64 bg-[#1A1A1A] border border-white/10 rounded-2xl p-2 shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-150">
-          <div className="px-3 py-2 border-b border-white/5 text-[10px] uppercase font-bold text-gray-400 tracking-wider">
+          <div className="px-3 py-2 border-b border-white/5 text-[10px] uppercase font-bold text-gray-300 tracking-wider">
             Choisir votre calendrier
           </div>
 
@@ -93,7 +93,7 @@ export const AddToCalendarButton: React.FC<AddToCalendarButtonProps> = ({
                 </div>
                 <span>Google Agenda</span>
               </div>
-              <ExternalLink className="w-3.5 h-3.5 text-gray-500 group-hover:text-white" />
+              <ExternalLink className="w-3.5 h-3.5 text-gray-300 group-hover:text-white" />
             </a>
 
             {/* Apple Calendar / iCal (.ics) */}
@@ -108,10 +108,10 @@ export const AddToCalendarButton: React.FC<AddToCalendarButtonProps> = ({
                 </div>
                 <div>
                   <span className="block">Apple Calendar (iCal)</span>
-                  <span className="text-[10px] text-gray-400">Fichier universel .ics</span>
+                  <span className="text-[10px] text-gray-300">Fichier universel .ics</span>
                 </div>
               </div>
-              <Download className="w-3.5 h-3.5 text-gray-500 group-hover:text-[#E9C349]" />
+              <Download className="w-3.5 h-3.5 text-gray-300 group-hover:text-[#E9C349]" />
             </button>
 
             {/* Outlook Calendar Web */}
@@ -128,7 +128,7 @@ export const AddToCalendarButton: React.FC<AddToCalendarButtonProps> = ({
                 </div>
                 <span>Outlook Calendar</span>
               </div>
-              <ExternalLink className="w-3.5 h-3.5 text-gray-500 group-hover:text-white" />
+              <ExternalLink className="w-3.5 h-3.5 text-gray-300 group-hover:text-white" />
             </a>
           </div>
         </div>

@@ -230,7 +230,7 @@ export const MapView: React.FC<MapViewProps> = ({
               Carte Interactive des Soirées & Galas
             </h3>
           </div>
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-[#E5E2E1]">
             Zoomez, naviguez et cliquez sur les marqueurs pour découvrir et réserver vos billets au Sénégal.
           </p>
         </div>
@@ -420,7 +420,7 @@ export const MapView: React.FC<MapViewProps> = ({
                   {/* Prix et Bouton de Réservation */}
                   <div className="pt-2 border-t border-white/10 flex items-center justify-between gap-2">
                     <div>
-                      <span className="text-[9px] uppercase tracking-wider text-gray-400 block">À partir de</span>
+                      <span className="text-[9px] uppercase tracking-wider text-gray-300 block">À partir de</span>
                       <span className="text-sm font-extrabold text-[#E9C349] font-heading">
                         {event.price.toLocaleString('fr-FR')} F
                       </span>
@@ -443,7 +443,7 @@ export const MapView: React.FC<MapViewProps> = ({
       </div>
 
       {/* Légende en bas de carte */}
-      <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-gray-400 pt-1">
+      <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-gray-300 pt-1">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-1.5">
             <span className="w-3 h-3 rounded-full bg-[#8A2BE2] border border-white inline-block shadow-sm" />
@@ -455,7 +455,7 @@ export const MapView: React.FC<MapViewProps> = ({
           </div>
         </div>
 
-        <div className="text-[11px] text-gray-500">
+        <div className="text-[11px] text-gray-300">
           Source cartographique : CartoDB Dark Matter & OpenStreetMap
         </div>
       </div>

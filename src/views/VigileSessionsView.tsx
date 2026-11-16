@@ -100,7 +100,7 @@ export const VigileSessionsView: React.FC = () => {
           <h1 className="font-heading text-2xl sm:text-3xl font-black text-white tracking-tight">
             Sessions de Scan & Vigiles
           </h1>
-          <p className="text-xs sm:text-sm text-gray-400">
+          <p className="text-xs sm:text-sm text-[#E5E2E1]">
             Contrôle anti-partage de lien : chaque scanner mobile est verrouillé sur un seul terminal physique.
           </p>
         </div>
@@ -140,7 +140,7 @@ export const VigileSessionsView: React.FC = () => {
             <Radio className="w-5 h-5 animate-pulse" />
           </div>
           <div>
-            <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider block">
+            <span className="text-[10px] text-gray-300 uppercase font-bold tracking-wider block">
               Scanners Actifs en Direct
             </span>
             <span className="font-heading text-2xl font-black text-emerald-400">{activeCount}</span>
@@ -148,11 +148,11 @@ export const VigileSessionsView: React.FC = () => {
         </div>
 
         <div className="glass-panel p-4 rounded-2xl border border-white/10 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gray-500/20 border border-gray-500/40 flex items-center justify-center text-gray-400">
+          <div className="w-10 h-10 rounded-xl bg-gray-500/20 border border-gray-500/40 flex items-center justify-center text-gray-300">
             <Lock className="w-5 h-5" />
           </div>
           <div>
-            <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider block">
+            <span className="text-[10px] text-gray-300 uppercase font-bold tracking-wider block">
               Sessions Révoquées / Expirées
             </span>
             <span className="font-heading text-2xl font-black text-gray-300">{revokedCount}</span>
@@ -164,7 +164,7 @@ export const VigileSessionsView: React.FC = () => {
             <ShieldCheck className="w-5 h-5" />
           </div>
           <div>
-            <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider block">
+            <span className="text-[10px] text-gray-300 uppercase font-bold tracking-wider block">
               Verrouillage Anti-Fraude
             </span>
             <span className="font-heading text-xl font-black text-[#E9C349]">1 Poste = 1 Appareil</span>
@@ -176,7 +176,7 @@ export const VigileSessionsView: React.FC = () => {
       <div className="glass-panel rounded-3xl border border-white/10 overflow-hidden shadow-2xl">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-[#16151E] text-gray-400 font-heading uppercase text-[10px] tracking-wider border-b border-white/10">
+            <thead className="bg-[#16151E] text-gray-300 font-heading uppercase text-[10px] tracking-wider border-b border-white/10">
               <tr>
                 <th className="py-3.5 px-4">Statut</th>
                 <th className="py-3.5 px-4">Poste & Événement</th>
@@ -190,14 +190,14 @@ export const VigileSessionsView: React.FC = () => {
             <tbody className="divide-y divide-white/5">
               {isLoading && sessions.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-gray-400">
+                  <td colSpan={7} className="py-12 text-center text-gray-300">
                     <RefreshCw className="w-6 h-6 animate-spin mx-auto text-[#8A2BE2] mb-2" />
                     Lecture des sessions de contrôle...
                   </td>
                 </tr>
               ) : sessions.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-gray-400">
+                  <td colSpan={7} className="py-12 text-center text-gray-300">
                     <Radio className="w-8 h-8 text-gray-600 mx-auto mb-2" />
                     Aucune session vigile active pour le moment.
                   </td>
@@ -228,7 +228,7 @@ export const VigileSessionsView: React.FC = () => {
                             Actif
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-500/20 text-gray-400 border border-gray-500/30 text-[10px] font-bold uppercase tracking-wider">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-500/20 text-gray-300 border border-gray-500/30 text-[10px] font-bold uppercase tracking-wider">
                             <span className="w-2 h-2 rounded-full bg-gray-500" />
                             Révoqué
                           </span>
@@ -240,7 +240,7 @@ export const VigileSessionsView: React.FC = () => {
                         <div className="font-heading font-black text-white text-xs">
                           {session.stationName || 'Poste de Contrôle'}
                         </div>
-                        <div className="text-[10px] text-gray-400 font-mono mt-0.5 flex items-center gap-1">
+                        <div className="text-[10px] text-gray-300 font-mono mt-0.5 flex items-center gap-1">
                           <span className="text-[#E9C349] font-bold">{session.stationCode}</span>
                           <span>•</span>
                           <span className="truncate max-w-full min-w-0">{session.eventTitle || 'Soirée Thiès'}</span>
@@ -291,7 +291,7 @@ export const VigileSessionsView: React.FC = () => {
                             <span>{revokingId === session.id ? 'Révocation...' : 'Révoquer'}</span>
                           </button>
                         ) : (
-                          <span className="text-[11px] text-gray-500 font-mono">Désactivé</span>
+                          <span className="text-[11px] text-gray-300 font-mono">Désactivé</span>
                         )}
                       </td>
                     </tr>

@@ -152,7 +152,7 @@ export const ClaimTicketView: React.FC<ClaimTicketViewProps> = ({
           <RefreshCw className="w-8 h-8 text-[#8A2BE2] animate-spin" />
         </div>
         <p className="font-heading text-lg font-bold text-white">Vérification de votre invitation...</p>
-        <p className="text-xs text-gray-400 font-mono">Pass Cadeau Thièsdn</p>
+        <p className="text-xs text-[#E5E2E1] font-mono">Pass Cadeau Thièsdn</p>
       </div>
     );
   }
@@ -222,7 +222,7 @@ export const ClaimTicketView: React.FC<ClaimTicketViewProps> = ({
             <p className="text-xs text-[#E9C349] font-bold">
               {claimedSuccessTicket.tierName}
             </p>
-            <p className="text-[10px] text-gray-400 font-mono">
+            <p className="text-[10px] text-gray-300 font-mono">
               N° {claimedSuccessTicket.qrCode}
             </p>
           </div>
@@ -299,8 +299,8 @@ export const ClaimTicketView: React.FC<ClaimTicketViewProps> = ({
                     className="w-20 h-20 rounded-2xl object-cover border-2 border-[#E9C349] shadow-lg"
                   />
                 ) : (
-                  <div className="w-20 h-20 rounded-2xl bg-[#1A1A1A] border-2 border-dashed border-white/20 flex flex-col items-center justify-center text-gray-400">
-                    <User className="w-7 h-7 text-gray-400" />
+                  <div className="w-20 h-20 rounded-2xl bg-[#1A1A1A] border-2 border-dashed border-white/20 flex flex-col items-center justify-center text-gray-300">
+                    <User className="w-7 h-7 text-gray-300" />
                     <span className="text-[8px] uppercase mt-0.5">Photo</span>
                   </div>
                 )}
@@ -324,7 +324,7 @@ export const ClaimTicketView: React.FC<ClaimTicketViewProps> = ({
 
               <div className="flex-1">
                 <p className="text-xs font-bold text-white">Votre Photo de Profil (Selfie)</p>
-                <p className="text-[11px] text-gray-400 mt-0.5 leading-snug">
+                <p className="text-[11px] text-gray-300 mt-0.5 leading-snug">
                   Elle apparaîtra sur l'écran du vigile lors du scan pour valider votre entrée sans équivoque.
                 </p>
                 <label
@@ -393,14 +393,14 @@ export const ClaimTicketView: React.FC<ClaimTicketViewProps> = ({
               type="button"
               onClick={handleDecline}
               disabled={isDeclining}
-              className="w-full py-2.5 rounded-xl bg-transparent hover:bg-white/5 text-gray-400 hover:text-white text-xs font-bold transition-colors"
+              className="w-full py-2.5 rounded-xl bg-transparent hover:bg-white/5 text-gray-300 hover:text-white text-xs font-bold transition-colors"
             >
               {isDeclining ? 'Restitution en cours...' : 'Décliner ce cadeau'}
             </button>
           </div>
         </form>
 
-        <p className="text-[10px] text-gray-400 text-center font-mono">
+        <p className="text-[10px] text-gray-300 text-center font-mono">
           Thièsdn Billetterie • Sécurité Anti-Fraude & Nominativité Certifiée
         </p>
       </div>

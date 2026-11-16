@@ -90,7 +90,7 @@ export const LoginHistoryView: React.FC = () => {
           <h1 className="font-heading text-2xl sm:text-3xl font-black text-white tracking-tight">
             Journal des Connexions
           </h1>
-          <p className="text-xs sm:text-sm text-gray-400">
+          <p className="text-xs sm:text-sm text-[#E5E2E1]">
             Traçabilité des accès utilisateurs et administrateurs avec géolocalisation IP et empreinte appareil.
           </p>
         </div>
@@ -112,7 +112,7 @@ export const LoginHistoryView: React.FC = () => {
             <History className="w-5 h-5" />
           </div>
           <div>
-            <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider block">
+            <span className="text-[10px] text-gray-300 uppercase font-bold tracking-wider block">
               Total Connexions Enregistrées
             </span>
             <span className="font-heading text-xl font-black text-white">{totalCount}</span>
@@ -124,7 +124,7 @@ export const LoginHistoryView: React.FC = () => {
             <Globe className="w-5 h-5" />
           </div>
           <div>
-            <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider block">
+            <span className="text-[10px] text-gray-300 uppercase font-bold tracking-wider block">
               Pays d'Origine Détectés
             </span>
             <span className="font-heading text-xl font-black text-white">
@@ -138,7 +138,7 @@ export const LoginHistoryView: React.FC = () => {
             <ShieldCheck className="w-5 h-5" />
           </div>
           <div>
-            <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider block">
+            <span className="text-[10px] text-gray-300 uppercase font-bold tracking-wider block">
               Protection RLS Active
             </span>
             <span className="font-heading text-xl font-black text-[#E9C349]">100% Hermétique</span>
@@ -149,13 +149,13 @@ export const LoginHistoryView: React.FC = () => {
       {/* BARRE DE FILTRES ET RECHERCHE */}
       <div className="glass-panel p-4 rounded-2xl border border-white/10 flex flex-col md:flex-row items-center justify-between gap-3 shadow-xl">
         <form onSubmit={handleSearchSubmit} className="relative w-full md:w-80">
-          <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-gray-300 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchEmail}
             onChange={(e) => setSearchEmail(e.target.value)}
             placeholder="Rechercher par email..."
-            className="w-full bg-[#161616] border border-white/10 rounded-xl pl-10 pr-3.5 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#8A2BE2]"
+            className="w-full bg-[#161616] border border-white/10 rounded-xl pl-10 pr-3.5 py-2 text-xs text-white placeholder:text-gray-300/75 focus:outline-none focus:border-[#8A2BE2]"
           />
         </form>
 
@@ -202,7 +202,7 @@ export const LoginHistoryView: React.FC = () => {
       <div className="glass-panel rounded-3xl border border-white/10 overflow-hidden shadow-2xl">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-[#16151E] text-gray-400 font-heading uppercase text-[10px] tracking-wider border-b border-white/10">
+            <thead className="bg-[#16151E] text-gray-300 font-heading uppercase text-[10px] tracking-wider border-b border-white/10">
               <tr>
                 <th className="py-3.5 px-4">Date & Heure</th>
                 <th className="py-3.5 px-4">Utilisateur</th>
@@ -215,14 +215,14 @@ export const LoginHistoryView: React.FC = () => {
             <tbody className="divide-y divide-white/5">
               {isLoading ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-gray-400">
+                  <td colSpan={6} className="py-12 text-center text-gray-300">
                     <RefreshCw className="w-6 h-6 animate-spin mx-auto text-[#8A2BE2] mb-2" />
                     Chargement du journal des accès...
                   </td>
                 </tr>
               ) : logs.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-gray-400">
+                  <td colSpan={6} className="py-12 text-center text-gray-300">
                     <History className="w-8 h-8 text-gray-600 mx-auto mb-2" />
                     Aucun enregistrement de connexion correspondant.
                   </td>
@@ -318,7 +318,7 @@ export const LoginHistoryView: React.FC = () => {
         </div>
 
         {/* PAGINATION (50 PAR PAGE) */}
-        <div className="p-4 bg-[#14131A] border-t border-white/10 flex items-center justify-between text-xs text-gray-400">
+        <div className="p-4 bg-[#14131A] border-t border-white/10 flex items-center justify-between text-xs text-gray-300">
           <div>
             Affichage de {logs.length} sur {totalCount} connexions enregistrées
           </div>

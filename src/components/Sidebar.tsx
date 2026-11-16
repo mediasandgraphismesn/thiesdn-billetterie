@@ -217,7 +217,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Navigation Links Aérés */}
       <nav className="flex-1 space-y-1 overflow-y-auto pr-1">
-        <p className="text-[10px] uppercase tracking-wider text-gray-400 font-bold px-3 mb-1.5">
+        <p className="text-[10px] uppercase tracking-wider text-gray-300 font-bold px-3 mb-1.5">
           {user.role === 'admin' && !isAdminPreview
             ? 'Administration'
             : user.role === 'promoter'
@@ -236,11 +236,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
               className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left ${
                 isActive
                   ? 'bg-gradient-to-r from-[#8A2BE2]/25 to-[#E9C349]/10 text-white border border-[#8A2BE2]/40 font-bold shadow-sm'
-                  : 'text-gray-400 hover:bg-white/5 hover:text-white'
+                  : 'text-gray-300 hover:bg-white/5 hover:text-white'
               }`}
             >
               <div className="flex items-center gap-2.5 truncate">
-                <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-[#E9C349]' : 'text-gray-400'}`} />
+                <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-[#E9C349]' : 'text-gray-300'}`} />
                 <span className="truncate">{item.label}</span>
               </div>
               {item.badge && (
@@ -295,7 +295,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
             <span className="text-gray-300 font-medium">Billetterie Live SN</span>
           </div>
-          <span className="text-[10px] text-gray-400">Thiès • Saly • Mbour</span>
+          <span className="text-[10px] text-gray-300">Thiès • Saly • Mbour</span>
         </div>
       </div>
     </aside>

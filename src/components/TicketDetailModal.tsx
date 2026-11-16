@@ -628,7 +628,7 @@ export const TicketDetailModal: React.FC<TicketDetailModalProps> = ({
           {/* Métadonnées du Billet */}
           <div className="grid grid-cols-2 gap-3 bg-[#1F1F1F] p-3.5 rounded-2xl border border-white/5 text-xs">
             <div className="min-w-0">
-              <p className="text-[10px] uppercase text-gray-400 font-bold">Titulaire</p>
+              <p className="text-[10px] uppercase text-gray-300 font-bold">Titulaire</p>
               <div className="flex items-center gap-1.5 mt-0.5">
                 {(ticket.holderAvatar || ticket.assignedToAvatar) && (
                   <img
@@ -642,7 +642,7 @@ export const TicketDetailModal: React.FC<TicketDetailModalProps> = ({
                 <p className="font-bold text-white truncate">{ticket.holderName}</p>
               </div>
               {isAdminMode && ticket.holderPhone && (
-                <p className="text-[11px] font-mono text-gray-400 flex items-center gap-1 mt-0.5 truncate">
+                <p className="text-[11px] font-mono text-gray-300 flex items-center gap-1 mt-0.5 truncate">
                   <Phone className="w-3 h-3 text-[#E9C349] shrink-0" />
                   <span>{ticket.holderPhone}</span>
                 </p>
@@ -650,14 +650,14 @@ export const TicketDetailModal: React.FC<TicketDetailModalProps> = ({
             </div>
 
             <div className="min-w-0">
-              <p className="text-[10px] uppercase text-gray-400 font-bold">
+              <p className="text-[10px] uppercase text-gray-300 font-bold">
                 {isAdminMode ? 'Canal & Placement' : 'Placement'}
               </p>
               <p className="font-bold text-[#DCB8FF] truncate">
                 {ticket.seatNumber || 'Accès Officiel'}
               </p>
               {isAdminMode && (
-                <p className="text-[10px] text-gray-400 flex items-center gap-1 mt-0.5 truncate">
+                <p className="text-[10px] text-gray-300 flex items-center gap-1 mt-0.5 truncate">
                   <Store className="w-3 h-3 text-[#8A2BE2] shrink-0" />
                   <span>
                     {ticket.isPhysical
@@ -669,13 +669,13 @@ export const TicketDetailModal: React.FC<TicketDetailModalProps> = ({
             </div>
 
             <div>
-              <p className="text-[10px] uppercase text-gray-400 font-bold">Date & Heure</p>
+              <p className="text-[10px] uppercase text-gray-300 font-bold">Date & Heure</p>
               <p className="font-semibold text-white">{ticket.eventDate}</p>
-              <p className="text-gray-400">{ticket.eventTime}</p>
+              <p className="text-[#E5E2E1]">{ticket.eventTime}</p>
             </div>
 
             <div>
-              <p className="text-[10px] uppercase text-gray-400 font-bold">Tarif Réglé</p>
+              <p className="text-[10px] uppercase text-gray-300 font-bold">Tarif Réglé</p>
               <p className="font-bold text-[#E9C349] tabular-nums">
                 {Number(ticket.price).toLocaleString('fr-FR')} FCFA
               </p>
@@ -716,7 +716,7 @@ export const TicketDetailModal: React.FC<TicketDetailModalProps> = ({
                         <Ticket className="w-3.5 h-3.5 text-[#E9C349]" />
                         <span>Frottez pour révéler votre billet</span>
                       </span>
-                      <p className="text-[10px] text-gray-500 font-medium">
+                      <p className="text-[10px] text-gray-300 font-medium">
                         Glissez votre doigt ou la souris sur la surface dorée
                       </p>
                     </div>
@@ -785,7 +785,7 @@ export const TicketDetailModal: React.FC<TicketDetailModalProps> = ({
                 </p>
               </div>
 
-              <p className="text-[10px] text-gray-500 mt-1 flex items-center gap-1 font-sans">
+              <p className="text-[10px] text-gray-300 mt-1 flex items-center gap-1 font-sans">
                 <CheckCircle className="w-3 h-3 text-emerald-600" />
                 QR Code certifié avec signature visuelle Thièsdn
               </p>

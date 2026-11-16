@@ -81,14 +81,14 @@ export class ErrorBoundary extends Component<Props, State> {
               <h1 className="font-heading text-xl sm:text-2xl font-extrabold text-white">
                 Interruption Temporaire d'Affichage
               </h1>
-              <p className="text-xs text-gray-400 leading-relaxed max-w-sm mx-auto">
+              <p className="text-xs text-[#E5E2E1] leading-relaxed max-w-sm mx-auto">
                 Une anomalie dans le cycle de rendu a été interceptée pour préserver l'application d'un écran noir.
               </p>
             </div>
 
             {/* Diagnostic Message */}
             <div className="bg-black/50 border border-white/5 rounded-2xl p-3.5 text-left space-y-1">
-              <p className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Détail technique</p>
+              <p className="text-[10px] uppercase font-bold text-gray-300 tracking-wider">Détail technique</p>
               <p className="text-xs font-mono text-rose-300 break-words line-clamp-3">
                 {errorMessage}
               </p>

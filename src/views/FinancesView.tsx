@@ -49,7 +49,9 @@ import {
   MessageCircle,
   KeyRound,
   AlertTriangle,
+  Loader2,
 } from 'lucide-react';
+import { useToast } from '../contexts/ToastContext';
 import {
   getStoredTransactions,
   TransactionRecord,
@@ -116,6 +118,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
   promoterName,
   initialTab,
 }) => {
+  const { showToast } = useToast();
   const isConnected = isSupabaseConfigured();
   const [transactions, setTransactions] = useState<TransactionRecord[]>(() =>
     isConnected ? [] : getStoredTransactions()
@@ -219,6 +222,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
   const [showSettlementModal, setShowSettlementModal] = useState(false);
   const [selectedAgentForSettlement, setSelectedAgentForSettlement] = useState<SalesAgent | null>(null);
   const [settlementAmountInput, setSettlementAmountInput] = useState<number>(0);
+  const [isSubmittingSettlement, setIsSubmittingSettlement] = useState<boolean>(false);
 
   // Aperçu du Guichet Vendeur Mobile
   const [previewAgent, setPreviewAgent] = useState<SalesAgent | null>(null);
@@ -1255,6 +1259,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
           : `https://wa.me/?text=${encodeURIComponent(message)}`;
 
         setAssignNotification({ message: res.message, waUrl });
+        showToast('Billets attribués', 'success');
         setShowAssignModal(false);
       } else {
         alert(res.message);
@@ -1270,21 +1275,27 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
   // Action : Enregistrement de versement
   const handleRecordSettlementSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedAgentForSettlement) return;
+    if (!selectedAgentForSettlement || isSubmittingSettlement) return;
     const amount = Number(settlementAmountInput);
     if (isNaN(amount) || amount <= 0) {
       alert('Veuillez saisir un montant valide.');
       return;
     }
 
-    const res = await recordAgentSettlement(selectedAgentForSettlement.id, amount);
-    if (res.success) {
-      setAgents(getStoredSalesAgents());
-      setShowSettlementModal(false);
-      setSettlementAmountInput(0);
-      setSelectedAgentForSettlement(null);
-    } else {
-      alert(res.message);
+    setIsSubmittingSettlement(true);
+    try {
+      const res = await recordAgentSettlement(selectedAgentForSettlement.id, amount);
+      if (res.success) {
+        setAgents(getStoredSalesAgents());
+        showToast('Versement encaissé', 'success');
+        setShowSettlementModal(false);
+        setSettlementAmountInput(0);
+        setSelectedAgentForSettlement(null);
+      } else {
+        showToast(res.message || 'Erreur lors de l’encaissement.', 'error');
+      }
+    } finally {
+      setIsSubmittingSettlement(false);
     }
   };
 
@@ -1485,7 +1496,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
   // ====================================================================
   if (currentRole === 'promoter' || promoterTab !== 'compta') {
     return (
-      <div className="w-full max-w-6xl mx-auto space-y-8 pb-24 animate-in fade-in duration-300">
+      <div className="w-full max-w-6xl mx-auto space-y-8 pb-[calc(80px+env(safe-area-inset-bottom))] animate-in fade-in duration-300">
         {/* Header Bar Promoteur */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>
@@ -1501,7 +1512,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
             <h1 className="font-heading text-2xl sm:text-3xl font-extrabold text-white tracking-tight mt-2">
               Tableau de Bord & Cockpit des Ventes
             </h1>
-            <p className="text-sm text-gray-400 mt-1">
+            <p className="text-sm text-[#E5E2E1] mt-1">
               Statistiques temps réel, ventilation par catégorie, taux de scan et relance WhatsApp de vos clients.
             </p>
           </div>
@@ -1531,7 +1542,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
               className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs font-heading font-extrabold tracking-wider uppercase transition-all flex items-center gap-2 shrink-0 ${
                 promoterTab === 'stats'
                   ? 'bg-[#E9C349] text-[#241A00] shadow-md shadow-[#E9C349]/20'
-                  : 'text-gray-400 hover:text-white'
+                  : 'text-gray-300 hover:text-white'
               }`}
             >
               <BarChart3 className="w-4 h-4" />
@@ -1548,7 +1559,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
               className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs font-heading font-extrabold tracking-wider uppercase transition-all flex items-center gap-2 shrink-0 ${
                 promoterTab === 'network'
                   ? 'bg-gradient-to-r from-[#8A2BE2] to-[#E9C349] text-white shadow-md shadow-[#8A2BE2]/40'
-                  : 'text-gray-400 hover:text-white'
+                  : 'text-gray-300 hover:text-white'
               }`}
             >
               <Ticket className="w-4 h-4" />
@@ -1568,7 +1579,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
               className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs font-heading font-extrabold tracking-wider uppercase transition-all flex items-center gap-2 shrink-0 ${
                 promoterTab === 'finances'
                   ? 'bg-[#8A2BE2] text-white shadow-md shadow-[#8A2BE2]/30'
-                  : 'text-gray-400 hover:text-white'
+                  : 'text-gray-300 hover:text-white'
               }`}
             >
               <Wallet className="w-4 h-4" />
@@ -1602,7 +1613,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                   onClick={(e) => e.stopPropagation()}
                   className="absolute right-0 top-full mt-2 w-72 sm:w-80 bg-[#171717] border border-white/15 rounded-2xl shadow-2xl z-[100] p-2 space-y-1 animate-in fade-in zoom-in-95 duration-150"
                 >
-                  <div className="px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-gray-500 border-b border-white/5">
+                  <div className="px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-gray-300 border-b border-white/5">
                     Modules Spécialisés
                   </div>
 
@@ -1715,7 +1726,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
             {/* Sélecteur d'Événement pour filtrer les statistiques (Poussé à droite) */}
             {promoterEvents.length > 0 && (
               <div className="flex items-center gap-2 min-w-0">
-                <span className="text-xs text-gray-400 font-bold hidden md:inline shrink-0">Événement :</span>
+                <span className="text-xs text-gray-300 font-bold hidden md:inline shrink-0">Événement :</span>
                 <select
                   value={selectedEventId}
                   onChange={(e) => setSelectedEventId(e.target.value)}
@@ -1739,7 +1750,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
             <button
               type="button"
               onClick={() => setPromoterTab('stats')}
-              className="text-xs text-gray-400 hover:text-[#E9C349] font-bold flex items-center gap-1 transition-colors"
+              className="text-xs text-gray-300 hover:text-[#E9C349] font-bold flex items-center gap-1 transition-colors"
             >
               <ChevronRight className="w-3.5 h-3.5 rotate-180" />
               <span>Retour à la Vue d'ensemble</span>
@@ -1784,11 +1795,11 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                 <div className="w-12 h-12 rounded-xl bg-[#8A2BE2]/20 text-[#DCB8FF] flex items-center justify-center group-hover:scale-105 transition-transform">
                   <Ticket className="w-6 h-6" />
                 </div>
-                <p className="text-xs uppercase tracking-wider text-gray-400 font-bold">Billets Vendus</p>
+                <p className="text-xs uppercase tracking-wider text-gray-300 font-bold">Billets Vendus</p>
                 <h3 className="font-heading text-3xl font-black text-white">
                   {totalTicketsSold} <span className="text-xs text-[#DCB8FF] font-bold">places</span>
                 </h3>
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-[#E5E2E1]">
                   {webTicketsSold} en ligne • {physicalTicketsSold} en boutique
                 </p>
               </div>
@@ -1798,11 +1809,11 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                 <div className="w-12 h-12 rounded-xl bg-[#E9C349]/20 text-[#E9C349] flex items-center justify-center group-hover:scale-105 transition-transform">
                   <DollarSign className="w-6 h-6" />
                 </div>
-                <p className="text-xs uppercase tracking-wider text-gray-400 font-bold">CA Brut Consolidé</p>
+                <p className="text-xs uppercase tracking-wider text-gray-300 font-bold">CA Brut Consolidé</p>
                 <h3 className="font-heading text-3xl font-black text-[#E9C349]">
                   {totalGrossCA.toLocaleString('fr-FR')} <span className="text-xs text-white font-bold">FCFA</span>
                 </h3>
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-[#E5E2E1]">
                   {webGrossCA > 0 ? `${webGrossCA.toLocaleString('fr-FR')} F Web` : '0 F Web'} • {physicalGrossCA > 0 ? `${physicalGrossCA.toLocaleString('fr-FR')} F Réseau` : '0 F Réseau'}
                 </p>
               </div>
@@ -1812,11 +1823,11 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                 <div className="w-12 h-12 rounded-xl bg-[#E9C349]/20 text-[#E9C349] flex items-center justify-center group-hover:scale-105 transition-transform">
                   <TrendingUp className="w-6 h-6" />
                 </div>
-                <p className="text-xs uppercase tracking-wider text-gray-400 font-bold">Net Promoteur (90%)</p>
+                <p className="text-xs uppercase tracking-wider text-gray-300 font-bold">Net Promoteur (90%)</p>
                 <h3 className="font-heading text-3xl font-black text-[#E9C349]">
                   {promoterNetShare.toLocaleString('fr-FR')} <span className="text-xs text-white font-bold">FCFA</span>
                 </h3>
-                <p className="text-xs text-gray-400">Reversement garanti sous 24h</p>
+                <p className="text-xs text-[#E5E2E1]">Reversement garanti sous 24h</p>
               </div>
 
               {/* 4. Billets Scannés à l'Entrée */}
@@ -1824,11 +1835,11 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                 <div className="w-12 h-12 rounded-xl bg-[#8A2BE2]/20 text-[#DCB8FF] flex items-center justify-center group-hover:scale-105 transition-transform">
                   <QrCode className="w-6 h-6" />
                 </div>
-                <p className="text-xs uppercase tracking-wider text-gray-400 font-bold">Billets Scannés</p>
+                <p className="text-xs uppercase tracking-wider text-gray-300 font-bold">Billets Scannés</p>
                 <h3 className="font-heading text-3xl font-black text-white">
-                  {scannedTicketsCount} <span className="text-xs text-gray-400 font-bold">/ {totalTicketsSold}</span>
+                  {scannedTicketsCount} <span className="text-xs text-gray-300 font-bold">/ {totalTicketsSold}</span>
                 </h3>
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-[#E5E2E1]">
                   {totalTicketsSold > 0
                     ? `${Math.round((scannedTicketsCount / totalTicketsSold) * 100)}% de taux de présence`
                     : 'Contrôle laser le jour J'}
@@ -1893,7 +1904,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
               </div>
 
               {manualSalesByAgent.length === 0 ? (
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-[#E5E2E1]">
                   Aucun point de vente physique n&apos;est encore rattaché à cet événement.
                 </p>
               ) : (
@@ -1911,7 +1922,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                         <p className="font-heading font-bold text-sm text-white truncate">
                           {agent.pointDeVente}
                         </p>
-                        <p className="text-[11px] text-gray-400 truncate">
+                        <p className="text-[11px] text-gray-300 truncate">
                           {agent.gerantName} • {totalSold} vendu(s) au total
                         </p>
                         {manualCount > 0 && (
@@ -1963,7 +1974,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                           </strong>
                           )
                         </span>
-                        <span className="text-[10px] text-gray-400">
+                        <span className="text-[10px] text-gray-300">
                           {new Date(shift.createdAt).toLocaleString('fr-FR')}
                         </span>
                       </div>
@@ -2010,7 +2021,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                     />
                   </div>
 
-                  <div className="flex justify-between items-center text-xs text-gray-400 pt-1">
+                  <div className="flex justify-between items-center text-xs text-gray-300 pt-1">
                     <span>Quota restant : {Math.max(0, statsByCategory.prevente.quota - statsByCategory.prevente.sold)}</span>
                     <span className="font-extrabold text-[#E9C349] font-mono">
                       {statsByCategory.prevente.ca.toLocaleString('fr-FR')} F
@@ -2041,7 +2052,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                     />
                   </div>
 
-                  <div className="flex justify-between items-center text-xs text-gray-400 pt-1">
+                  <div className="flex justify-between items-center text-xs text-gray-300 pt-1">
                     <span>Quota restant : {Math.max(0, statsByCategory.jourJ.quota - statsByCategory.jourJ.sold)}</span>
                     <span className="font-extrabold text-[#E9C349] font-mono">
                       {statsByCategory.jourJ.ca.toLocaleString('fr-FR')} F
@@ -2073,7 +2084,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                     />
                   </div>
 
-                  <div className="flex justify-between items-center text-xs text-gray-400 pt-1">
+                  <div className="flex justify-between items-center text-xs text-gray-300 pt-1">
                     <span>Quota restant : {Math.max(0, statsByCategory.vip.quota - statsByCategory.vip.sold)}</span>
                     <span className="font-extrabold text-[#E9C349] font-mono">
                       {statsByCategory.vip.ca.toLocaleString('fr-FR')} F
@@ -2092,15 +2103,15 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                     Liste des Participants & Contact Direct ({filteredOrders.length})
                   </h3>
                 </div>
-                <span className="text-xs text-gray-400">
+                <span className="text-xs text-gray-300">
                   Cliquez sur l'icône WhatsApp pour envoyer un rappel personnalisé
                 </span>
               </div>
 
               {filteredOrders.length === 0 ? (
                 <div className="p-8 rounded-2xl bg-[#141414] text-center space-y-2 border border-white/5">
-                  <Ticket className="w-8 h-8 text-gray-500 mx-auto" />
-                  <p className="text-xs text-gray-400">
+                  <Ticket className="w-8 h-8 text-gray-300 mx-auto" />
+                  <p className="text-xs text-[#E5E2E1]">
                     Aucune réservation enregistrée pour le moment.
                   </p>
                 </div>
@@ -2128,7 +2139,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                                 ? 'bg-emerald-500/20 text-emerald-300'
                                 : order.status === 'payment_signaled'
                                 ? 'bg-amber-500/20 text-amber-300'
-                                : 'bg-white/10 text-gray-400'
+                                : 'bg-white/10 text-gray-300'
                             }`}
                           >
                             {order.status === 'confirmed'
@@ -2141,11 +2152,11 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
 
                         <div className="flex items-center justify-between text-xs p-2.5 rounded-xl bg-black/40 border border-white/5">
                           <div>
-                            <span className="text-[10px] text-gray-400 uppercase font-bold block">Formule</span>
+                            <span className="text-[10px] text-gray-300 uppercase font-bold block">Formule</span>
                             <span className="font-semibold text-white">{order.tierName} • {order.quantity} pl.</span>
                           </div>
                           <div className="text-right">
-                            <span className="text-[10px] text-gray-400 uppercase font-bold block">Montant</span>
+                            <span className="text-[10px] text-gray-300 uppercase font-bold block">Montant</span>
                             <span className="font-heading font-black text-sm text-[#E9C349]">
                               {order.totalAmount.toLocaleString('fr-FR')} FCFA
                             </span>
@@ -2169,7 +2180,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                   <div className="overflow-x-auto hidden md:block">
                   <table className="w-full text-left text-xs">
                     <thead>
-                      <tr className="border-b border-white/10 text-gray-400 uppercase font-heading tracking-wider">
+                      <tr className="border-b border-white/10 text-gray-300 uppercase font-heading tracking-wider">
                         <th className="pb-3 px-3">Participant</th>
                         <th className="pb-3 px-3">Téléphone Wave</th>
                         <th className="pb-3 px-3">Formule</th>
@@ -2204,7 +2215,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                                   ? 'bg-emerald-500/20 text-emerald-300'
                                   : order.status === 'payment_signaled'
                                   ? 'bg-amber-500/20 text-amber-300'
-                                  : 'bg-white/10 text-gray-400'
+                                  : 'bg-white/10 text-gray-300'
                               }`}
                             >
                               {order.status === 'confirmed'
@@ -2242,27 +2253,27 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
           <div className="space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="glass-panel p-5 rounded-2xl border border-[#E9C349]/30 bg-[#241A00]/30 space-y-2">
-                <p className="text-xs uppercase tracking-wider text-gray-400 font-bold">Total Encaissé</p>
+                <p className="text-xs uppercase tracking-wider text-gray-300 font-bold">Total Encaissé</p>
                 <h3 className="font-heading text-2xl font-black text-white">
                   {totalGrossCA.toLocaleString('fr-FR')} <span className="text-xs text-[#E9C349]">FCFA</span>
                 </h3>
-                <p className="text-[11px] text-gray-400">Paiements validés pour vos soirées</p>
+                <p className="text-[11px] text-gray-300">Paiements validés pour vos soirées</p>
               </div>
 
               <div className="glass-panel p-5 rounded-2xl border border-emerald-500/30 bg-emerald-950/20 space-y-2">
-                <p className="text-xs uppercase tracking-wider text-gray-400 font-bold">Votre Part Nette (90%)</p>
+                <p className="text-xs uppercase tracking-wider text-gray-300 font-bold">Votre Part Nette (90%)</p>
                 <h3 className="font-heading text-2xl font-black text-emerald-400">
                   {promoterNetShare.toLocaleString('fr-FR')} <span className="text-xs text-white">FCFA</span>
                 </h3>
-                <p className="text-[11px] text-gray-400">À virer directement sur votre Wave Business</p>
+                <p className="text-[11px] text-gray-300">À virer directement sur votre Wave Business</p>
               </div>
 
               <div className="glass-panel p-5 rounded-2xl border border-white/10 space-y-2">
-                <p className="text-xs uppercase tracking-wider text-gray-400 font-bold">Commission Thièsdn (10%)</p>
+                <p className="text-xs uppercase tracking-wider text-gray-300 font-bold">Commission Thièsdn (10%)</p>
                 <h3 className="font-heading text-2xl font-black text-[#DCB8FF]">
                   {platformFeeShare.toLocaleString('fr-FR')} <span className="text-xs text-white">FCFA</span>
                 </h3>
-                <p className="text-[11px] text-gray-400">Frais de plateforme et hébergement</p>
+                <p className="text-[11px] text-gray-300">Frais de plateforme et hébergement</p>
               </div>
             </div>
 
@@ -2291,7 +2302,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                 </div>
                 <button
                   onClick={() => setBatchSuccessMessage(null)}
-                  className="text-xs font-bold text-gray-400 hover:text-white px-2 py-1"
+                  className="text-xs font-bold text-gray-300 hover:text-white px-2 py-1"
                 >
                   ✕
                 </button>
@@ -2343,7 +2354,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                   <h3 className="font-heading text-xl sm:text-2xl font-black text-white mt-1">
                     Générer un Lot de Billets Physiques avec QR Code
                   </h3>
-                  <p className="text-xs text-gray-400 mt-1 max-w-2xl leading-relaxed">
+                  <p className="text-xs text-[#E5E2E1] mt-1 max-w-2xl leading-relaxed">
                     Créez des planches A4 de 4 billets avec souche détachable et QR Code unique certifié pour distribution dans les boutiques, kiosques et vendeurs de rue de Thiès.
                   </p>
                 </div>
@@ -2416,7 +2427,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                           className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all border ${
                             batchCount === qty
                               ? 'bg-[#E9C349] text-[#241A00] border-[#E9C349] shadow-md font-extrabold'
-                              : 'bg-[#141414] text-gray-400 border-white/10 hover:text-white'
+                              : 'bg-[#141414] text-gray-300 border-white/10 hover:text-white'
                           }`}
                         >
                           {qty}
@@ -2424,7 +2435,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                       ))}
                     </div>
                   ) : (
-                    <div className="py-2.5 px-3 rounded-xl bg-black/40 border border-white/5 text-xs text-gray-400 flex items-center justify-between">
+                    <div className="py-2.5 px-3 rounded-xl bg-black/40 border border-white/5 text-xs text-gray-300 flex items-center justify-between">
                       <span>Billets déjà attribués</span>
                       <span className="text-sky-300 font-bold font-mono">
                         {networkAgents.find((a) => a.id === batchAgentFilter)?.allocatedCount || 0} pass
@@ -2467,7 +2478,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
               </div>
 
               {/* Bandeau d'astuce d'impression */}
-              <div className="p-4 rounded-2xl bg-[#0F0F12] border border-white/5 flex flex-col sm:flex-row sm:items-center justify-between text-xs text-gray-400 gap-3">
+              <div className="p-4 rounded-2xl bg-[#0F0F12] border border-white/5 flex flex-col sm:flex-row sm:items-center justify-between text-xs text-gray-300 gap-3">
                 <div className="flex items-center gap-2.5">
                   <Printer className="w-4 h-4 text-[#E9C349]" />
                   <span>
@@ -2496,11 +2507,11 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                 <div className="w-12 h-12 rounded-xl bg-[#8A2BE2]/20 text-[#DCB8FF] flex items-center justify-center group-hover:scale-105 transition-transform">
                   <FileText className="w-6 h-6" />
                 </div>
-                <p className="text-xs uppercase tracking-wider text-gray-400 font-bold">En Réserve Promoteur</p>
+                <p className="text-xs uppercase tracking-wider text-gray-300 font-bold">En Réserve Promoteur</p>
                 <h3 className="font-heading text-3xl font-black text-white">
                   {unassignedPhysicalTickets.length} <span className="text-xs text-[#DCB8FF] font-bold">billets</span>
                 </h3>
-                <p className="text-xs text-gray-400">Imprimés, prêts à être alloués</p>
+                <p className="text-xs text-[#E5E2E1]">Imprimés, prêts à être alloués</p>
                 {unassignedPhysicalTickets.length > 0 && (
                   <button
                     type="button"
@@ -2518,11 +2529,11 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                 <div className="w-12 h-12 rounded-xl bg-[#E9C349]/20 text-[#E9C349] flex items-center justify-center group-hover:scale-105 transition-transform">
                   <Store className="w-6 h-6" />
                 </div>
-                <p className="text-xs uppercase tracking-wider text-gray-400 font-bold">Distribués en Boutique</p>
+                <p className="text-xs uppercase tracking-wider text-gray-300 font-bold">Distribués en Boutique</p>
                 <h3 className="font-heading text-3xl font-black text-[#E9C349]">
                   {totalPhysicalDistributed} <span className="text-xs text-white font-bold">billets</span>
                 </h3>
-                <p className="text-xs text-gray-400">Confier à {networkAgents.length} partenaires</p>
+                <p className="text-xs text-[#E5E2E1]">Confier à {networkAgents.length} partenaires</p>
               </div>
 
               {/* 3. Billets Physiques Vendus */}
@@ -2530,11 +2541,11 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                 <div className="w-12 h-12 rounded-xl bg-[#8A2BE2]/20 text-[#DCB8FF] flex items-center justify-center group-hover:scale-105 transition-transform">
                   <CheckCheck className="w-6 h-6" />
                 </div>
-                <p className="text-xs uppercase tracking-wider text-gray-400 font-bold">Vendus & Déclarés</p>
+                <p className="text-xs uppercase tracking-wider text-gray-300 font-bold">Vendus & Déclarés</p>
                 <h3 className="font-heading text-3xl font-black text-white">
                   {totalPhysicalSold} <span className="text-xs text-[#DCB8FF] font-bold">billets</span>
                 </h3>
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-[#E5E2E1]">
                   CA Réseau : {networkTotalGrossCollected.toLocaleString('fr-FR')} FCFA
                 </p>
               </div>
@@ -2544,11 +2555,11 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                 <div className="w-12 h-12 rounded-xl bg-[#E9C349]/20 text-[#E9C349] flex items-center justify-center group-hover:scale-105 transition-transform">
                   <DollarSign className="w-6 h-6" />
                 </div>
-                <p className="text-xs uppercase tracking-wider text-gray-400 font-bold">Cash Net à Récupérer</p>
+                <p className="text-xs uppercase tracking-wider text-gray-300 font-bold">Cash Net à Récupérer</p>
                 <h3 className="font-heading text-3xl font-black text-[#E9C349]">
                   {networkTotalAmountDue.toLocaleString('fr-FR')} <span className="text-xs text-white font-bold">FCFA</span>
                 </h3>
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-[#E5E2E1]">
                   Déjà versé : {networkTotalPaid.toLocaleString('fr-FR')} FCFA
                 </p>
               </div>
@@ -2564,7 +2575,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                       Points de Vente & Vendeurs Partenaires ({networkAgents.length})
                     </h3>
                   </div>
-                  <p className="text-xs text-gray-400 mt-0.5">
+                  <p className="text-xs text-[#E5E2E1] mt-0.5">
                     Suivi des stocks confiés, commissions commerçants (10%) et encaissement des espèces.
                   </p>
                 </div>
@@ -2614,7 +2625,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                     <button
                       type="button"
                       onClick={() => setAgentAccessBanner(null)}
-                      className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white"
+                      className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white"
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -2659,11 +2670,11 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
 
               {networkAgents.length === 0 ? (
                 <div className="p-12 text-center rounded-2xl bg-[#141414] border border-white/5 space-y-3">
-                  <Store className="w-10 h-10 text-gray-500 mx-auto" />
+                  <Store className="w-10 h-10 text-gray-300 mx-auto" />
                   <h4 className="font-heading font-bold text-sm text-white">
                     Aucun collaborateur enregistré
                   </h4>
-                  <p className="text-xs text-gray-400 max-w-sm mx-auto">
+                  <p className="text-xs text-[#E5E2E1] max-w-sm mx-auto">
                     Ajoutez vos points de vente partenaires à Thiès (boutiques, kiosques, stations-service) pour leur confier des stocks de billets.
                   </p>
                 </div>
@@ -2700,7 +2711,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                                   </span>
                                 )}
                               </div>
-                              <p className="text-xs text-gray-400 mt-1">
+                              <p className="text-xs text-[#E5E2E1] mt-1">
                                 Gérant : <strong className="text-gray-200">{agent.gerantName}</strong>
                               </p>
                             </div>
@@ -2711,11 +2722,11 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
 
                           <div className="grid grid-cols-2 gap-3 text-xs pt-1 border-t border-white/5">
                             <div className="p-3 rounded-xl bg-black/40 border border-white/5">
-                              <span className="text-gray-400 text-[10px] uppercase font-bold">Vendus :</span>
+                              <span className="text-gray-300 text-[10px] uppercase font-bold">Vendus :</span>
                               <p className="font-mono font-bold text-emerald-400 text-sm mt-0.5">{soldDisplay} billets</p>
                             </div>
                             <div className="p-3 rounded-xl bg-black/40 border border-white/5">
-                              <span className="text-gray-400 text-[10px] uppercase font-bold">En stock boutique :</span>
+                              <span className="text-gray-300 text-[10px] uppercase font-bold">En stock boutique :</span>
                               <p className="font-mono font-bold text-[#E9C349] text-sm mt-0.5">{remaining} billets</p>
                             </div>
                           </div>
@@ -2771,7 +2782,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                   <div className="overflow-x-auto hidden md:block">
                     <table className="w-full text-left text-xs">
                       <thead>
-                        <tr className="border-b border-white/10 text-gray-400 uppercase font-heading tracking-wider">
+                        <tr className="border-b border-white/10 text-gray-300 uppercase font-heading tracking-wider">
                           <th className="pb-3 px-3">Point de Vente & Quartier</th>
                           <th className="pb-3 px-3">Gérant & Contact</th>
                           <th className="pb-3 px-3">Billets Confiés / Vendus</th>
@@ -2854,7 +2865,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                               <td className="py-4 px-3">
                                 <div className="flex items-center justify-between text-[11px] font-bold mb-1">
                                   <span className="text-emerald-400">{soldDisplay} vendus</span>
-                                  <span className="text-gray-400">/ {allocatedDisplay}</span>
+                                  <span className="text-gray-300">/ {allocatedDisplay}</span>
                                 </div>
                                 <div className="w-28 bg-[#1F1F1F] rounded-full h-1.5 overflow-hidden">
                                   <div
@@ -2882,7 +2893,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                                 <div className="font-mono font-bold text-white">
                                   {agent.cashCollected.toLocaleString('fr-FR')} F
                                 </div>
-                                <div className="text-[10px] text-gray-400">
+                                <div className="text-[10px] text-gray-300">
                                   Com: {agent.commissionPercent}% (
                                   {Math.round(
                                     agent.cashCollected * (agent.commissionPercent / 100)
@@ -2969,7 +2980,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                     </div>
                     <button
                       onClick={() => setShowAddAgentModal(false)}
-                      className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white"
+                      className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white"
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -3011,6 +3022,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                         </label>
                         <input
                           type="tel"
+                          inputMode="tel"
                           required
                           value={newAgentPhone}
                           onChange={(e) => setNewAgentPhone(e.target.value)}
@@ -3077,9 +3089,10 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                       <button
                         type="submit"
                         disabled={isSavingAgent}
-                        className="flex-1 py-3 rounded-2xl bg-gradient-to-r from-[#8A2BE2] to-[#E9C349] text-white font-heading font-extrabold text-xs uppercase tracking-wider shadow-lg disabled:opacity-50"
+                        className="flex-1 py-3 rounded-2xl bg-gradient-to-r from-[#8A2BE2] to-[#E9C349] text-white font-heading font-extrabold text-xs uppercase tracking-wider shadow-lg disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
                       >
-                        {isSavingAgent ? 'Enregistrement...' : 'Créer le Partenaire'}
+                        {isSavingAgent && <Loader2 className="w-4 h-4 animate-spin" />}
+                        <span>{isSavingAgent ? 'Enregistrement...' : 'Créer le Partenaire'}</span>
                       </button>
                     </div>
                   </form>
@@ -3118,7 +3131,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                     </div>
                     <button
                       onClick={() => setShowSettlementModal(false)}
-                      className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white"
+                      className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white"
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -3126,7 +3139,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
 
                   <form onSubmit={handleRecordSettlementSubmit} className="space-y-4">
                     <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-1">
-                      <p className="text-xs text-gray-400 uppercase font-bold">Collaborateur</p>
+                      <p className="text-xs text-gray-300 uppercase font-bold">Collaborateur</p>
                       <h4 className="font-heading font-extrabold text-white text-base">
                         {selectedAgentForSettlement.pointDeVente}
                       </h4>
@@ -3144,6 +3157,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                       </label>
                       <input
                         type="number"
+                        inputMode="decimal"
                         min="1"
                         required
                         value={settlementAmountInput}
@@ -3162,9 +3176,11 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                       </button>
                       <button
                         type="submit"
-                        className="flex-1 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-heading font-extrabold text-xs uppercase tracking-wider shadow-lg"
+                        disabled={isSubmittingSettlement}
+                        className="flex-1 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-heading font-extrabold text-xs uppercase tracking-wider shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
                       >
-                        Enregistrer la Remise
+                        {isSubmittingSettlement && <Loader2 className="w-4 h-4 animate-spin" />}
+                        <span>{isSubmittingSettlement ? 'Encaissement...' : 'Enregistrer la Remise'}</span>
                       </button>
                     </div>
                   </form>
@@ -3277,7 +3293,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setDeactivateSuccessMessage(null)}
-                  className="text-xs font-bold text-gray-400 hover:text-white px-2 py-1"
+                  className="text-xs font-bold text-gray-300 hover:text-white px-2 py-1"
                 >
                   ✕
                 </button>
@@ -3287,14 +3303,14 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
             {/* 4 KPIs de Traçabilité */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="glass-panel p-5 rounded-3xl border border-white/10 space-y-1">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-gray-300">
                   Billets Imprimés
                 </p>
                 <h4 className="font-heading text-2xl font-black text-white">
                   {unassignedPhysicalTickets.length + totalPhysicalDistributed}{' '}
-                  <span className="text-xs font-bold text-gray-400">billets</span>
+                  <span className="text-xs font-bold text-gray-300">billets</span>
                 </h4>
-                <p className="text-[10px] text-gray-400">Total lots physiques générés</p>
+                <p className="text-[10px] text-gray-300">Total lots physiques générés</p>
               </div>
 
               <div className="glass-panel p-5 rounded-3xl border border-emerald-500/30 bg-emerald-950/20 space-y-1">
@@ -3327,7 +3343,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                   {eventPhysicalTickets.filter((t) => t.status === 'cancelled').length}{' '}
                   <span className="text-xs font-bold text-white">verrouillés</span>
                 </h4>
-                <p className="text-[10px] text-gray-400">Protection anti-vols active</p>
+                <p className="text-[10px] text-gray-300">Protection anti-vols active</p>
               </div>
             </div>
 
@@ -3338,14 +3354,14 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                   <h4 className="font-heading font-black text-base text-white">
                     État des Stocks par Collaborateur du Réseau
                   </h4>
-                  <p className="text-xs text-gray-400">
+                  <p className="text-xs text-[#E5E2E1]">
                     Suivi précis des billets confiés et bouton de désactivation préventive des invendus avant l'événement.
                   </p>
                 </div>
               </div>
 
               {physicalTicketsByAgent.length === 0 ? (
-                <p className="text-xs text-gray-500 py-6 text-center">
+                <p className="text-xs text-[#E5E2E1] py-6 text-center">
                   Aucun collaborateur n'a encore été rattaché à cet événement.
                 </p>
               ) : (
@@ -3362,7 +3378,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                             <h4 className="font-heading font-extrabold text-white text-sm">
                               {item.agent.pointDeVente}
                             </h4>
-                            <p className="text-xs text-gray-400 mt-0.5">
+                            <p className="text-xs text-[#E5E2E1] mt-0.5">
                               Responsable : <strong className="text-gray-200">{item.agent.gerantName}</strong>
                             </p>
                             <p className="font-mono text-[11px] text-[#DCB8FF] mt-0.5">
@@ -3385,15 +3401,15 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                         {/* Synthèse Chiffres X/Y/Z */}
                         <div className="grid grid-cols-3 gap-2 text-center text-xs p-2.5 rounded-xl bg-black/40 border border-white/5">
                           <div>
-                            <span className="text-[10px] text-gray-400 uppercase font-bold block">Imprimés</span>
+                            <span className="text-[10px] text-gray-300 uppercase font-bold block">Imprimés</span>
                             <span className="font-heading font-bold text-white text-sm">{item.printedCount}</span>
                           </div>
                           <div>
-                            <span className="text-[10px] text-gray-400 uppercase font-bold block">Vendus</span>
+                            <span className="text-[10px] text-gray-300 uppercase font-bold block">Vendus</span>
                             <span className="font-heading font-bold text-emerald-400 text-sm">{item.soldCount}</span>
                           </div>
                           <div>
-                            <span className="text-[10px] text-gray-400 uppercase font-bold block">Invendus</span>
+                            <span className="text-[10px] text-gray-300 uppercase font-bold block">Invendus</span>
                             <span className="font-heading font-bold text-amber-300 text-sm">{item.unsoldCount}</span>
                           </div>
                         </div>
@@ -3416,7 +3432,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                   <div className="overflow-x-auto hidden md:block">
                   <table className="w-full text-left text-xs">
                     <thead>
-                      <tr className="border-b border-white/5 text-gray-400 uppercase font-heading text-[10px]">
+                      <tr className="border-b border-white/5 text-gray-300 uppercase font-heading text-[10px]">
                         <th className="py-3 px-3">Point de Vente & Gérant</th>
                         <th className="py-3 px-3">Téléphone</th>
                         <th className="py-3 px-3 text-center">Imprimés (X)</th>
@@ -3433,7 +3449,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                             <span className="font-heading font-bold text-white block">
                               {item.agent.pointDeVente}
                             </span>
-                            <span className="text-[11px] text-gray-400 flex items-center gap-1">
+                            <span className="text-[11px] text-gray-300 flex items-center gap-1">
                               <span>Responsable :</span>
                               <strong className="text-gray-300">{item.agent.gerantName}</strong>
                               <span>•</span>
@@ -3481,7 +3497,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                                 Désactiver les {item.unsoldCount} invendus
                               </button>
                             ) : (
-                              <span className="text-[11px] text-gray-500 italic">Aucun invendu</span>
+                              <span className="text-[11px] text-gray-300 italic">Aucun invendu</span>
                             )}
                           </td>
                         </tr>
@@ -3526,21 +3542,21 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
             {/* Récapitulatif Global de la Répartition */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="glass-panel p-5 rounded-2xl border border-white/10 space-y-2">
-                <p className="text-xs uppercase tracking-wider text-gray-400 font-bold">CA Total Événement</p>
+                <p className="text-xs uppercase tracking-wider text-gray-300 font-bold">CA Total Événement</p>
                 <h3 className="font-heading text-2xl font-black text-white">
                   {totalGrossCA.toLocaleString('fr-FR')} <span className="text-xs text-[#E9C349]">FCFA</span>
                 </h3>
-                <p className="text-[11px] text-gray-400">Base de calcul pour tous les ayants-droit</p>
+                <p className="text-[11px] text-gray-300">Base de calcul pour tous les ayants-droit</p>
               </div>
 
               <div className="glass-panel p-5 rounded-2xl border border-[#E9C349]/30 bg-[#241A00]/20 space-y-2">
-                <p className="text-xs uppercase tracking-wider text-gray-400 font-bold">Total Parts Co-Producteurs</p>
+                <p className="text-xs uppercase tracking-wider text-gray-300 font-bold">Total Parts Co-Producteurs</p>
                 <h3 className="font-heading text-2xl font-black text-[#E9C349]">
                   {coproducers
                     .filter((c) => !activeEvent || c.eventId === activeEvent.id)
                     .reduce((sum, c) => sum + c.revenueShare, 0)}% <span className="text-xs text-white">du CA</span>
                 </h3>
-                <p className="text-[11px] text-gray-400">
+                <p className="text-[11px] text-gray-300">
                   Soit{' '}
                   {Math.round(
                     (totalGrossCA *
@@ -3554,7 +3570,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
               </div>
 
               <div className="glass-panel p-5 rounded-2xl border border-emerald-500/30 bg-emerald-950/20 space-y-2">
-                <p className="text-xs uppercase tracking-wider text-gray-400 font-bold">Part Nette Producteur Principal</p>
+                <p className="text-xs uppercase tracking-wider text-gray-300 font-bold">Part Nette Producteur Principal</p>
                 <h3 className="font-heading text-2xl font-black text-emerald-400">
                   {Math.max(
                     0,
@@ -3564,7 +3580,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                         .reduce((sum, c) => sum + c.revenueShare, 0)
                   )}% <span className="text-xs text-white">du CA</span>
                 </h3>
-                <p className="text-[11px] text-gray-400">
+                <p className="text-[11px] text-gray-300">
                   Soit{' '}
                   {Math.round(
                     (totalGrossCA *
@@ -3589,7 +3605,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                   <h3 className="font-heading font-extrabold text-base sm:text-lg text-white">
                     Liste des Ayants-Droit & Répartition ({coproducers.filter((c) => !activeEvent || c.eventId === activeEvent.id).length})
                   </h3>
-                  <p className="text-xs text-gray-400 mt-0.5">
+                  <p className="text-xs text-[#E5E2E1] mt-0.5">
                     Chaque ayant-droit dispose d’un accès dédié en direct pour vérifier ses chiffres et sa guest list.
                   </p>
                 </div>
@@ -3628,19 +3644,19 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                             <span className="font-heading font-black text-lg text-[#E9C349] block">
                               {coprod.revenueShare}%
                             </span>
-                            <span className="text-[10px] text-gray-400">part brute</span>
+                            <span className="text-[10px] text-gray-300">part brute</span>
                           </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-2 text-xs p-2.5 rounded-xl bg-black/40 border border-white/5">
                           <div>
-                            <span className="text-[10px] text-gray-400 uppercase font-bold block">Montant Net</span>
+                            <span className="text-[10px] text-gray-300 uppercase font-bold block">Montant Net</span>
                             <span className="font-heading font-bold text-white text-sm">
                               {netAmount.toLocaleString('fr-FR')} FCFA
                             </span>
                           </div>
                           <div>
-                            <span className="text-[10px] text-gray-400 uppercase font-bold block">Guest List</span>
+                            <span className="text-[10px] text-gray-300 uppercase font-bold block">Guest List</span>
                             <span className="font-heading font-bold text-[#DCB8FF] text-xs">
                               {coprod.guestTicketsUsed} / {coprod.guestTicketsAllocated} places
                             </span>
@@ -3677,7 +3693,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
               <div className="overflow-x-auto hidden md:block">
                 <table className="w-full text-left text-xs">
                   <thead>
-                    <tr className="border-b border-white/10 text-gray-400 uppercase font-heading tracking-wider">
+                    <tr className="border-b border-white/10 text-gray-300 uppercase font-heading tracking-wider">
                       <th className="pb-3 px-3">Ayant-Droit & Rôle</th>
                       <th className="pb-3 px-3">Contact Téléphone</th>
                       <th className="pb-3 px-3">Part Contractuelle</th>
@@ -3724,7 +3740,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                               <div className="font-mono font-extrabold text-white text-sm">
                                 {netAmount.toLocaleString('fr-FR')} FCFA
                               </div>
-                              <div className="text-[10px] text-gray-400">Revenus nets</div>
+                              <div className="text-[10px] text-gray-300">Revenus nets</div>
                             </td>
 
                             <td className="py-4 px-3">
@@ -3794,7 +3810,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                     </div>
                     <button
                       onClick={() => setShowAddCoprodModal(false)}
-                      className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white"
+                      className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white"
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -3862,6 +3878,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                         </label>
                         <input
                           type="tel"
+                          inputMode="tel"
                           required
                           value={newCoprodPhone}
                           onChange={(e) => setNewCoprodPhone(e.target.value)}
@@ -3912,9 +3929,10 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                       <button
                         type="submit"
                         disabled={isSavingCoprod}
-                        className="flex-1 py-3 rounded-2xl btn-gold-glow font-heading font-extrabold text-xs uppercase tracking-wider shadow-lg disabled:opacity-50"
+                        className="flex-1 py-3 rounded-2xl btn-gold-glow font-heading font-extrabold text-xs uppercase tracking-wider shadow-lg disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
                       >
-                        {isSavingCoprod ? 'Enregistrement...' : 'Enregistrer cet Ayant-Droit'}
+                        {isSavingCoprod && <Loader2 className="w-4 h-4 animate-spin text-[#241A00]" />}
+                        <span>{isSavingCoprod ? 'Enregistrement...' : 'Enregistrer cet Ayant-Droit'}</span>
                       </button>
                     </div>
                   </form>
@@ -3991,7 +4009,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
   // 2. VUE ADMIN GLOBALE : MODULE FINANCIER & RÉCONCILIATION GÉNÉRALE
   // ====================================================================
   return (
-    <div className="max-w-6xl mx-auto space-y-8 pb-20 animate-in fade-in duration-300">
+    <div className="max-w-6xl mx-auto space-y-8 pb-[calc(80px+env(safe-area-inset-bottom))] animate-in fade-in duration-300">
       {/* Navigation par Onglets Administrateur */}
       <div className="flex bg-[#1C1B1B] p-1 rounded-2xl border border-white/10 overflow-x-auto max-w-full">
         <button
@@ -4000,7 +4018,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
           className={`px-4 py-2 rounded-xl text-xs font-heading font-extrabold tracking-wider uppercase transition-all flex items-center gap-2 ${
             promoterTab === 'compta'
               ? 'bg-[#8A2BE2] text-white shadow-md shadow-[#8A2BE2]/40'
-              : 'text-gray-400 hover:text-white'
+              : 'text-gray-300 hover:text-white'
           }`}
         >
           <Wallet className="w-4 h-4" />
@@ -4010,7 +4028,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
         <button
           type="button"
           onClick={() => setPromoterTab('network')}
-          className="px-4 py-2 rounded-xl text-xs font-heading font-extrabold tracking-wider uppercase transition-all flex items-center gap-2 text-gray-400 hover:text-white cursor-pointer"
+          className="px-4 py-2 rounded-xl text-xs font-heading font-extrabold tracking-wider uppercase transition-all flex items-center gap-2 text-gray-300 hover:text-white cursor-pointer"
         >
           <Store className="w-4 h-4 text-[#E9C349]" />
           <span>Réseau & Billets Physiques</span>
@@ -4022,7 +4040,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
         <button
           type="button"
           onClick={() => setPromoterTab('unsold')}
-          className="px-4 py-2 rounded-xl text-xs font-heading font-extrabold tracking-wider uppercase transition-all flex items-center gap-2 text-gray-400 hover:text-white cursor-pointer"
+          className="px-4 py-2 rounded-xl text-xs font-heading font-extrabold tracking-wider uppercase transition-all flex items-center gap-2 text-gray-300 hover:text-white cursor-pointer"
         >
           <AlertCircle className="w-4 h-4 text-rose-400" />
           <span>Billets Non Vendus</span>
@@ -4031,7 +4049,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
         <button
           type="button"
           onClick={() => setPromoterTab('stats')}
-          className="px-4 py-2 rounded-xl text-xs font-heading font-extrabold tracking-wider uppercase transition-all flex items-center gap-2 text-gray-400 hover:text-white cursor-pointer"
+          className="px-4 py-2 rounded-xl text-xs font-heading font-extrabold tracking-wider uppercase transition-all flex items-center gap-2 text-gray-300 hover:text-white cursor-pointer"
         >
           <BarChart3 className="w-4 h-4 text-sky-400" />
           <span>Cockpit Organisateur</span>
@@ -4058,7 +4076,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
           <h1 className="font-heading text-2xl sm:text-3xl font-extrabold text-white tracking-tight mt-2">
             Comptabilité du MVP & Réconciliation des Fonds
           </h1>
-          <p className="text-sm text-gray-400 mt-1">
+          <p className="text-sm text-[#E5E2E1] mt-1">
             Formule validée (Option 3) : 90% Promoteur • 10% Thièsdn • 100% équilibré
           </p>
         </div>
@@ -4124,11 +4142,11 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
           <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
             <DollarSign className="w-5 h-5" />
           </div>
-          <p className="text-xs uppercase tracking-wider text-gray-400 font-bold">Encaissé Confirmé</p>
+          <p className="text-xs uppercase tracking-wider text-gray-300 font-bold">Encaissé Confirmé</p>
           <h3 className="font-heading text-2xl font-black text-white">
             {totalVolumeConfirmed.toLocaleString('fr-FR')} <span className="text-xs text-emerald-400 font-bold">FCFA</span>
           </h3>
-          <p className="text-[11px] text-gray-400">Paiements validés & billets émis</p>
+          <p className="text-[11px] text-gray-300">Paiements validés & billets émis</p>
         </div>
 
         {/* Signalé en Attente de Vérification */}
@@ -4136,11 +4154,11 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
           <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center">
             <Clock className="w-5 h-5" />
           </div>
-          <p className="text-xs uppercase tracking-wider text-gray-400 font-bold">Signalé (À Vérifier)</p>
+          <p className="text-xs uppercase tracking-wider text-gray-300 font-bold">Signalé (À Vérifier)</p>
           <h3 className="font-heading text-2xl font-black text-amber-300">
             {signaledVolume.toLocaleString('fr-FR')} <span className="text-xs text-white font-bold">FCFA</span>
           </h3>
-          <p className="text-[11px] text-gray-400">{signaledOrders.length} virement(s) à confirmer dans Modération</p>
+          <p className="text-[11px] text-gray-300">{signaledOrders.length} virement(s) à confirmer dans Modération</p>
         </div>
 
         {/* Part Promoteurs (90%) */}
@@ -4148,11 +4166,11 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
           <div className="w-10 h-10 rounded-xl bg-[#E9C349]/20 text-[#E9C349] flex items-center justify-center">
             <TrendingUp className="w-5 h-5" />
           </div>
-          <p className="text-xs uppercase tracking-wider text-gray-400 font-bold">Part Promoteurs (90%)</p>
+          <p className="text-xs uppercase tracking-wider text-gray-300 font-bold">Part Promoteurs (90%)</p>
           <h3 className="font-heading text-2xl font-black text-[#E9C349]">
             {totalPromoterShare.toLocaleString('fr-FR')} <span className="text-xs text-white font-bold">FCFA</span>
           </h3>
-          <p className="text-[11px] text-gray-400">À reverser aux organisateurs</p>
+          <p className="text-[11px] text-gray-300">À reverser aux organisateurs</p>
         </div>
 
         {/* Commission Thièsdn (10%) */}
@@ -4160,11 +4178,11 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
           <div className="w-10 h-10 rounded-xl bg-[#DCB8FF]/20 text-[#DCB8FF] flex items-center justify-center">
             <Percent className="w-5 h-5" />
           </div>
-          <p className="text-xs uppercase tracking-wider text-gray-400 font-bold">Commission Thièsdn (10%)</p>
+          <p className="text-xs uppercase tracking-wider text-gray-300 font-bold">Commission Thièsdn (10%)</p>
           <h3 className="font-heading text-2xl font-black text-[#DCB8FF]">
             {totalPlatformFee.toLocaleString('fr-FR')} <span className="text-xs text-white font-bold">FCFA</span>
           </h3>
-          <p className="text-[11px] text-gray-400">Revenu net plateforme</p>
+          <p className="text-[11px] text-gray-300">Revenu net plateforme</p>
         </div>
       </div>
 
@@ -4192,11 +4210,12 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
               <Smartphone className="w-4 h-4" /> Wave Sénégal
             </h4>
             <div>
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
+              <label className="text-[10px] font-bold text-gray-300 uppercase tracking-wider block mb-1">
                 Numéro Wave Récepteur
               </label>
               <input
-                type="text"
+                type="tel"
+                inputMode="tel"
                 value={paymentSettings.waveNumber}
                 onChange={(e) =>
                   setLocalPaymentSettings({ ...paymentSettings, waveNumber: e.target.value })
@@ -4206,7 +4225,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
               />
             </div>
             <div>
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
+              <label className="text-[10px] font-bold text-gray-300 uppercase tracking-wider block mb-1">
                 Nom du Bénéficiaire Wave
               </label>
               <input
@@ -4226,11 +4245,12 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
               <Smartphone className="w-4 h-4" /> Orange Money Sénégal
             </h4>
             <div>
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
+              <label className="text-[10px] font-bold text-gray-300 uppercase tracking-wider block mb-1">
                 Numéro Orange Money Récepteur
               </label>
               <input
-                type="text"
+                type="tel"
+                inputMode="tel"
                 value={paymentSettings.omNumber}
                 onChange={(e) =>
                   setLocalPaymentSettings({ ...paymentSettings, omNumber: e.target.value })
@@ -4240,7 +4260,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
               />
             </div>
             <div>
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
+              <label className="text-[10px] font-bold text-gray-300 uppercase tracking-wider block mb-1">
                 Nom du Bénéficiaire Orange Money
               </label>
               <input
@@ -4285,7 +4305,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
 
           <form onSubmit={handleSaveSupabase} className="space-y-3">
             <div>
-              <label className="text-[11px] font-bold uppercase tracking-wider text-gray-400 block mb-1">
+              <label className="text-[11px] font-bold uppercase tracking-wider text-gray-300 block mb-1">
                 Supabase URL (VITE_SUPABASE_URL)
               </label>
               <input
@@ -4298,7 +4318,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
             </div>
 
             <div>
-              <label className="text-[11px] font-bold uppercase tracking-wider text-gray-400 block mb-1">
+              <label className="text-[11px] font-bold uppercase tracking-wider text-gray-300 block mb-1">
                 Supabase Anon Key (VITE_SUPABASE_ANON_KEY)
               </label>
               <input
@@ -4378,12 +4398,12 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
               Ce script prêt à l’emploi crée automatiquement les tables <strong className="text-white">profiles</strong>, <strong className="text-white">events</strong>, <strong className="text-white">tickets</strong>, <strong className="text-white">orders</strong>, <strong className="text-white">transactions</strong>, le trigger de calcul des commissions 90/10 et la fonction RPC <strong className="text-[#E9C349]">scan_ticket()</strong>.
             </p>
 
-            <div className="mt-3 bg-[#0A0A0C] p-3 rounded-xl border border-white/5 font-mono text-[10px] text-gray-400 max-h-36 overflow-y-auto">
+            <div className="mt-3 bg-[#0A0A0C] p-3 rounded-xl border border-white/5 font-mono text-[10px] text-gray-300 max-h-36 overflow-y-auto">
               <pre>{SUPABASE_SQL_SCHEMA}</pre>
             </div>
           </div>
 
-          <div className="pt-3 border-t border-white/5 flex items-center justify-between text-xs text-gray-400">
+          <div className="pt-3 border-t border-white/5 flex items-center justify-between text-xs text-gray-300">
             <span>Région couverte : Thiès, Mbour, Saly, Dakar</span>
             <span className="text-[#DCB8FF] font-bold">100% Compatible PostgreSQL</span>
           </div>
@@ -4400,7 +4420,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
             </h2>
           </div>
 
-          <div className="text-xs text-gray-400">
+          <div className="text-xs text-gray-300">
             Paiements en direct via Mobile Money
           </div>
         </div>
@@ -4408,7 +4428,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
         {/* Mobile View: Transaction Cards */}
         <div className="block md:hidden space-y-3">
           {adminTransactions.length === 0 ? (
-            <p className="text-center py-6 text-gray-400 text-xs">Aucune transaction enregistrée.</p>
+            <p className="text-center py-6 text-[#E5E2E1] text-xs">Aucune transaction enregistrée.</p>
           ) : (
             adminTransactions.map((tx) => {
               const cur = safeEvents.find((e) => e && e.id === tx.eventId);
@@ -4451,9 +4471,9 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                   <div className="flex items-center justify-between text-xs text-gray-300 bg-black/30 p-2.5 rounded-xl border border-white/5">
                     <div>
                       <p className="font-medium text-white truncate max-w-[150px]">{tx.customerName}</p>
-                      <p className="text-[10px] text-gray-400 font-mono">{tx.customerPhone}</p>
+                      <p className="text-[10px] text-gray-300 font-mono">{tx.customerPhone}</p>
                     </div>
-                    <span className="text-[10px] text-gray-500 text-right">
+                    <span className="text-[10px] text-gray-300 text-right">
                       {new Date(tx.createdAt).toLocaleDateString('fr-FR', {
                         day: 'numeric',
                         month: 'short',
@@ -4465,7 +4485,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
 
                   <div className="pt-2 border-t border-white/5 flex items-center justify-between">
                     <div>
-                      <p className="text-[10px] text-gray-400 uppercase tracking-wider">Total Encaissé</p>
+                      <p className="text-[10px] text-gray-300 uppercase tracking-wider">Total Encaissé</p>
                       <p className="text-base font-heading font-extrabold text-white">{tx.totalAmount.toLocaleString('fr-FR')} F</p>
                     </div>
                     <div className="text-right">
@@ -4483,7 +4503,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
         <div className="overflow-x-auto hidden md:block">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-white/10 text-gray-400 uppercase font-heading tracking-wider">
+              <tr className="border-b border-white/10 text-gray-300 uppercase font-heading tracking-wider">
                 <th className="pb-3 px-3">Réf / Date</th>
                 <th className="pb-3 px-3">Événement & Organisateur</th>
                 <th className="pb-3 px-3">Client</th>
@@ -4499,7 +4519,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                 <tr key={tx.id} className="hover:bg-white/5 transition-colors">
                   <td className="py-3.5 px-3">
                     <p className="font-mono text-white font-bold">{tx.id}</p>
-                    <p className="text-[10px] text-gray-500">
+                    <p className="text-[10px] text-gray-300">
                       {new Date(tx.createdAt).toLocaleDateString('fr-FR', {
                         day: 'numeric',
                         month: 'short',
@@ -4528,7 +4548,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
 
                   <td className="py-3.5 px-3">
                     <p className="text-white">{tx.customerName}</p>
-                    <p className="text-[10px] text-gray-400 font-mono">{tx.customerPhone}</p>
+                    <p className="text-[10px] text-gray-300 font-mono">{tx.customerPhone}</p>
                   </td>
 
                   <td className="py-3.5 px-3">

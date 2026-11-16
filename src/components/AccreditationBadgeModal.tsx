@@ -195,7 +195,7 @@ export const AccreditationBadgeModal: React.FC<AccreditationBadgeModalProps> = (
               <span className="font-heading text-xs font-black tracking-widest text-[#E9C349] uppercase">
                 THIÈSDN BILLETTERIE
               </span>
-              <p className="text-[10px] text-gray-400">Pass Officiel de Sécurité</p>
+              <p className="text-[10px] text-gray-300">Pass Officiel de Sécurité</p>
             </div>
             <div className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-white/10 text-white font-mono">
               OFFICIEL
@@ -229,7 +229,7 @@ export const AccreditationBadgeModal: React.FC<AccreditationBadgeModalProps> = (
                 {accreditation.organization}
               </p>
             )}
-            <p className="text-xs text-gray-400">{accreditation.holderPhone}</p>
+            <p className="text-xs text-[#E5E2E1]">{accreditation.holderPhone}</p>
           </div>
 
           {/* Image QR Code Haute Définition avec Logo au Centre */}
@@ -247,10 +247,10 @@ export const AccreditationBadgeModal: React.FC<AccreditationBadgeModalProps> = (
             <p className="font-mono font-black text-sm text-white tracking-widest bg-white/5 py-1.5 px-3 rounded-lg border border-white/10 inline-block">
               {accreditation.qrCode}
             </p>
-            <p className="text-[10px] text-gray-400 uppercase font-semibold">
+            <p className="text-[10px] text-gray-300 uppercase font-semibold">
               Événement : {accreditation.eventTitle}
             </p>
-            <p className="text-[9px] text-gray-500 italic max-w-xs mx-auto">
+            <p className="text-[9px] text-gray-300 italic max-w-xs mx-auto">
               Présentation obligatoire à l'entrée. Badge strictement nominatif et infalsifiable.
             </p>
           </div>

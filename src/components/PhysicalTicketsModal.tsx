@@ -159,7 +159,7 @@ export const PhysicalTicketsModal: React.FC<PhysicalTicketsModalProps> = ({
               />
             )}
             <div className="min-w-0 flex-1">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-gray-300">
                 Événement sélectionné
               </p>
               <h4 className="text-sm font-bold text-white truncate">{event.title}</h4>
@@ -199,7 +199,7 @@ export const PhysicalTicketsModal: React.FC<PhysicalTicketsModalProps> = ({
                     className={`p-3 rounded-xl border text-left transition-all ${
                       selectedTierId === t.id
                         ? 'bg-[#8A2BE2]/20 border-[#8A2BE2] text-white shadow-md shadow-[#8A2BE2]/20'
-                        : 'bg-black/30 border-white/10 text-gray-400 hover:text-white hover:bg-white/5'
+                        : 'bg-black/30 border-white/10 text-gray-300 hover:text-white hover:bg-white/5'
                     }`}
                   >
                     <div className="flex items-center justify-between">
@@ -243,7 +243,7 @@ export const PhysicalTicketsModal: React.FC<PhysicalTicketsModalProps> = ({
                 onChange={(e) => setTicketCount(parseInt(e.target.value) || 0)}
                 className="w-full px-3.5 py-2.5 rounded-xl bg-black/40 border border-white/10 text-white font-bold text-sm focus:outline-none focus:border-[#8A2BE2]"
               />
-              <p className="text-[10px] text-gray-400">
+              <p className="text-[10px] text-gray-300">
                 Imposition : 5 billets par page A4 (ex: {ticketCount} billets = {Math.ceil(ticketCount / 5)} page(s) A4)
               </p>
             </div>
@@ -325,7 +325,7 @@ export const PhysicalTicketsModal: React.FC<PhysicalTicketsModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="p-4 bg-[#14131A] border-t border-white/10 flex items-center justify-between text-xs text-gray-400 shrink-0">
+        <div className="p-4 bg-[#14131A] border-t border-white/10 flex items-center justify-between text-xs text-gray-300 shrink-0">
           <span className="flex items-center gap-1.5">
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
             <span>Format vectoriel offset 5 billets / page A4</span>

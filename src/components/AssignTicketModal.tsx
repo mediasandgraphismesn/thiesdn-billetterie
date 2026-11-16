@@ -12,9 +12,11 @@ import {
   Ticket,
   AlertCircle,
   ExternalLink,
+  Loader2,
 } from 'lucide-react';
 import { UserTicket } from '../types';
 import { assignTicketToFriend } from '../services/supabase';
+import { useToast } from '../contexts/ToastContext';
 
 interface AssignTicketModalProps {
   ticket: UserTicket | null;
@@ -31,6 +33,7 @@ export const AssignTicketModal: React.FC<AssignTicketModalProps> = ({
   buyerName,
   onAssignedSuccess,
 }) => {
+  const { showToast } = useToast();
   const [friendName, setFriendName] = useState('');
   const [friendPhone, setFriendPhone] = useState('');
   const [friendEmail, setFriendEmail] = useState('');
@@ -86,6 +89,7 @@ export const AssignTicketModal: React.FC<AssignTicketModalProps> = ({
           claimToken: res.claimToken,
           ticket: res.ticket,
         });
+        showToast('Billet attribué', 'success');
         onAssignedSuccess(res.ticket);
       } else {
         setErrorMessage(res.message || 'Une erreur est survenue lors de l’assignation.');
@@ -133,7 +137,7 @@ export const AssignTicketModal: React.FC<AssignTicketModalProps> = ({
               <h3 className="font-heading font-black text-sm text-white">
                 Assigner ce Billet à un Ami
               </h3>
-              <p className="text-[10px] text-gray-400">
+              <p className="text-[10px] text-gray-300">
                 {ticket.tierName} • {ticket.seatNumber || ticket.qrCode}
               </p>
             </div>
@@ -160,7 +164,7 @@ export const AssignTicketModal: React.FC<AssignTicketModalProps> = ({
                 <p className="font-heading font-bold text-sm text-white">
                   {ticket.eventTitle}
                 </p>
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-[#E5E2E1]">
                   {ticket.eventDate} à {ticket.eventTime} • {ticket.eventVenue}
                 </p>
               </div>
@@ -185,7 +189,7 @@ export const AssignTicketModal: React.FC<AssignTicketModalProps> = ({
                     placeholder="Ex: Moussa Ndiaye"
                     className="w-full bg-[#181818] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#8A2BE2]"
                   />
-                  <p className="text-[10px] text-gray-400 mt-1">
+                  <p className="text-[10px] text-gray-300 mt-1">
                     Ce nom sera inscrit sur son billet et vérifié à l'entrée par les vigiles.
                   </p>
                 </div>
@@ -206,7 +210,7 @@ export const AssignTicketModal: React.FC<AssignTicketModalProps> = ({
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold uppercase tracking-wider text-gray-400 block mb-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-gray-300 block mb-1.5">
                     Email de l'ami (Optionnel)
                   </label>
                   <input
@@ -226,7 +230,10 @@ export const AssignTicketModal: React.FC<AssignTicketModalProps> = ({
                   className="w-full btn-primary-glow py-3.5 px-4 rounded-xl font-heading font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   {isSubmitting ? (
-                    'Génération du lien en cours...'
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Génération du lien en cours...</span>
+                    </>
                   ) : (
                     <>
                       <UserPlus className="w-4 h-4" />
@@ -265,7 +272,7 @@ export const AssignTicketModal: React.FC<AssignTicketModalProps> = ({
 
               {/* LIEN UNIQUE & BOUTON COPIER */}
               <div className="p-3 bg-black/60 border border-white/10 rounded-2xl text-left space-y-2">
-                <span className="text-[10px] uppercase font-bold text-gray-400 block">
+                <span className="text-[10px] uppercase font-bold text-gray-300 block">
                   Lien unique de récupération du pass :
                 </span>
                 <div className="flex items-center gap-2">

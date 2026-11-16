@@ -189,7 +189,7 @@ export const SoldTicketsSection: React.FC<SoldTicketsSectionProps> = ({
             <h2 className="font-heading font-bold text-base sm:text-lg text-white">
               Registre des Billets Vendus ({stats.total})
             </h2>
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-[#E5E2E1]">
               Liste optimisée haute performance • Cliquez sur « Voir le QR » pour afficher et télécharger un Pass
             </p>
           </div>
@@ -214,13 +214,13 @@ export const SoldTicketsSection: React.FC<SoldTicketsSectionProps> = ({
       {/* Barre de filtres */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
         <div className="relative">
-          <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <Search className="w-4 h-4 text-gray-300 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Client, tél, code THIES-..., POS..."
-            className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-[#161616] border border-white/10 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-[#8A2BE2]"
+            className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-[#161616] border border-white/10 text-sm text-white placeholder:text-gray-300/75 focus:outline-none focus:border-[#8A2BE2]"
           />
         </div>
 
@@ -249,7 +249,7 @@ export const SoldTicketsSection: React.FC<SoldTicketsSectionProps> = ({
 
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
-            <Filter className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <Filter className="w-3.5 h-3.5 text-gray-300 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <select
               value={filterStatus}
               onChange={(e) =>
@@ -279,14 +279,14 @@ export const SoldTicketsSection: React.FC<SoldTicketsSectionProps> = ({
 
       {/* Contenu principal */}
       {isLoading ? (
-        <div className="rounded-2xl bg-[#141414] border border-white/10 p-8 text-center text-sm text-gray-400">
+        <div className="rounded-2xl bg-[#141414] border border-white/10 p-8 text-center text-sm text-[#E5E2E1]">
           Chargement des billets en cours...
         </div>
       ) : paginatedTickets.length === 0 ? (
         <div className="rounded-2xl bg-[#141414] border border-white/10 p-8 text-center space-y-2">
           <Ticket className="w-8 h-8 text-gray-600 mx-auto" />
           <p className="text-sm font-semibold text-gray-300">Aucun billet trouvé</p>
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-[#E5E2E1]">
             Ajustez votre recherche ou vos filtres pour afficher d&apos;autres billets.
           </p>
         </div>
@@ -297,7 +297,7 @@ export const SoldTicketsSection: React.FC<SoldTicketsSectionProps> = ({
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="border-b border-white/10 bg-[#1A1A1A] text-[11px] uppercase tracking-wider text-gray-400">
+                  <tr className="border-b border-white/10 bg-[#1A1A1A] text-[11px] uppercase tracking-wider text-gray-300">
                     <th className="py-3 px-4 font-bold">Client</th>
                     <th className="py-3 px-4 font-bold">Événement</th>
                     <th className="py-3 px-4 font-bold">Formule</th>
@@ -321,7 +321,7 @@ export const SoldTicketsSection: React.FC<SoldTicketsSectionProps> = ({
                             <p className="font-semibold text-white truncate max-w-[220px]">
                               {ticket.holderName || 'Client Billetterie'}
                             </p>
-                            <div className="flex flex-wrap items-center gap-1.5 mt-0.5 text-xs text-gray-400">
+                            <div className="flex flex-wrap items-center gap-1.5 mt-0.5 text-xs text-gray-300">
                               <span>{ticket.holderPhone || 'Tél. non renseigné'}</span>
                               <span>•</span>
                               {online ? (
@@ -339,7 +339,7 @@ export const SoldTicketsSection: React.FC<SoldTicketsSectionProps> = ({
                                 </span>
                               )}
                             </div>
-                            <p className="text-[11px] font-mono text-gray-500 mt-0.5 truncate max-w-[220px]">
+                            <p className="text-[11px] font-mono text-gray-300 mt-0.5 truncate max-w-[220px]">
                               {ticket.qrCode}
                             </p>
                           </div>
@@ -349,7 +349,7 @@ export const SoldTicketsSection: React.FC<SoldTicketsSectionProps> = ({
                           <p className="font-medium text-white truncate max-w-[210px]">
                             {ticket.eventTitle}
                           </p>
-                          <p className="text-xs text-gray-400 truncate max-w-[210px]">
+                          <p className="text-xs text-[#E5E2E1] truncate max-w-[210px]">
                             {ticket.eventDate}
                             {ticket.eventTime ? ` • ${ticket.eventTime}` : ''}
                           </p>
@@ -435,7 +435,7 @@ export const SoldTicketsSection: React.FC<SoldTicketsSectionProps> = ({
                       <p className="font-bold text-sm text-white truncate">
                         {ticket.holderName || 'Client Billetterie'}
                       </p>
-                      <p className="text-xs text-gray-400 truncate">
+                      <p className="text-xs text-[#E5E2E1] truncate">
                         {ticket.holderPhone || 'Tél. non renseigné'} •{' '}
                         {online ? 'En ligne' : agentLabel || 'Guichet POS'}
                         {ticket.isManualEntry ? ' • Manuel' : ''}
@@ -452,7 +452,7 @@ export const SoldTicketsSection: React.FC<SoldTicketsSectionProps> = ({
                   <div className="flex items-center justify-between gap-2 text-xs bg-white/[0.03] rounded-xl px-3 py-2 border border-white/5">
                     <div className="min-w-0">
                       <p className="font-semibold text-gray-200 truncate">{ticket.eventTitle}</p>
-                      <p className="text-[11px] text-gray-400 truncate">
+                      <p className="text-[11px] text-gray-300 truncate">
                         {ticket.eventDate} • {ticket.tierName}
                       </p>
                     </div>
@@ -460,7 +460,7 @@ export const SoldTicketsSection: React.FC<SoldTicketsSectionProps> = ({
                       <p className="font-bold text-[#E9C349]">
                         {(ticket.price || 0).toLocaleString('fr-FR')} F
                       </p>
-                      <p className="text-[10px] font-mono text-gray-500">{ticket.qrCode}</p>
+                      <p className="text-[10px] font-mono text-gray-300">{ticket.qrCode}</p>
                     </div>
                   </div>
 
@@ -502,7 +502,7 @@ export const SoldTicketsSection: React.FC<SoldTicketsSectionProps> = ({
           </div>
 
           {/* Barre de pagination */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-[#141414] border border-white/10 rounded-2xl px-4 py-3 text-xs text-gray-400">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-[#141414] border border-white/10 rounded-2xl px-4 py-3 text-xs text-gray-300">
             <span>
               Affichage <strong className="text-white">{startIndex}</strong>–
               <strong className="text-white">{endIndex}</strong> sur{' '}

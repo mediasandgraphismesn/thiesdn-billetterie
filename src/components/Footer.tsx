@@ -73,7 +73,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateAdmin, onNavigateCGV }
 
   return (
     <>
-      <footer className="mt-auto border-t border-white/10 bg-[#0A0A0A] text-gray-400 transition-all">
+      <footer className="mt-auto border-t border-white/10 bg-[#0A0A0A] text-gray-300 transition-all">
         <div className="max-w-7xl mx-auto px-6 py-12 pb-[calc(var(--nav-h,72px)+env(safe-area-inset-bottom)+24px)] md:pb-12">
           {/* Grille principale : 1 colonne centrée sur mobile, 3 colonnes aérées sur desktop */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-10 items-start text-center md:text-left">
@@ -87,7 +87,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateAdmin, onNavigateCGV }
                 </span>
               </div>
 
-              <p className="text-xs text-gray-400 leading-relaxed max-w-sm">
+              <p className="text-xs text-[#E5E2E1] leading-relaxed max-w-sm">
                 Thièsdn Billetterie, la billetterie officielle des événements de prestige à Thiès, Saly, Mbour et Dakar.
               </p>
 
@@ -107,7 +107,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateAdmin, onNavigateCGV }
               <div className="flex flex-col items-center md:items-start gap-2.5 text-xs">
                 <a
                   href="mailto:contact@mgartswork.site"
-                  className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors py-0.5"
+                  className="flex items-center gap-2 text-gray-300 hover:text-white transition-colors py-0.5"
                 >
                   <Mail className="w-4 h-4 text-[#DCB8FF] shrink-0" />
                   <span>contact@mgartswork.site</span>
@@ -117,7 +117,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateAdmin, onNavigateCGV }
                   href="https://wa.me/221774587474?text=Bonjour%20Thi%C3%A8sdn%20Billetterie"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-gray-400 hover:text-emerald-400 transition-colors py-0.5"
+                  className="flex items-center gap-2 text-gray-300 hover:text-emerald-400 transition-colors py-0.5"
                 >
                   <Phone className="w-4 h-4 text-emerald-400 shrink-0" />
                   <span className="font-mono">+221 77 458 74 74</span>
@@ -127,7 +127,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateAdmin, onNavigateCGV }
                   href="https://thiesdn.mgartswork.site/"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 text-gray-400 hover:text-[#E9C349] transition-colors py-0.5"
+                  className="flex items-center gap-1.5 text-gray-300 hover:text-[#E9C349] transition-colors py-0.5"
                 >
                   <Globe className="w-4 h-4 text-[#E9C349] shrink-0" />
                   <span>thiesdn.mgartswork.site</span>
@@ -143,7 +143,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateAdmin, onNavigateCGV }
                     if (onNavigateCGV) onNavigateCGV();
                     else setIsCGVModalOpen(true);
                   }}
-                  className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors cursor-pointer"
+                  className="flex items-center gap-2 text-gray-300 hover:text-white transition-colors cursor-pointer"
                 >
                   <FileText className="w-3.5 h-3.5 text-[#DCB8FF]" />
                   <span>Conditions Générales de Vente (CGV)</span>
@@ -152,7 +152,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateAdmin, onNavigateCGV }
                 <button
                   type="button"
                   onClick={() => setLegalModal('confidentialite')}
-                  className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors cursor-pointer"
+                  className="flex items-center gap-2 text-gray-300 hover:text-white transition-colors cursor-pointer"
                 >
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
                   <span>Politique de Confidentialité</span>
@@ -161,7 +161,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateAdmin, onNavigateCGV }
                 <button
                   type="button"
                   onClick={() => setLegalModal('faq')}
-                  className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors cursor-pointer"
+                  className="flex items-center gap-2 text-gray-300 hover:text-white transition-colors cursor-pointer"
                 >
                   <HelpCircle className="w-3.5 h-3.5 text-[#E9C349]" />
                   <span>Foire Aux Questions (FAQ)</span>
@@ -175,7 +175,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateAdmin, onNavigateCGV }
                 Réseaux Sociaux
               </h4>
 
-              <p className="text-xs text-gray-400 max-w-xs">
+              <p className="text-xs text-[#E5E2E1] max-w-xs">
                 Suivez toute l'actualité des spectacles et sorties culturelles en direct.
               </p>
 
@@ -208,11 +208,11 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateAdmin, onNavigateCGV }
           </div>
 
           {/* LIGNE DE SÉPARATION SUBTILE & COPYRIGHT */}
-          <div className="pt-6 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-500 text-center sm:text-left">
+          <div className="pt-6 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-300 text-center sm:text-left">
             <p>© 2026 Thièsdn Billetterie. Tous droits réservés.</p>
 
             <div className="flex items-center gap-1.5 text-[#E9C349]">
-              <span className="text-gray-500">Conçu & Développé par</span>
+              <span className="text-gray-300">Conçu & Développé par</span>
               <a
                 href="https://mgartswork.site"
                 target="_blank"
@@ -281,19 +281,19 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateAdmin, onNavigateCGV }
                 <>
                   <div>
                     <h5 className="font-bold text-white mb-1">Comment payer mon billet avec Wave ?</h5>
-                    <p className="text-gray-400">
+                    <p className="text-[#E5E2E1]">
                       Sélectionnez votre formule puis cliquez sur "Payer avec Wave". Votre application Wave s'ouvre avec le montant exact prérempli. Dès votre validation, notre équipe émet votre pass.
                     </p>
                   </div>
                   <div>
                     <h5 className="font-bold text-white mb-1">Où retrouver mon billet acheté ?</h5>
-                    <p className="text-gray-400">
+                    <p className="text-[#E5E2E1]">
                       Rendez-vous dans l'onglet "Mes Billets & Pass VIP" depuis votre espace client. Vous pouvez afficher et télécharger votre QR Code certifié à tout moment.
                     </p>
                   </div>
                   <div>
                     <h5 className="font-bold text-white mb-1">Que faire en cas de problème de validation ?</h5>
-                    <p className="text-gray-400">
+                    <p className="text-[#E5E2E1]">
                       Contactez directement notre service support via WhatsApp au +221 77 458 74 74 avec votre référence de commande CMD-XXXX.
                     </p>
                   </div>

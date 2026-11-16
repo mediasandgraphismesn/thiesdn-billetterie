@@ -46,7 +46,7 @@ export const TermsOfServiceModal: React.FC<TermsOfServiceModalProps> = ({
               <h2 className="font-heading text-lg sm:text-xl font-black text-white">
                 Conditions Générales de Vente (CGV)
               </h2>
-              <p className="text-[11px] text-gray-400">
+              <p className="text-[11px] text-gray-300">
                 Thièsdn Billetterie • Version {CURRENT_TERMS_VERSION} • Droit Sénégalais
               </p>
             </div>
@@ -160,7 +160,7 @@ export const TermsOfServiceModal: React.FC<TermsOfServiceModalProps> = ({
                 className={`w-full py-3 rounded-2xl font-heading font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
                   hasAgreedInModal
                     ? 'btn-primary-glow cursor-pointer'
-                    : 'bg-white/10 text-gray-500 cursor-not-allowed opacity-60'
+                    : 'bg-white/10 text-gray-300 cursor-not-allowed opacity-60'
                 }`}
               >
                 <Check className="w-4 h-4" />

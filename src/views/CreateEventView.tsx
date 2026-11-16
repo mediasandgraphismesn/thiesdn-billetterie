@@ -728,7 +728,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
               className={`sm:w-2/3 py-3 rounded-2xl font-heading font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-lg ${
                 agreedTermsLocal && !isAcceptingTerms
                   ? 'btn-primary-glow cursor-pointer'
-                  : 'bg-white/10 text-gray-500 cursor-not-allowed opacity-60'
+                  : 'bg-white/10 text-gray-300 cursor-not-allowed opacity-60'
               }`}
             >
               {isAcceptingTerms ? (
@@ -776,7 +776,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
         <h1 className="font-heading text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
           Créer un Événement
         </h1>
-        <p className="text-sm text-gray-400 mt-1">
+        <p className="text-sm text-[#E5E2E1] mt-1">
           Soumettez votre événement à Thiès, Mbour, Saly ou Dakar pour modération et vente avec Mobile Money.
         </p>
       </div>
@@ -825,7 +825,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
 
           {/* Event Title */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-gray-400">
+            <label className="text-xs font-bold uppercase tracking-wider text-gray-300">
               Titre de l'événement
             </label>
             <div className="input-glass rounded-xl px-4 py-3">
@@ -843,7 +843,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
           {/* Category & City */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold uppercase tracking-wider text-gray-400">
+              <label className="text-xs font-bold uppercase tracking-wider text-gray-300">
                 Catégorie
               </label>
               <div className="input-glass rounded-xl px-4 py-3">
@@ -865,7 +865,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold uppercase tracking-wider text-gray-400">
+              <label className="text-xs font-bold uppercase tracking-wider text-gray-300">
                 Ville / Région Sénégal
               </label>
               <div className="input-glass rounded-xl px-4 py-3">
@@ -886,7 +886,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
           {/* Date & Time Row */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold uppercase tracking-wider text-gray-400">
+              <label className="text-xs font-bold uppercase tracking-wider text-gray-300">
                 Date & Heure de Début
               </label>
               <div className="input-glass rounded-xl px-4 py-3">
@@ -900,7 +900,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold uppercase tracking-wider text-gray-400">
+              <label className="text-xs font-bold uppercase tracking-wider text-gray-300">
                 Fin (Optionnel)
               </label>
               <div className="input-glass rounded-xl px-4 py-3">
@@ -917,7 +917,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
           {/* Heure de fin estimée (gestion soirée traversant minuit) */}
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+              <label className="text-xs font-bold uppercase tracking-wider text-gray-300 flex items-center gap-1.5">
                 <Clock className="w-3.5 h-3.5 text-[#DCB8FF]" />
                 <span>Heure de Fin Estimée de la Soirée (Optionnel)</span>
               </label>
@@ -932,7 +932,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
                 className="w-full bg-transparent border-none outline-none text-white text-sm focus:ring-0 p-0 font-mono"
               />
             </div>
-            <p className="text-[11px] text-gray-400">
+            <p className="text-[11px] text-gray-300">
               Permet au système de maintenir l'événement actif et affiché le lendemain matin (ex: KMOU JANGO commence à 23h00 et se termine à 05h00).
             </p>
           </div>
@@ -944,7 +944,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
                 <Clock className="w-3.5 h-3.5" />
                 <span>Date d'Ouverture des Ventes (Optionnel - Compte à Rebours)</span>
               </label>
-              <span className="text-[10px] text-gray-400">
+              <span className="text-[10px] text-gray-300">
                 Laisser vide = ventes ouvertes immédiatement
               </span>
             </div>
@@ -956,14 +956,14 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
                 className="w-full bg-transparent border-none outline-none text-white text-sm focus:ring-0 p-0 [color-scheme:dark]"
               />
             </div>
-            <p className="text-[11px] text-gray-400">
+            <p className="text-[11px] text-gray-300">
               Si une date future est renseignée, la carte affichera un compte à rebours et un formulaire de pré-inscription pour capturer les coordonnées des acheteurs.
             </p>
           </div>
 
           {/* Short Description */}
           <div className="flex flex-col gap-1.5 pt-2">
-            <label className="text-xs font-bold uppercase tracking-wider text-gray-400">
+            <label className="text-xs font-bold uppercase tracking-wider text-gray-300">
               Accroche courte / Teaser
             </label>
             <div className="input-glass rounded-xl px-4 py-3">
@@ -984,7 +984,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
                 <FileText className="w-4 h-4 text-[#8A2BE2]" />
                 <span>Description détaillée (Ambiance, Dress Code, Artistes)</span>
               </label>
-              <span className="text-[10px] text-gray-400">Optionnel mais recommandé</span>
+              <span className="text-[10px] text-gray-300">Optionnel mais recommandé</span>
             </div>
             <div className="input-glass rounded-xl px-4 py-3">
               <textarea
@@ -1006,11 +1006,11 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-gray-400">
+            <label className="text-xs font-bold uppercase tracking-wider text-gray-300">
               Nom de la salle, hôtel ou plage
             </label>
             <div className="input-glass rounded-xl px-4 py-3 flex items-center gap-2">
-              <MapPin className="w-4 h-4 text-gray-400" />
+              <MapPin className="w-4 h-4 text-gray-300" />
               <input
                 type="text"
                 required
@@ -1063,7 +1063,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
                   </optgroup>
                 </select>
               </div>
-              <p className="text-[11px] text-gray-400">
+              <p className="text-[11px] text-gray-300">
                 Sélectionnez le quartier hôte parmi les 33 quartiers de Thiès pour guider au mieux le public.
               </p>
             </div>
@@ -1079,7 +1079,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
 
           {/* URL de l'affiche personnalisée (prioritaire sur les présets) */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+            <label className="text-xs font-bold uppercase tracking-wider text-gray-300 flex items-center gap-1.5">
               <Link className="w-3.5 h-3.5 text-[#E9C349]" />
               Lien de l'affiche (URL) — Recommandé
             </label>
@@ -1088,7 +1088,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
                 ? 'border border-[#E9C349]/60 ring-1 ring-[#E9C349]/20'
                 : 'border border-white/10'
             }`}>
-              <ImageIcon className="w-4 h-4 text-gray-400 flex-shrink-0" />
+              <ImageIcon className="w-4 h-4 text-gray-300 flex-shrink-0" />
               <input
                 type="url"
                 value={PRESET_POSTERS.some(p => p.url === posterUrl) ? '' : posterUrl}
@@ -1098,13 +1098,13 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
                   else setPosterUrl(PRESET_POSTERS[0].url);
                 }}
                 placeholder="https://i.imgur.com/... ou autre URL d'image directe"
-                className="w-full bg-transparent border-none outline-none text-white text-sm focus:ring-0 p-0 placeholder-gray-500"
+                className="w-full bg-transparent border-none outline-none text-white text-sm focus:ring-0 p-0 placeholder:text-gray-300/75"
               />
               {posterUrl && !PRESET_POSTERS.some(p => p.url === posterUrl) && (
                 <button
                   type="button"
                   onClick={() => setPosterUrl(PRESET_POSTERS[0].url)}
-                  className="text-gray-500 hover:text-red-400 transition-colors flex-shrink-0"
+                  className="text-gray-300 hover:text-red-400 transition-colors flex-shrink-0"
                   title="Effacer et revenir aux présets"
                 >
                   <X className="w-4 h-4" />
@@ -1125,14 +1125,14 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
                   <p className="text-[11px] font-bold text-[#E9C349] flex items-center gap-1">
                     <CheckCircle2 className="w-3.5 h-3.5" /> Affiche personnalisée active
                   </p>
-                  <p className="text-[10px] text-gray-400 truncate mt-0.5 font-mono">{posterUrl}</p>
+                  <p className="text-[10px] text-gray-300 truncate mt-0.5 font-mono">{posterUrl}</p>
                 </div>
               </div>
             )}
           </div>
 
           <div>
-            <label className="text-xs font-bold uppercase tracking-wider text-gray-400 block mb-2">
+            <label className="text-xs font-bold uppercase tracking-wider text-gray-300 block mb-2">
               Ou sélectionner un visuel préconfiguré
             </label>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
@@ -1163,11 +1163,11 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
 
           {/* YouTube Promo Link */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-gray-400">
+            <label className="text-xs font-bold uppercase tracking-wider text-gray-300">
               Lien Spot Vidéo / YouTube (Optionnel)
             </label>
             <div className="input-glass rounded-xl px-4 py-3 flex items-center gap-2">
-              <Link className="w-4 h-4 text-gray-400" />
+              <Link className="w-4 h-4 text-gray-300" />
               <input
                 type="url"
                 value={youtubeUrl}
@@ -1191,7 +1191,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
             </span>
           </div>
 
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-[#E5E2E1]">
             Configurez les liens de paiement Wave Business pour chaque formule. Lors de l'achat, le client est redirigé directement vers son application Wave sans recopie de numéro.
           </p>
 
@@ -1204,7 +1204,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
                   1. Formule Prévente
                 </span>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-400">Prix :</span>
+                  <span className="text-xs text-gray-300">Prix :</span>
                   <input
                     type="number"
                     min="500"
@@ -1219,7 +1219,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
               </div>
               {userRole === 'admin' ? (
                 <div className="flex flex-col gap-1">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-gray-300 flex items-center gap-1.5">
                     <ExternalLink className="w-3.5 h-3.5 text-[#1DC3F4]" />
                     Lien de paiement Wave - Prévente (Admin)
                   </label>
@@ -1232,7 +1232,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
                   />
                 </div>
               ) : (
-                <div className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-[11px] text-gray-400 flex items-center gap-2">
+                <div className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-[11px] text-gray-300 flex items-center gap-2">
                   <Smartphone className="w-3.5 h-3.5 text-[#1DC3F4] shrink-0" />
                   <span>Lien Wave assigné par l'administrateur lors de l'approbation de l'événement.</span>
                 </div>
@@ -1247,7 +1247,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
                   2. Formule Jour J
                 </span>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-400">Prix :</span>
+                  <span className="text-xs text-gray-300">Prix :</span>
                   <input
                     type="number"
                     min="500"
@@ -1262,7 +1262,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
               </div>
               {userRole === 'admin' ? (
                 <div className="flex flex-col gap-1">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-gray-300 flex items-center gap-1.5">
                     <ExternalLink className="w-3.5 h-3.5 text-[#1DC3F4]" />
                     Lien de paiement Wave - Jour J (Admin)
                   </label>
@@ -1275,7 +1275,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
                   />
                 </div>
               ) : (
-                <div className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-[11px] text-gray-400 flex items-center gap-2">
+                <div className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-[11px] text-gray-300 flex items-center gap-2">
                   <Smartphone className="w-3.5 h-3.5 text-[#1DC3F4] shrink-0" />
                   <span>Lien Wave assigné par l'administrateur lors de l'approbation de l'événement.</span>
                 </div>
@@ -1290,7 +1290,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
                   3. Formule VIP Prestige
                 </span>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-400">Prix :</span>
+                  <span className="text-xs text-gray-300">Prix :</span>
                   <input
                     type="number"
                     min="500"
@@ -1318,7 +1318,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
                   />
                 </div>
               ) : (
-                <div className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-[11px] text-gray-400 flex items-center gap-2">
+                <div className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-[11px] text-gray-300 flex items-center gap-2">
                   <Smartphone className="w-3.5 h-3.5 text-[#E9C349] shrink-0" />
                   <span>Lien Wave assigné par l'administrateur lors de l'approbation de l'événement.</span>
                 </div>
@@ -1339,13 +1339,13 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
             </span>
           </div>
 
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-[#E5E2E1]">
             Créez un code de réduction pour vos partenaires, influenceurs ou vos campagnes de lancement. La déduction sera appliquée automatiquement lors du paiement Wave du client.
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+              <label className="text-xs font-bold uppercase tracking-wider text-gray-300 flex items-center gap-1.5">
                 <Tag className="w-3.5 h-3.5 text-[#E9C349]" />
                 <span>Code Promo (Ex: THIES2027)</span>
               </label>
@@ -1361,7 +1361,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+              <label className="text-xs font-bold uppercase tracking-wider text-gray-300 flex items-center gap-1.5">
                 <Percent className="w-3.5 h-3.5 text-[#DCB8FF]" />
                 <span>Pourcentage de réduction (%)</span>
               </label>
@@ -1402,14 +1402,14 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
             </span>
           </div>
 
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-[#E5E2E1]">
             Associez vos profils officiels pour renforcer la confiance des acheteurs et offrir un accès direct à vos teasers et actualités.
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Facebook */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+              <label className="text-xs font-bold uppercase tracking-wider text-gray-300 flex items-center gap-1.5">
                 <Facebook className="w-3.5 h-3.5 text-blue-500" />
                 <span>Événement / Page Facebook</span>
               </label>
@@ -1426,7 +1426,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
 
             {/* Instagram */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+              <label className="text-xs font-bold uppercase tracking-wider text-gray-300 flex items-center gap-1.5">
                 <Instagram className="w-3.5 h-3.5 text-pink-500" />
                 <span>Instagram (Artiste / Promoteur)</span>
               </label>
@@ -1443,7 +1443,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
 
             {/* TikTok */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+              <label className="text-xs font-bold uppercase tracking-wider text-gray-300 flex items-center gap-1.5">
                 <TikTokIcon className="w-3.5 h-3.5 text-cyan-400" />
                 <span>TikTok Officiel</span>
               </label>
@@ -1460,7 +1460,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
 
             {/* YouTube */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+              <label className="text-xs font-bold uppercase tracking-wider text-gray-300 flex items-center gap-1.5">
                 <Youtube className="w-3.5 h-3.5 text-red-500" />
                 <span>Lien Teaser / Aftermovie YouTube</span>
               </label>
@@ -1495,7 +1495,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
 
           {/* Site Web Officiel */}
           <div className="flex flex-col gap-1.5 pt-1">
-            <label className="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+            <label className="text-xs font-bold uppercase tracking-wider text-gray-300 flex items-center gap-1.5">
               <Globe className="w-3.5 h-3.5 text-[#E9C349]" />
               <span>Site Web Officiel / Billetterie Externe (Optionnel)</span>
             </label>
@@ -1533,7 +1533,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
             </label>
           </div>
 
-          <p className="text-xs text-gray-400 leading-relaxed">
+          <p className="text-xs text-[#E5E2E1] leading-relaxed">
             Offrez une visibilité transparente à l'artiste, à son staff et aux co-producteurs. Définissez le pourcentage des recettes (revenue share) et allouez un quota d'invitations Guest List.
           </p>
 
@@ -1584,7 +1584,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
               {/* Liste des Co-Producteurs Déjà Ajoutés */}
               {coproducersList.length > 0 && (
                 <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-gray-400">
+                  <label className="text-xs font-bold uppercase tracking-wider text-gray-300">
                     Ayants-droit enregistrés ({coproducersList.length})
                   </label>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1608,7 +1608,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
                                 : 'Co-Prod'}
                             </span>
                           </div>
-                          <p className="text-[11px] text-gray-400 font-mono mt-0.5">
+                          <p className="text-[11px] text-gray-300 font-mono mt-0.5">
                             {coprod.phone} • <strong className="text-[#E9C349]">{coprod.revenueShare}% CA</strong> • {coprod.guestTicketsAllocated} invitations
                           </p>
                         </div>
@@ -1636,7 +1636,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <label className="text-[11px] text-gray-400 font-semibold">Rôle</label>
+                    <label className="text-[11px] text-gray-300 font-semibold">Rôle</label>
                     <select
                       value={newCoprodRole}
                       onChange={(e) => setNewCoprodRole(e.target.value as CoproducerRole)}
@@ -1650,7 +1650,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
                   </div>
 
                   <div>
-                    <label className="text-[11px] text-gray-400 font-semibold">Nom / Structure *</label>
+                    <label className="text-[11px] text-gray-300 font-semibold">Nom / Structure *</label>
                     <input
                       type="text"
                       value={newCoprodName}
@@ -1661,9 +1661,10 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
                   </div>
 
                   <div>
-                    <label className="text-[11px] text-gray-400 font-semibold">Téléphone Wave/OM *</label>
+                    <label className="text-[11px] text-gray-300 font-semibold">Téléphone Wave/OM *</label>
                     <input
                       type="tel"
+                      inputMode="tel"
                       value={newCoprodPhone}
                       onChange={(e) => setNewCoprodPhone(e.target.value)}
                       placeholder="+221 77 XXX XX XX"
@@ -1674,7 +1675,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                   <div>
-                    <label className="text-[11px] text-gray-400 font-semibold flex justify-between">
+                    <label className="text-[11px] text-gray-300 font-semibold flex justify-between">
                       <span>Part des Recettes (Revenue Share)</span>
                       <strong className="text-[#E9C349] font-mono">{newCoprodShare}%</strong>
                     </label>
@@ -1689,7 +1690,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
                   </div>
 
                   <div>
-                    <label className="text-[11px] text-gray-400 font-semibold flex justify-between">
+                    <label className="text-[11px] text-gray-300 font-semibold flex justify-between">
                       <span>Quota Billets Invités (Guest List)</span>
                       <strong className="text-white font-mono">{newCoprodGuestQuota} places</strong>
                     </label>
@@ -1725,13 +1726,14 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-gray-400">
+            <label className="text-xs font-bold uppercase tracking-wider text-gray-300">
               Numéro WhatsApp Organisateur
             </label>
             <div className="input-glass rounded-xl px-4 py-3 flex items-center gap-2">
               <Phone className="w-4 h-4 text-emerald-400" />
               <input
                 type="tel"
+                inputMode="tel"
                 value={whatsappContact}
                 onChange={(e) => setWhatsappContact(e.target.value)}
                 placeholder="+221 77 XXX XX XX"
@@ -1746,7 +1748,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({
           <button
             type="button"
             onClick={handleClearDraft}
-            className="w-full sm:w-auto px-5 py-4 rounded-2xl bg-white/5 hover:bg-rose-500/10 text-gray-400 hover:text-rose-400 border border-white/10 hover:border-rose-500/30 text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2"
+            className="w-full sm:w-auto px-5 py-4 rounded-2xl bg-white/5 hover:bg-rose-500/10 text-gray-300 hover:text-rose-400 border border-white/10 hover:border-rose-500/30 text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2"
             title="Réinitialiser tous les champs et effacer le brouillon sauvegardé"
           >
             <Trash2 className="w-4 h-4" />

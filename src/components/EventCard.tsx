@@ -163,11 +163,11 @@ export const EventCard: React.FC<EventCardProps> = ({
               </span>
             )}
           </div>
-          <div className="mt-1 flex items-center gap-2 text-xs text-gray-400">
+          <div className="mt-1 flex items-center gap-2 text-xs text-gray-300">
             <Calendar className="w-3.5 h-3.5 text-[#DCB8FF] shrink-0" />
             <span className="truncate">{event.date} • {event.time}</span>
           </div>
-          <div className="mt-0.5 flex items-center gap-2 text-xs text-gray-400 min-w-0">
+          <div className="mt-0.5 flex items-center gap-2 text-xs text-gray-300 min-w-0">
             <MapPin className="w-3.5 h-3.5 text-[#E9C349] shrink-0" />
             <span className="truncate">{event.venue}{event.quartier ? ` (${event.quartier})` : ''}, {event.city}</span>
           </div>
@@ -309,7 +309,7 @@ export const EventCard: React.FC<EventCardProps> = ({
                     className="w-5 h-5 rounded-full object-cover flex-shrink-0"
                   />
                 )}
-                <span className="text-[11px] text-gray-400 truncate max-w-full min-w-0">
+                <span className="text-[11px] text-gray-300 truncate max-w-full min-w-0">
                   {event.promoter.name}
                 </span>
               </div>

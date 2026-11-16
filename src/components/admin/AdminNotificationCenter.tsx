@@ -358,7 +358,7 @@ export const AdminNotificationCenter: React.FC<AdminNotificationCenterProps> = (
               <button
                 type="button"
                 onClick={() => setIncomingAlert(null)}
-                className="text-gray-400 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
+                className="text-gray-300 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
                 aria-label="Fermer l'alerte"
               >
                 <X className="w-4 h-4" />
@@ -366,7 +366,7 @@ export const AdminNotificationCenter: React.FC<AdminNotificationCenterProps> = (
             </div>
 
             <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/10">
-              <span className="font-mono text-[10px] text-gray-400">
+              <span className="font-mono text-[10px] text-gray-300">
                 Réf: <strong className="text-white">{incomingAlert.reference}</strong>
               </span>
               <button
@@ -401,7 +401,7 @@ export const AdminNotificationCenter: React.FC<AdminNotificationCenterProps> = (
                   <h3 className="font-heading font-extrabold text-base text-white">
                     Centre d'Alertes Paiements
                   </h3>
-                  <p className="text-xs text-gray-400">
+                  <p className="text-xs text-[#E5E2E1]">
                     Notifications temps réel des déclarations clients
                   </p>
                 </div>
@@ -409,7 +409,7 @@ export const AdminNotificationCenter: React.FC<AdminNotificationCenterProps> = (
               <button
                 type="button"
                 onClick={onCloseModal}
-                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -451,13 +451,13 @@ export const AdminNotificationCenter: React.FC<AdminNotificationCenterProps> = (
                   {soundEnabled ? (
                     <Volume2 className="w-5 h-5 text-emerald-400" />
                   ) : (
-                    <VolumeX className="w-5 h-5 text-gray-500" />
+                    <VolumeX className="w-5 h-5 text-gray-300" />
                   )}
                   <div>
                     <h4 className="font-heading font-bold text-xs text-white">
                       Alertes Sonores de la Console
                     </h4>
-                    <p className="text-[11px] text-gray-400">
+                    <p className="text-[11px] text-gray-300">
                       Carillon Web Audio à chaque paiement signalé
                     </p>
                   </div>
@@ -473,7 +473,7 @@ export const AdminNotificationCenter: React.FC<AdminNotificationCenterProps> = (
                   className={`px-3 py-1.5 rounded-xl font-heading font-bold text-xs uppercase tracking-wider transition-all cursor-pointer ${
                     soundEnabled
                       ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                      : 'bg-white/5 text-gray-400 border border-white/10'
+                      : 'bg-white/5 text-gray-300 border border-white/10'
                   }`}
                 >
                   {soundEnabled ? 'Son ON' : 'Son OFF'}
@@ -501,7 +501,7 @@ export const AdminNotificationCenter: React.FC<AdminNotificationCenterProps> = (
                     <h4 className="font-heading font-bold text-xs text-white">
                       Notifications Push Système
                     </h4>
-                    <p className="text-[11px] text-gray-400">
+                    <p className="text-[11px] text-gray-300">
                       Recevez des alertes même lorsque l'application est fermée
                     </p>
                   </div>
@@ -525,17 +525,17 @@ export const AdminNotificationCenter: React.FC<AdminNotificationCenterProps> = (
 
             {/* Liste des Appareils Enregistrés */}
             <div className="space-y-2">
-              <h4 className="font-heading font-bold text-xs uppercase tracking-wider text-gray-400 px-1">
+              <h4 className="font-heading font-bold text-xs uppercase tracking-wider text-gray-300 px-1">
                 Appareils autorisés ({subscriptions.length})
               </h4>
 
               {loadingSubscriptions ? (
-                <div className="py-6 text-center text-xs text-gray-500">
+                <div className="py-6 text-center text-xs text-gray-300">
                   <RefreshCw className="w-4 h-4 animate-spin mx-auto mb-1" />
                   Chargement des appareils...
                 </div>
               ) : subscriptions.length === 0 ? (
-                <div className="p-4 rounded-2xl bg-white/5 border border-white/5 text-center text-xs text-gray-400">
+                <div className="p-4 rounded-2xl bg-white/5 border border-white/5 text-center text-xs text-gray-300">
                   Aucun appareil enregistré pour votre compte. Cliquez sur « Activer cet appareil » ci-dessus.
                 </div>
               ) : (
@@ -557,7 +557,7 @@ export const AdminNotificationCenter: React.FC<AdminNotificationCenterProps> = (
                             ? '💻 Windows PC'
                             : '📱 Appareil'}
                         </p>
-                        <p className="text-[10px] text-gray-500">
+                        <p className="text-[10px] text-gray-300">
                           Ajouté le {new Date(sub.created_at).toLocaleDateString('fr-FR')}
                         </p>
                       </div>
@@ -565,7 +565,7 @@ export const AdminNotificationCenter: React.FC<AdminNotificationCenterProps> = (
                       <button
                         type="button"
                         onClick={() => handleRemoveSubscription(sub)}
-                        className="p-2 rounded-xl hover:bg-rose-500/20 text-gray-400 hover:text-rose-400 transition-colors cursor-pointer"
+                        className="p-2 rounded-xl hover:bg-rose-500/20 text-gray-300 hover:text-rose-400 transition-colors cursor-pointer"
                         title="Désactiver cet appareil"
                       >
                         <Trash2 className="w-4 h-4" />

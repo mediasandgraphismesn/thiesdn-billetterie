@@ -244,7 +244,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
             </div>
 
             {/* Conseils boîte mail */}
-            <div className="p-4 rounded-2xl bg-[#141414] border border-white/5 text-left text-xs text-gray-400 space-y-2">
+            <div className="p-4 rounded-2xl bg-[#141414] border border-white/5 text-left text-xs text-gray-300 space-y-2">
               <div className="flex items-start gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                 <span>Vérifiez également votre dossier <strong>Spam / Courrier indésirable</strong>.</span>
@@ -347,35 +347,36 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
               {isRegister && !isForgotPassword && (
                 <>
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-gray-300">
                       NOM COMPLET <span className="text-[#E9C349]">*</span>
                     </label>
                     <div className="input-glass rounded-xl px-4 py-3.5 flex items-center gap-3">
-                      <User className="w-4 h-4 text-gray-400" />
+                      <User className="w-4 h-4 text-gray-300" />
                       <input
                         type="text"
                         required
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                         placeholder="ex: Mamadou Ndiaye"
-                        className="bg-transparent border-none outline-none text-white text-sm w-full p-0 focus:ring-0 placeholder-gray-600"
+                        className="bg-transparent border-none outline-none text-white text-sm w-full p-0 focus:ring-0 placeholder:text-gray-300/75"
                       />
                     </div>
                   </div>
 
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-gray-300">
                       TÉLÉPHONE (WAVE / ORANGE MONEY) <span className="text-[#E9C349]">*</span>
                     </label>
                     <div className="input-glass rounded-xl px-4 py-3.5 flex items-center gap-3">
-                      <Phone className="w-4 h-4 text-gray-400" />
+                      <Phone className="w-4 h-4 text-gray-300" />
                       <input
                         type="tel"
+                        inputMode="tel"
                         required
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
                         placeholder="+221 77 000 00 00"
-                        className="bg-transparent border-none outline-none text-white text-sm w-full p-0 focus:ring-0 placeholder-gray-600"
+                        className="bg-transparent border-none outline-none text-white text-sm w-full p-0 focus:ring-0 placeholder:text-gray-300/75"
                       />
                     </div>
                   </div>
@@ -384,7 +385,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {/* Menu déroulant Ville */}
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-gray-300">
                         VILLE <span className="text-[#E9C349]">*</span>
                       </label>
                       <div className="input-glass rounded-xl px-4 py-3.5 flex items-center gap-2.5">
@@ -406,7 +407,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
 
                     {/* Champ texte Quartier / Adresse */}
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-gray-300">
                         QUARTIER / ADRESSE <span className="text-[#E9C349]">*</span>
                       </label>
                       <div className="input-glass rounded-xl px-4 py-3.5 flex items-center gap-2.5">
@@ -418,7 +419,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                           value={address}
                           onChange={(e) => setAddress(e.target.value)}
                           placeholder={city === 'Thiès' ? 'ex: Grand Standing' : 'ex: Almadies, Somone...'}
-                          className="bg-transparent border-none outline-none text-white text-sm w-full p-0 focus:ring-0 placeholder-gray-600"
+                          className="bg-transparent border-none outline-none text-white text-sm w-full p-0 focus:ring-0 placeholder:text-gray-300/75"
                         />
                         {/* Liste d'autocomplétion des 33 quartiers de Thiès */}
                         <datalist id="thies-quartiers-options">
@@ -435,7 +436,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
               {/* Champ Email */}
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center justify-between">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-gray-300">
                     EMAIL <span className="text-[#E9C349]">*</span>
                   </label>
                   {isForgotPassword && (
@@ -453,7 +454,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                   )}
                 </div>
                 <div className="input-glass rounded-xl px-4 py-3.5 flex items-center gap-3">
-                  <Mail className="w-4 h-4 text-gray-400" />
+                  <Mail className="w-4 h-4 text-gray-300" />
                   <input
                     type="text"
                     inputMode="email"
@@ -467,7 +468,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                       }
                     }}
                     placeholder="votre@email.com"
-                    className="bg-transparent border-none outline-none text-white text-sm w-full p-0 focus:ring-0 placeholder-gray-600"
+                    className="bg-transparent border-none outline-none text-white text-sm w-full p-0 focus:ring-0 placeholder:text-gray-300/75"
                   />
                 </div>
               </div>
@@ -476,7 +477,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
               {!isForgotPassword && (
                 <div className="flex flex-col gap-1.5">
                   <div className="flex items-center justify-between">
-                    <label className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-gray-300">
                       MOT DE PASSE <span className="text-[#E9C349]">*</span>
                     </label>
                     {!isRegister && (
@@ -494,19 +495,19 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                     )}
                   </div>
                   <div className="input-glass rounded-xl px-4 py-3.5 flex items-center gap-3">
-                    <Lock className="w-4 h-4 text-gray-400" />
+                    <Lock className="w-4 h-4 text-gray-300" />
                     <input
                       type={showPassword ? 'text' : 'password'}
                       required
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="••••••••"
-                      className="bg-transparent border-none outline-none text-white text-sm w-full p-0 focus:ring-0 placeholder-gray-600"
+                      className="bg-transparent border-none outline-none text-white text-sm w-full p-0 focus:ring-0 placeholder:text-gray-300/75"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="text-gray-400 hover:text-white"
+                      className="text-gray-300 hover:text-white"
                     >
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
@@ -557,7 +558,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                 disabled={loading || !captchaToken || (isRegister && !isForgotPassword && !acceptedTerms)}
                 className={`w-full py-3.5 rounded-2xl font-heading font-bold text-sm tracking-wider flex items-center justify-center gap-2 transition-all mt-3 ${
                   loading || !captchaToken || (isRegister && !isForgotPassword && !acceptedTerms)
-                    ? 'bg-white/10 text-gray-500 cursor-not-allowed opacity-60'
+                    ? 'bg-white/10 text-gray-300 cursor-not-allowed opacity-60'
                     : 'btn-primary-glow cursor-pointer'
                 }`}
               >
@@ -584,7 +585,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
 
         {/* Bascule Connexion / Inscription */}
         {!emailConfirmationSent && (
-          <div className="mt-6 text-center text-xs text-gray-400">
+          <div className="mt-6 text-center text-xs text-gray-300">
             <span>{isRegister ? 'Déjà un compte ?' : 'Nouveau sur Thiesdn ?'} </span>
             <button
               onClick={() => {

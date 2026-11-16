@@ -199,7 +199,7 @@ export const ModerationView: React.FC<ModerationViewProps> = ({
           <h1 className="font-heading text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
             Hub de Modération & Encaissements
           </h1>
-          <p className="text-sm text-gray-400 mt-1">
+          <p className="text-sm text-[#E5E2E1] mt-1">
             Validation des événements et vérification manuelle des transferts Wave / Orange Money
           </p>
         </div>
@@ -211,7 +211,7 @@ export const ModerationView: React.FC<ModerationViewProps> = ({
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
               activeTab === 'orders'
                 ? 'bg-[#8A2BE2] text-white shadow-lg shadow-[#8A2BE2]/30'
-                : 'text-gray-400 hover:text-white'
+                : 'text-gray-300 hover:text-white'
             }`}
           >
             <Smartphone className="w-4 h-4" />
@@ -228,7 +228,7 @@ export const ModerationView: React.FC<ModerationViewProps> = ({
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
               activeTab === 'events'
                 ? 'bg-[#8A2BE2] text-white shadow-lg shadow-[#8A2BE2]/30'
-                : 'text-gray-400 hover:text-white'
+                : 'text-gray-300 hover:text-white'
             }`}
           >
             <Calendar className="w-4 h-4" />
@@ -288,7 +288,7 @@ export const ModerationView: React.FC<ModerationViewProps> = ({
                   className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
                     orderFilter === f.id
                       ? 'bg-[#8A2BE2]/30 text-[#DCB8FF] border border-[#8A2BE2]/50'
-                      : 'text-gray-400 hover:text-white bg-black/30'
+                      : 'text-gray-300 hover:text-white bg-black/30'
                   }`}
                 >
                   <span>{f.label}</span>
@@ -336,7 +336,7 @@ export const ModerationView: React.FC<ModerationViewProps> = ({
           {isLoadingOrders ? (
             <div className="glass-panel p-12 rounded-3xl text-center space-y-3">
               <RefreshCw className="w-8 h-8 text-[#E9C349] animate-spin mx-auto" />
-              <p className="text-xs text-gray-400">Synchronisation des commandes avec Supabase...</p>
+              <p className="text-xs text-[#E5E2E1]">Synchronisation des commandes avec Supabase...</p>
             </div>
           ) : filteredOrders.length === 0 ? (
             <div className="glass-panel p-12 rounded-3xl text-center space-y-3">
@@ -344,7 +344,7 @@ export const ModerationView: React.FC<ModerationViewProps> = ({
               <h3 className="font-heading text-base font-bold text-white">
                 Aucune commande dans cette catégorie
               </h3>
-              <p className="text-xs text-gray-400 max-w-sm mx-auto">
+              <p className="text-xs text-[#E5E2E1] max-w-sm mx-auto">
                 Les commandes passées par les clients via Wave ou Orange Money apparaîtront ici pour vérification.
               </p>
             </div>
@@ -386,7 +386,7 @@ export const ModerationView: React.FC<ModerationViewProps> = ({
                           }`}>
                             {isSignaled ? 'Virement Signalé' : isConfirmed ? 'Confirmé' : isRejected ? 'Rejeté' : 'En attente Wave'}
                           </span>
-                          <span className="text-[11px] text-gray-400">
+                          <span className="text-[11px] text-gray-300">
                             {new Date(order.createdAt).toLocaleDateString('fr-FR', {
                               day: '2-digit',
                               month: 'short',
@@ -435,7 +435,7 @@ export const ModerationView: React.FC<ModerationViewProps> = ({
                         {/* Référence client déclarée */}
                         {order.paymentReference && (
                           <div className="mt-2 p-2.5 rounded-xl bg-black/50 border border-white/5 text-xs flex items-center justify-between">
-                            <span className="text-gray-400">
+                            <span className="text-gray-300">
                               Réf. transaction déclarée par le client : <strong className="text-white font-mono">{order.paymentReference}</strong>
                             </span>
                           </div>
@@ -445,7 +445,7 @@ export const ModerationView: React.FC<ModerationViewProps> = ({
                       {/* Right: Amount & Action */}
                       <div className="flex flex-row lg:flex-col items-center lg:items-end justify-between gap-3 pt-3 lg:pt-0 border-t lg:border-t-0 border-white/10">
                         <div className="text-left lg:text-right">
-                          <span className="text-[10px] uppercase font-bold text-gray-400 block">
+                          <span className="text-[10px] uppercase font-bold text-gray-300 block">
                             Montant perçu (TTC)
                           </span>
                           <span className="font-heading font-extrabold text-xl text-[#E9C349] tabular-nums">
@@ -524,13 +524,13 @@ export const ModerationView: React.FC<ModerationViewProps> = ({
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-[#1C1B1B] p-4 rounded-2xl border border-white/5">
             {/* Search Input */}
             <div className="relative w-full sm:w-80">
-              <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-300" />
               <input
                 type="text"
                 placeholder="Rechercher un événement, lieu ou promoteur..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-[#141414] border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#8A2BE2]"
+                className="w-full bg-[#141414] border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder:text-gray-300/75 focus:outline-none focus:border-[#8A2BE2]"
               />
             </div>
 
@@ -543,7 +543,7 @@ export const ModerationView: React.FC<ModerationViewProps> = ({
                   className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors ${
                     filterCategory === cat
                       ? 'bg-[#8A2BE2] text-white'
-                      : 'bg-[#141414] text-gray-400 hover:text-white border border-white/5'
+                      : 'bg-[#141414] text-gray-300 hover:text-white border border-white/5'
                   }`}
                 >
                   {cat === 'All' ? 'Tous' : cat}
@@ -607,8 +607,8 @@ export const ModerationView: React.FC<ModerationViewProps> = ({
                         <p className="text-xs text-[#E9C349] font-medium mt-1">
                           {event.venue}, {event.city}
                         </p>
-                        <p className="text-[11px] text-gray-400 mt-1 flex items-center gap-1.5">
-                          <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                        <p className="text-[11px] text-gray-300 mt-1 flex items-center gap-1.5">
+                          <Calendar className="w-3.5 h-3.5 text-gray-300 shrink-0" />
                           <span>{event.date} • {event.time}</span>
                         </p>
                       </div>
@@ -617,11 +617,11 @@ export const ModerationView: React.FC<ModerationViewProps> = ({
                     {/* Promoter & Pricing info */}
                     <div className="flex items-center justify-between p-3 rounded-xl bg-black/40 border border-white/5 text-xs">
                       <div>
-                        <span className="text-[10px] text-gray-400 block">Promoteur :</span>
+                        <span className="text-[10px] text-gray-300 block">Promoteur :</span>
                         <strong className="text-white">{event.promoter.name}</strong>
                       </div>
                       <div className="text-right">
-                        <span className="text-[10px] text-gray-400 block">Prix de base :</span>
+                        <span className="text-[10px] text-gray-300 block">Prix de base :</span>
                         <strong className="text-[#E9C349] font-bold">{event.price.toLocaleString('fr-FR')} FCFA</strong>
                       </div>
                     </div>
@@ -682,7 +682,7 @@ export const ModerationView: React.FC<ModerationViewProps> = ({
                   className={`p-3 rounded-xl border flex items-center gap-2.5 cursor-pointer text-xs ${
                     rejectionReason === reason
                       ? 'bg-rose-950/40 border-rose-500/40 text-rose-200'
-                      : 'bg-black/40 border-white/5 text-gray-400 hover:text-white'
+                      : 'bg-black/40 border-white/5 text-gray-300 hover:text-white'
                   }`}
                 >
                   <input
@@ -700,7 +700,7 @@ export const ModerationView: React.FC<ModerationViewProps> = ({
             <div className="flex items-center justify-end gap-2 pt-2">
               <button
                 onClick={() => setRejectingEvent(null)}
-                className="px-4 py-2 rounded-xl text-xs text-gray-400 hover:text-white"
+                className="px-4 py-2 rounded-xl text-xs text-gray-300 hover:text-white"
               >
                 Annuler
               </button>

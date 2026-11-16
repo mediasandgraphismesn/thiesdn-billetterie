@@ -184,7 +184,7 @@ export const AssignPhysicalTicketsModal: React.FC<AssignPhysicalTicketsModalProp
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white cursor-pointer transition-colors"
+            className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white cursor-pointer transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -323,19 +323,19 @@ export const AssignPhysicalTicketsModal: React.FC<AssignPhysicalTicketsModalProp
 
             {/* ENCART RÉCAPITULATIF MIS À JOUR EN TEMPS RÉEL À CHAQUE FRAPPE */}
             <div className="p-3.5 rounded-2xl bg-[#121212] border border-white/10 space-y-2 text-xs">
-              <div className="flex items-center justify-between text-gray-400">
+              <div className="flex items-center justify-between text-gray-300">
                 <span>Vendeur partenaire :</span>
                 <span className="font-bold text-white">
                   🏪 {selectedAgent?.pointDeVente || 'Non sélectionné'}
                 </span>
               </div>
-              <div className="flex items-center justify-between text-gray-400">
+              <div className="flex items-center justify-between text-gray-300">
                 <span>Type de billet :</span>
                 <span className="font-bold text-[#E9C349]">
                   🎫 {assignTierName || 'Standard'}
                 </span>
               </div>
-              <div className="flex items-center justify-between text-gray-400 border-t border-white/5 pt-1.5">
+              <div className="flex items-center justify-between text-gray-300 border-t border-white/5 pt-1.5">
                 <span>Stock actuel en réserve :</span>
                 <span className="font-mono text-white">{stockDisponible} billets</span>
               </div>

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Bell,
   BellOff,
@@ -10,6 +11,7 @@ import {
   Smartphone,
   Ticket,
   Sparkles,
+  X,
 } from 'lucide-react';
 import { NotificationItem } from '../types';
 import { usePushNotifications } from '../hooks/usePushNotifications';
@@ -74,7 +76,12 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [feedback, setFeedback] = useState<{ ok: boolean; text: string } | null>(null);
+  const [desktopCoords, setDesktopCoords] = useState<{ top: number; right: number }>({
+    top: 72,
+    right: 24,
+  });
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
 
   const {
     isSupported,
@@ -90,8 +97,23 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
   useEffect(() => {
     if (!isOpen) return;
 
+    const updateDesktopCoords = () => {
+      if (containerRef.current && typeof window !== 'undefined') {
+        const rect = containerRef.current.getBoundingClientRect();
+        setDesktopCoords({
+          top: rect.bottom + 10,
+          right: Math.max(12, window.innerWidth - rect.right),
+        });
+      }
+    };
+
+    updateDesktopCoords();
+
     const handleOutsideClick = (event: MouseEvent | TouchEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      const inTrigger = containerRef.current?.contains(target);
+      const inPanel = panelRef.current?.contains(target);
+      if (!inTrigger && !inPanel) {
         setIsOpen(false);
       }
     };
@@ -102,11 +124,13 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
       }
     };
 
+    window.addEventListener('resize', updateDesktopCoords);
     document.addEventListener('mousedown', handleOutsideClick);
     document.addEventListener('touchstart', handleOutsideClick);
     document.addEventListener('keydown', handleKeyDown);
 
     return () => {
+      window.removeEventListener('resize', updateDesktopCoords);
       document.removeEventListener('mousedown', handleOutsideClick);
       document.removeEventListener('touchstart', handleOutsideClick);
       document.removeEventListener('keydown', handleKeyDown);
@@ -164,151 +188,187 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
         )}
       </button>
 
-      {/* Dropdown Notifications Nocturnal Elegance */}
-      {isOpen && (
-        <div
-          role="dialog"
-          aria-label="Centre de notifications"
-          className="fixed inset-x-3 top-16 sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-3 sm:w-[400px] glass-panel bg-[#121215]/95 backdrop-blur-xl rounded-2xl p-4 shadow-2xl z-50 border border-white/10"
-        >
-          {/* En-tête du dropdown */}
-          <div className="flex items-center justify-between pb-3 border-b border-white/10">
-            <div className="flex items-center gap-2">
-              <h3 className="font-heading font-bold text-sm text-white">Notifications</h3>
-              {unreadCount > 0 && (
-                <span className="bg-red-600/20 border border-red-500/40 text-red-300 text-[11px] font-bold px-2 py-0.5 rounded-full">
-                  {unreadCount} non {unreadCount > 1 ? 'lues' : 'lue'}
-                </span>
-              )}
-            </div>
-            {unreadCount > 0 && (
-              <button
-                type="button"
-                onClick={onClearNotifications}
-                className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#DCB8FF] hover:text-[#E9C349] transition-colors cursor-pointer"
-              >
-                <CheckCheck className="w-3.5 h-3.5" />
-                <span>Tout marquer comme lu</span>
-              </button>
-            )}
-          </div>
+      {/* Bottom Sheet Mobile + Dropdown Opaque Desktop via Portal (hors stacking context Header) */}
+      {isOpen &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div className="fixed inset-0 z-[9999] pointer-events-none">
+            {/* Backdrop sombre sur mobile (et discret pour fermer sur desktop) */}
+            <div
+              onClick={() => setIsOpen(false)}
+              className="fixed inset-0 bg-black/75 sm:bg-black/30 backdrop-blur-sm sm:backdrop-blur-none pointer-events-auto animate-in fade-in duration-200"
+              aria-hidden="true"
+            />
 
-          {/* Bannière Opt-In Web Push */}
-          <div className="mt-3 p-3 rounded-xl bg-gradient-to-r from-[#8A2BE2]/15 via-[#1C1B1B] to-[#E9C349]/10 border border-white/10 space-y-2">
-            {isIosNeedsInstall ? (
-              <div className="flex items-start gap-2.5 text-[11px] text-amber-200">
-                <Smartphone className="w-4 h-4 text-[#E9C349] shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-bold text-white">Alertes sur iPhone / iPad</p>
-                  <p className="text-gray-300 mt-0.5">
-                    Appuyez sur Partager puis &laquo; Sur l&rsquo;écran d&rsquo;accueil &raquo; pour activer les notifications Push.
-                  </p>
-                </div>
+            <div
+              ref={panelRef}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Centre de notifications"
+              style={
+                typeof window !== 'undefined' && window.innerWidth >= 640
+                  ? { top: `${desktopCoords.top}px`, right: `${desktopCoords.right}px` }
+                  : undefined
+              }
+              className="pointer-events-auto fixed inset-x-0 bottom-0 sm:inset-x-auto sm:bottom-auto sm:w-[400px] bg-[#121118]/95 backdrop-blur-2xl rounded-t-3xl sm:rounded-2xl p-4 sm:p-5 pb-[calc(20px+env(safe-area-inset-bottom))] sm:pb-5 shadow-2xl border-t sm:border border-white/15 max-h-[85dvh] sm:max-h-[75vh] flex flex-col animate-in slide-in-from-bottom-6 sm:slide-in-from-top-2 duration-200"
+            >
+              {/* Poignée visuelle iOS Bottom Sheet (mobile uniquement) */}
+              <div className="sm:hidden flex justify-center pb-2.5 shrink-0">
+                <span className="w-10 h-1 rounded-full bg-white/25" />
               </div>
-            ) : permission === 'denied' ? (
-              <div className="flex items-start gap-2.5 text-[11px] text-rose-200">
-                <BellOff className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-bold text-white">Notifications bloquées par le navigateur</p>
-                  <p className="text-gray-300 mt-0.5">
-                    Autorisez les notifications dans les réglages du site (icône cadenas) pour recevoir les alertes temps réel.
-                  </p>
-                </div>
-              </div>
-            ) : !isSupported ? (
-              <div className="flex items-center gap-2 text-[11px] text-gray-300">
-                <Sparkles className="w-4 h-4 text-[#DCB8FF] shrink-0" />
-                <span>Les alertes s&rsquo;affichent en direct ici pendant votre session.</span>
-              </div>
-            ) : isSubscribed ? (
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 text-[11px] text-emerald-300">
-                  <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span className="font-semibold">Alertes actives sur cet appareil (même écran éteint)</span>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-xs font-bold text-white">Alertes temps réel (jour &amp; nuit)</p>
-                  <p className="text-[11px] text-gray-300">
-                    Recevez un push instantané sur ce téléphone même onglet fermé.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void handleEnablePush();
-                  }}
-                  disabled={isLoading}
-                  className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#8A2BE2] hover:bg-[#9D4EFF] text-white text-[11px] font-heading font-bold uppercase tracking-wider shadow-lg shadow-[#8A2BE2]/30 transition-all cursor-pointer disabled:opacity-50"
-                >
-                  <BellRing className="w-3.5 h-3.5 text-[#E9C349]" />
-                  <span>{isLoading ? '...' : 'Activer les alertes'}</span>
-                </button>
-              </div>
-            )}
 
-            {feedback && (
-              <p
-                className={`text-[11px] font-medium ${
-                  feedback.ok ? 'text-emerald-300' : 'text-rose-300'
-                }`}
-              >
-                {feedback.text}
-              </p>
-            )}
-          </div>
-
-          {/* Liste des notifications */}
-          <div className="divide-y divide-white/5 max-h-80 overflow-y-auto mt-3 pr-0.5 space-y-1">
-            {notifications.length === 0 ? (
-              <div className="py-8 text-center text-xs text-gray-400">
-                Aucune notification pour le moment.
-              </div>
-            ) : (
-              notifications.map((notif) => {
-                const targetUrl = notif.actionUrl || notif.url;
-                return (
+              {/* En-tête du panneau */}
+              <div className="flex items-center justify-between pb-3 border-b border-white/10 shrink-0 gap-2">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-heading font-bold text-sm sm:text-base text-white">
+                    Notifications
+                  </h3>
+                  {unreadCount > 0 && (
+                    <span className="bg-red-600/20 border border-red-500/40 text-red-300 text-[11px] font-bold px-2 py-0.5 rounded-full">
+                      {unreadCount} non {unreadCount > 1 ? 'lues' : 'lue'}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {unreadCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={onClearNotifications}
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#DCB8FF] hover:text-[#E9C349] transition-colors cursor-pointer"
+                    >
+                      <CheckCheck className="w-3.5 h-3.5" />
+                      <span>Tout marquer lu</span>
+                    </button>
+                  )}
                   <button
-                    key={notif.id}
                     type="button"
-                    onClick={() => {
-                      onMarkNotificationRead(notif.id, targetUrl, notif.sourceTable);
-                      setIsOpen(false);
-                    }}
-                    className={`w-full text-left p-3 rounded-xl transition-all cursor-pointer flex items-start gap-2.5 ${
-                      notif.read
-                        ? 'opacity-60 hover:opacity-90 hover:bg-white/5'
-                        : 'bg-white/[0.06] hover:bg-white/[0.1] border border-[#8A2BE2]/25'
-                    }`}
+                    onClick={() => setIsOpen(false)}
+                    aria-label="Fermer les notifications"
+                    className="p-1.5 rounded-xl bg-white/5 hover:bg-white/15 text-gray-300 hover:text-white transition-colors cursor-pointer"
                   >
-                    {renderTypeBadge(notif.type)}
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-2">
-                        <h4 className="text-xs font-bold text-white leading-snug">
-                          {notif.title}
-                        </h4>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          {!notif.read && (
-                            <span className="w-2 h-2 rounded-full bg-red-500" />
-                          )}
-                          <span className="text-[10px] text-gray-400 whitespace-nowrap">
-                            {formatNotificationTime(notif.timestamp)}
-                          </span>
-                        </div>
-                      </div>
-                      <p className="text-[11px] text-gray-300 mt-0.5 line-clamp-3">
-                        {notif.message}
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Bannière Opt-In Web Push */}
+              <div className="mt-3 p-3 rounded-xl bg-gradient-to-r from-[#8A2BE2]/20 via-[#1C1B1B] to-[#E9C349]/15 border border-white/10 space-y-2 shrink-0">
+                {isIosNeedsInstall ? (
+                  <div className="flex items-start gap-2.5 text-[11px] text-amber-200">
+                    <Smartphone className="w-4 h-4 text-[#E9C349] shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-bold text-white">Alertes sur iPhone / iPad</p>
+                      <p className="text-[#E5E2E1] mt-0.5">
+                        Appuyez sur Partager puis &laquo; Sur l&rsquo;écran d&rsquo;accueil &raquo; pour activer les notifications Push.
                       </p>
                     </div>
-                  </button>
-                );
-              })
-            )}
-          </div>
-        </div>
-      )}
+                  </div>
+                ) : permission === 'denied' ? (
+                  <div className="flex items-start gap-2.5 text-[11px] text-rose-200">
+                    <BellOff className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-bold text-white">Notifications bloquées par le navigateur</p>
+                      <p className="text-[#E5E2E1] mt-0.5">
+                        Autorisez les notifications dans les réglages du site (icône cadenas) pour recevoir les alertes temps réel.
+                      </p>
+                    </div>
+                  </div>
+                ) : !isSupported ? (
+                  <div className="flex items-center gap-2 text-[11px] text-gray-300">
+                    <Sparkles className="w-4 h-4 text-[#DCB8FF] shrink-0" />
+                    <span>Les alertes s&rsquo;affichent en direct ici pendant votre session.</span>
+                  </div>
+                ) : isSubscribed ? (
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 text-[11px] text-emerald-300">
+                      <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <span className="font-semibold">Alertes actives sur cet appareil (même écran éteint)</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-white">Alertes temps réel (jour &amp; nuit)</p>
+                      <p className="text-[11px] text-gray-300">
+                        Recevez un push instantané sur ce téléphone même onglet fermé.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void handleEnablePush();
+                      }}
+                      disabled={isLoading}
+                      className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#8A2BE2] hover:bg-[#9D4EFF] text-white text-[11px] font-heading font-bold uppercase tracking-wider shadow-lg shadow-[#8A2BE2]/30 transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      <BellRing className="w-3.5 h-3.5 text-[#E9C349]" />
+                      <span>{isLoading ? '...' : 'Activer les alertes'}</span>
+                    </button>
+                  </div>
+                )}
+
+                {feedback && (
+                  <p
+                    className={`text-[11px] font-medium ${
+                      feedback.ok ? 'text-emerald-300' : 'text-rose-300'
+                    }`}
+                  >
+                    {feedback.text}
+                  </p>
+                )}
+              </div>
+
+              {/* Liste des notifications */}
+              <div className="divide-y divide-white/5 flex-1 overflow-y-auto overscroll-contain mt-3 pr-0.5 space-y-1">
+                {notifications.length === 0 ? (
+                  <div className="py-10 text-center text-xs text-gray-300">
+                    Aucune notification pour le moment.
+                  </div>
+                ) : (
+                  notifications.map((notif) => {
+                    const targetUrl = notif.actionUrl || notif.url;
+                    return (
+                      <button
+                        key={notif.id}
+                        type="button"
+                        onClick={() => {
+                          onMarkNotificationRead(notif.id, targetUrl, notif.sourceTable);
+                          setIsOpen(false);
+                        }}
+                        className={`w-full text-left p-3 rounded-xl transition-all cursor-pointer flex items-start gap-2.5 ${
+                          notif.read
+                            ? 'opacity-70 hover:opacity-100 hover:bg-white/5'
+                            : 'bg-white/[0.07] hover:bg-white/[0.12] border border-[#8A2BE2]/35'
+                        }`}
+                      >
+                        {renderTypeBadge(notif.type)}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-2">
+                            <h4 className="text-xs font-bold text-white leading-snug">
+                              {notif.title}
+                            </h4>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {!notif.read && (
+                                <span className="w-2 h-2 rounded-full bg-red-500" />
+                              )}
+                              <span className="text-[10px] text-gray-300 whitespace-nowrap">
+                                {formatNotificationTime(notif.timestamp)}
+                              </span>
+                            </div>
+                          </div>
+                          <p className="text-[11px] text-[#E5E2E1] mt-0.5 line-clamp-3">
+                            {notif.message}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 };

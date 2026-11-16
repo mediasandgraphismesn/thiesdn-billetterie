@@ -138,7 +138,7 @@ export const UsersManagementView: React.FC<UsersManagementViewProps> = ({
           <h1 className="font-heading text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
             Gestion des Utilisateurs
           </h1>
-          <p className="text-xs sm:text-sm text-gray-400 mt-1">
+          <p className="text-xs sm:text-sm text-[#E5E2E1] mt-1">
             Gérez les comptes clients, promoteurs d'événements, artistes et superviseurs administratifs.
           </p>
         </div>
@@ -156,13 +156,13 @@ export const UsersManagementView: React.FC<UsersManagementViewProps> = ({
       {/* Barre de recherche et filtre de rôle */}
       <div className="glass-panel p-4 rounded-2xl border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="relative flex-1">
-          <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-gray-300 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Rechercher par nom, email, téléphone, quartier..."
-            className="w-full bg-[#141414] border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#8A2BE2]"
+            className="w-full bg-[#141414] border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder:text-gray-300/75 focus:outline-none focus:border-[#8A2BE2]"
           />
         </div>
 
@@ -174,7 +174,7 @@ export const UsersManagementView: React.FC<UsersManagementViewProps> = ({
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
                 roleFilter === r
                   ? 'bg-[#8A2BE2] text-white shadow-md'
-                  : 'bg-[#181818] text-gray-400 hover:text-white border border-white/5'
+                  : 'bg-[#181818] text-gray-300 hover:text-white border border-white/5'
               }`}
             >
               {r === 'all'
@@ -239,7 +239,7 @@ export const UsersManagementView: React.FC<UsersManagementViewProps> = ({
                   </span>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-3 text-xs text-gray-400">
+                <div className="flex flex-wrap items-center gap-3 text-xs text-gray-300">
                   <span className="flex items-center gap-1">
                     <Mail className="w-3 h-3 text-[#DCB8FF]" />
                     <span>{user.email || 'Email non renseigné'}</span>
@@ -269,7 +269,7 @@ export const UsersManagementView: React.FC<UsersManagementViewProps> = ({
                         <span>
                           CGV {user.termsVersion || CURRENT_TERMS_VERSION} signées
                           {user.termsAcceptedAt && (
-                            <span className="text-gray-400 ml-1">
+                            <span className="text-gray-300 ml-1">
                               ({new Date(user.termsAcceptedAt).toLocaleDateString('fr-FR', {
                                 day: '2-digit',
                                 month: 'short',
@@ -292,10 +292,10 @@ export const UsersManagementView: React.FC<UsersManagementViewProps> = ({
                       className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg font-medium ${
                         user.role === 'promoter'
                           ? 'bg-rose-500/15 text-rose-300 border border-rose-500/40'
-                          : 'bg-white/5 text-gray-500 border border-white/10'
+                          : 'bg-white/5 text-gray-300 border border-white/10'
                       }`}
                     >
-                      <AlertCircle className={`w-3 h-3 shrink-0 ${user.role === 'promoter' ? 'text-rose-400' : 'text-gray-500'}`} />
+                      <AlertCircle className={`w-3 h-3 shrink-0 ${user.role === 'promoter' ? 'text-rose-400' : 'text-gray-300'}`} />
                       <span>
                         {user.role === 'promoter'
                           ? 'CGV non signées (Création d’événements bloquée)'
@@ -315,7 +315,7 @@ export const UsersManagementView: React.FC<UsersManagementViewProps> = ({
                 className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border disabled:opacity-50 ${
                   user.isVip
                     ? 'bg-[#E9C349]/20 text-[#E9C349] border-[#E9C349]/40 hover:bg-[#E9C349]/30'
-                    : 'bg-white/5 text-gray-400 border-white/10 hover:text-white hover:bg-white/10'
+                    : 'bg-white/5 text-gray-300 border-white/10 hover:text-white hover:bg-white/10'
                 }`}
               >
                 {updatingUserId === user.id ? 'Mise à jour...' : user.isVip ? '★ Membre VIP' : '☆ Passer VIP'}

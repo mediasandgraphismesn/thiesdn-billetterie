@@ -75,12 +75,12 @@ export const CGVView: React.FC<CGVViewProps> = ({
               <Scale className="w-3.5 h-3.5" />
               Contrat Officiel • {CURRENT_TERMS_VERSION}
             </span>
-            <span className="text-xs text-gray-400">• Droit Sénégalais</span>
+            <span className="text-xs text-gray-300">• Droit Sénégalais</span>
           </div>
           <h1 className="font-heading text-2xl sm:text-3xl font-black text-white tracking-tight">
             Conditions Générales de Vente (CGV)
           </h1>
-          <p className="text-xs text-gray-400 mt-1">
+          <p className="text-xs text-[#E5E2E1] mt-1">
             Réglementation de la billetterie électronique, des organisateurs et des spectateurs
           </p>
         </div>
@@ -178,7 +178,7 @@ export const CGVView: React.FC<CGVViewProps> = ({
             Article 2 — Engagements & Déclarations de l'Organisateur
           </h3>
           <p>Tout Organisateur (promoteur ou artiste) publiant un événement s'engage formellement à :</p>
-          <ul className="list-disc pl-5 space-y-1 text-gray-400">
+          <ul className="list-disc pl-5 space-y-1 text-gray-300">
             <li>Détenir l'ensemble des autorisations administratives sénégalaises requises (déclaration préfectorale, autorisations municipales de la Ville de Thiès, conformité aux exigences des sapeurs-pompiers et de la Police Nationale).</li>
             <li>Fournir des informations exactes, sincères et vérifiées sur la date, le lieu, la programmation artistique et les tarifs applicables.</li>
             <li>Assurer le respect strict de la jauge maximale autorisée du lieu d'accueil afin de garantir la sécurité physique du public.</li>
@@ -194,7 +194,7 @@ export const CGVView: React.FC<CGVViewProps> = ({
           <p>
             Conformément à la formule tarifaire officielle de Thièsdn Billetterie (Règle Option 3) :
           </p>
-          <ul className="list-disc pl-5 space-y-1 text-gray-400">
+          <ul className="list-disc pl-5 space-y-1 text-gray-300">
             <li><strong>Part Promoteur :</strong> 90% du montant brut des ventes numériques encaissées sont intégralement reversés à l'Organisateur.</li>
             <li><strong>Frais de Plateforme Thièsdn :</strong> Une commission forfaitaire de 10% est perçue par Thièsdn Billetterie pour la mise à disposition de la technologie, la sécurisation des encaissements et la maintenance des serveurs.</li>
             <li><strong>Règlements Mobiles :</strong> Les paiements s'effectuent par Wave Sénégal et Orange Money (OM). Les billets ne sont émis qu'après confirmation bancaire ou validation administrative du paiement.</li>
@@ -291,7 +291,7 @@ export const CGVView: React.FC<CGVViewProps> = ({
           </div>
 
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1">
-            <span className="text-[11px] text-gray-400 font-mono">
+            <span className="text-[11px] text-gray-300 font-mono">
               Signataire : <strong>{user.name}</strong> ({user.role.toUpperCase()}) • Horodaté en temps réel
             </span>
 
@@ -301,7 +301,7 @@ export const CGVView: React.FC<CGVViewProps> = ({
               className={`w-full sm:w-auto px-6 py-3 rounded-2xl font-heading font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-lg ${
                 hasChecked && !isAccepting
                   ? 'btn-primary-glow cursor-pointer'
-                  : 'bg-white/10 text-gray-500 cursor-not-allowed opacity-60'
+                  : 'bg-white/10 text-gray-300 cursor-not-allowed opacity-60'
               }`}
             >
               {isAccepting ? (

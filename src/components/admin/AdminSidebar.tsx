@@ -148,7 +148,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
           </div>
         </div>
 
-        <div className="mt-3 pt-2.5 border-t border-white/10 flex items-center justify-between text-[11px] text-gray-400">
+        <div className="mt-3 pt-2.5 border-t border-white/10 flex items-center justify-between text-[11px] text-gray-300">
           <span className="flex items-center gap-1 text-[#DCB8FF]">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Console Globale
           </span>
@@ -193,7 +193,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
 
       {/* Menu d'Administration Strict */}
       <nav className="flex-1 space-y-1.5 overflow-y-auto">
-        <p className="text-[11px] uppercase tracking-wider text-gray-400 font-extrabold px-3 mb-2 font-heading">
+        <p className="text-[11px] uppercase tracking-wider text-gray-300 font-extrabold px-3 mb-2 font-heading">
           Menu Back-Office
         </p>
 
@@ -212,7 +212,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
               }`}
             >
               <div className="flex items-center gap-3">
-                <Icon className={`w-4 h-4 ${isActive ? 'text-[#E9C349]' : 'text-gray-400'}`} />
+                <Icon className={`w-4 h-4 ${isActive ? 'text-[#E9C349]' : 'text-gray-300'}`} />
                 <span>{item.label}</span>
               </div>
               {item.badge && (

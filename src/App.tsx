@@ -1221,12 +1221,12 @@ export default function App() {
             <p className="font-heading text-sm font-bold text-white tracking-wide">
               Vérification de votre guichet POS...
             </p>
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-[#E5E2E1]">
               Synchronisation avec votre point de vente Supabase.
             </p>
           </div>
         ) : isAuthenticated && (isPosAccount || effectiveRole === 'sales_agent' || Boolean(posLinkedAgentId)) ? (
-          <div className="p-3 sm:p-6">
+          <div className="p-3 sm:p-6 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[calc(80px+env(safe-area-inset-bottom))]">
             <React.Suspense fallback={<ViewSkeletonLoader />}>
               <SalesAgentDashboardView
                 user={user}
@@ -1315,6 +1315,8 @@ export default function App() {
     );
   }
 
+  const isKioskPosMode = isPosAccount || isPosRoute || activeTab === 'sales_agent' || effectiveRole === 'sales_agent';
+
   return (
     <div className="min-h-screen bg-[#0F0F0F] text-[#E5E2E1] flex flex-col relative font-sans">
       {/* African pattern overlay */}
@@ -1325,8 +1327,8 @@ export default function App() {
 
       {/* Main App Layout */}
       <div className="flex-1 flex flex-col relative z-10">
-        {/* Top Header Bar (Jamais affiché pour un compte POS) */}
-        {!isPosAccount && (
+        {/* Top Header Bar (Jamais affiché en mode Kiosque POS) */}
+        {!isKioskPosMode && (
           <Header
             user={{ ...user, role: effectiveRole }}
             notifications={notifications}
@@ -1345,7 +1347,7 @@ export default function App() {
         )}
 
         {/* Bannière Mode Aperçu Visiteur pour l'Administrateur */}
-        {isAdminPreview && !isPosAccount && (
+        {isAdminPreview && !isKioskPosMode && (
           <div className="bg-[#E9C349] text-[#241A00] px-4 py-2 text-xs font-bold flex items-center justify-between sticky top-16 z-40 shadow-lg">
             <span className="flex items-center gap-2">
               <Eye className="w-4 h-4" />
@@ -1361,7 +1363,7 @@ export default function App() {
         )}
 
         {/* Sidebar on Desktop / Tablet : VISIBLE UNIQUEMENT POUR UTILISATEURS CONNECTÉS NON-POS */}
-        {isAuthenticated && !isPosAccount && (
+        {isAuthenticated && !isKioskPosMode && (
           effectiveRole === 'admin' ? (
             <AdminSidebar
               user={{ ...user, role: 'admin' }}
@@ -1406,7 +1408,7 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setUserAlertToast(null)}
-                  className="text-gray-400 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
+                  className="text-gray-300 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -1456,9 +1458,11 @@ export default function App() {
         <main className={`flex-grow flex flex-col w-full mx-auto relative z-10 transition-all ${
           activeTab === 'showcase' || activeTab === 'presentation'
             ? 'p-0 m-0 max-w-none pt-0 pb-0'
-            : isAuthenticated 
-            ? 'pt-4 sm:pt-6 pb-[100px] md:pb-12 px-3 sm:px-6 md:pl-72 md:pr-8 w-full max-w-7xl' 
-            : 'pt-4 sm:pt-6 pb-[100px] md:pb-12 px-3 sm:px-8 w-full max-w-6xl'
+            : isKioskPosMode
+              ? 'pt-[max(0.75rem,env(safe-area-inset-top))] pb-[calc(80px+env(safe-area-inset-bottom))] px-3 sm:px-6 w-full max-w-5xl'
+              : isAuthenticated
+                ? 'pt-4 sm:pt-6 pb-[calc(80px+env(safe-area-inset-bottom))] md:pb-12 px-3 sm:px-6 md:pl-72 md:pr-8 w-full max-w-7xl'
+                : 'pt-4 sm:pt-6 pb-[calc(80px+env(safe-area-inset-bottom))] md:pb-12 px-3 sm:px-8 w-full max-w-6xl'
         }`}>
           {eventsError && (
             <div className="mb-6 p-4 rounded-2xl bg-rose-950/80 border border-rose-500/40 text-rose-200 flex items-center justify-between">
@@ -1499,7 +1503,7 @@ export default function App() {
                 </button>
                 <button
                   onClick={() => setPaymentBannerMessage(null)}
-                  className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-gray-400 hover:text-white"
+                  className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white"
                 >
                   ✕
                 </button>
@@ -1521,7 +1525,7 @@ export default function App() {
                     ? 'Connexion Super Admin Requise'
                     : 'Connexion Requise'}
                 </h2>
-                <p className="text-xs text-gray-400 mt-1">
+                <p className="text-xs text-[#E5E2E1] mt-1">
                   {['dashboard', 'moderation', 'orders', 'users', 'settings'].includes(activeTab)
                     ? 'Veuillez vous authentifier avec votre compte administrateur Supabase pour ouvrir la console.'
                     : 'Veuillez vous authentifier pour accéder à cet espace.'}
@@ -1543,7 +1547,7 @@ export default function App() {
                     ? 'Accès Réservé aux Promoteurs & Artistes'
                     : 'Accès Restreint — Espace Administration'}
                 </h3>
-                <p className="text-xs text-gray-400 mt-1">
+                <p className="text-xs text-[#E5E2E1] mt-1">
                   {activeTab === 'create'
                     ? 'La création d’événements est réservée aux comptes Promoteur et Artiste certifiés. Votre compte est actuellement configuré comme compte client.'
                     : 'Cette section est strictement réservée aux Super Administrateurs de Thièsdn Billetterie. Votre compte est actuellement configuré comme compte client.'}
@@ -1821,7 +1825,7 @@ export default function App() {
           )}
 
           {/* Pied de page Officiel (Footer) complet et responsive */}
-          {activeTab !== 'showcase' && activeTab !== 'presentation' && !isPosAccount && (
+          {activeTab !== 'showcase' && activeTab !== 'presentation' && !isKioskPosMode && (
             <Footer
               onNavigateCGV={() => handleTabChange('cgv')}
             />
@@ -1829,8 +1833,8 @@ export default function App() {
         </main>
       </div>
 
-      {/* Floating Bottom Nav for Mobile Screens (Jamais affiché pour un compte POS) */}
-      {!isPosAccount && (
+      {/* Floating Bottom Nav for Mobile Screens (Jamais affiché en mode Kiosque POS) */}
+      {!isKioskPosMode && (
         <BottomNav
           activeTab={activeTab}
           onTabChange={handleTabChange}

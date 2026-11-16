@@ -750,7 +750,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
               <button
                 type="button"
                 onClick={handleCloseModal}
-                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/15 text-gray-400 hover:text-white flex items-center justify-center transition-colors"
+                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/15 text-gray-300 hover:text-white flex items-center justify-center transition-colors"
                 title="Fermer"
               >
                 <X className="w-4 h-4" />
@@ -811,6 +811,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                           />
                           <input
                             type="tel"
+                            inputMode="tel"
                             value={preRegPhone}
                             onChange={(e) => setPreRegPhone(e.target.value)}
                             placeholder="Téléphone Wave (+221)"
@@ -842,7 +843,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                       <Calendar className="w-4 h-4" />
                     </div>
                     <div>
-                      <p className="text-[10px] uppercase font-bold text-gray-400">Date & Heure</p>
+                      <p className="text-[10px] uppercase font-bold text-gray-300">Date & Heure</p>
                       <p className="font-semibold text-white">{event.date} • {event.time}</p>
                     </div>
                   </div>
@@ -851,7 +852,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                       <MapPin className="w-4 h-4" />
                     </div>
                     <div className="truncate">
-                      <p className="text-[10px] uppercase font-bold text-gray-400">Lieu</p>
+                      <p className="text-[10px] uppercase font-bold text-gray-300">Lieu</p>
                       <p className="font-semibold text-white truncate">{event.venue}, {event.city}</p>
                     </div>
                   </div>
@@ -898,7 +899,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                   <h3 className="font-heading text-base font-extrabold text-white">
                     Vérification de Sécurité
                   </h3>
-                  <p className="text-xs text-gray-400 mt-1 max-w-xs mx-auto">
+                  <p className="text-xs text-[#E5E2E1] mt-1 max-w-xs mx-auto">
                     Protection anti-robot instantanée avant d'accéder à la réservation.
                   </p>
                 </div>
@@ -925,7 +926,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                     </button>
                   </div>
                 ) : (
-                  <p className="text-[11px] text-gray-500">
+                  <p className="text-[11px] text-gray-300">
                     Cochez la case ci-dessus pour continuer automatiquement.
                   </p>
                 )}
@@ -944,14 +945,14 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                     </span>
                     <span>Coordonnées de Réception</span>
                   </h3>
-                  <p className="text-[11px] text-gray-400 mt-0.5">
+                  <p className="text-[11px] text-gray-300 mt-0.5">
                     Indiquez le nom du titulaire et votre contact pour recevoir vos billets officiels.
                   </p>
                 </div>
 
                 <div className="space-y-2.5 bg-[#10111A] p-3.5 rounded-2xl border border-white/5">
                   <div>
-                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1 flex items-center justify-between">
+                    <label className="text-[10px] font-bold text-gray-300 uppercase tracking-wider block mb-1 flex items-center justify-between">
                       <span>Nom complet du participant</span>
                       <span className="text-[#E9C349] font-bold text-[9px]">* Requis (≥2 car.)</span>
                     </label>
@@ -965,14 +966,15 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                   </div>
 
                   <div>
-                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1 flex items-center justify-between">
+                    <label className="text-[10px] font-bold text-gray-300 uppercase tracking-wider block mb-1 flex items-center justify-between">
                       <span>Numéro Mobile Wave</span>
-                      <span className="text-gray-400 text-[9px]">Tél. ou Email requis</span>
+                      <span className="text-gray-300 text-[9px]">Tél. ou Email requis</span>
                     </label>
                     <div className="flex items-center gap-2 bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 focus-within:border-[#1DC3F4] transition-colors">
                       <span className="text-xs font-bold text-[#1DC3F4] tracking-wider">+221</span>
                       <input
                         type="tel"
+                        inputMode="tel"
                         value={phoneNumber}
                         onChange={(e) => setPhoneNumber(e.target.value)}
                         placeholder="77 123 45 67"
@@ -982,9 +984,9 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                   </div>
 
                   <div>
-                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1 flex items-center justify-between">
+                    <label className="text-[10px] font-bold text-gray-300 uppercase tracking-wider block mb-1 flex items-center justify-between">
                       <span>Email de réception</span>
-                      <span className="text-gray-400 text-[9px]">Recommandé</span>
+                      <span className="text-gray-300 text-[9px]">Recommandé</span>
                     </label>
                     <input
                       type="email"
@@ -1017,7 +1019,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                     </span>
                     <span>Choix de la Formule</span>
                   </h3>
-                  <p className="text-[11px] text-gray-400 mt-0.5">
+                  <p className="text-[11px] text-gray-300 mt-0.5">
                     Sélectionnez votre pass et le nombre de places souhaité.
                   </p>
                 </div>
@@ -1056,7 +1058,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                                 </span>
                               )}
                             </div>
-                            <p className="text-[10px] text-gray-400 truncate">{tier.description}</p>
+                            <p className="text-[10px] text-gray-300 truncate">{tier.description}</p>
                           </div>
                         </div>
 
@@ -1064,7 +1066,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                           <span className="font-heading font-extrabold text-xs text-[#E9C349]">
                             {tier.price.toLocaleString('fr-FR')} F
                           </span>
-                          <p className="text-[9px] text-gray-400">
+                          <p className="text-[9px] text-gray-300">
                             {tier.available > 5 ? `${tier.available} dispo` : `⚠️ Plus que ${tier.available} !`}
                           </p>
                         </div>
@@ -1078,7 +1080,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-bold text-gray-300 text-[11px]">Nombre de places</p>
-                      <p className="text-[10px] text-gray-400">Disponibles : {selectedTier.available}</p>
+                      <p className="text-[10px] text-gray-300">Disponibles : {selectedTier.available}</p>
                     </div>
                     <div className="flex items-center gap-3 bg-black/40 px-2 py-1 rounded-xl border border-white/10">
                       <button
@@ -1128,7 +1130,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                         <button
                           type="button"
                           onClick={handleRemovePromo}
-                          className="text-gray-400 hover:text-white underline font-bold text-[10px]"
+                          className="text-gray-300 hover:text-white underline font-bold text-[10px]"
                         >
                           Retirer
                         </button>
@@ -1154,26 +1156,26 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                     </span>
                     <span>Récapitulatif & Paiement</span>
                   </h3>
-                  <p className="text-[11px] text-gray-400 mt-0.5">
+                  <p className="text-[11px] text-gray-300 mt-0.5">
                     Vérifiez les détails avant d'ouvrir l'application Wave.
                   </p>
                 </div>
 
                 {/* Mini-carte Récapitulative Or Impérial */}
                 <div className="p-3.5 rounded-2xl bg-[#10111A] border border-[#E9C349]/30 shadow-lg shadow-[#E9C349]/5 space-y-2 text-xs">
-                  <div className="flex justify-between items-center text-gray-400">
+                  <div className="flex justify-between items-center text-gray-300">
                     <span>Événement :</span>
                     <strong className="text-white text-right truncate max-w-[180px]">{event.title}</strong>
                   </div>
-                  <div className="flex justify-between items-center text-gray-400">
+                  <div className="flex justify-between items-center text-gray-300">
                     <span>Formule :</span>
                     <strong className="text-white">{selectedTier.name} (x{quantity})</strong>
                   </div>
-                  <div className="flex justify-between items-center text-gray-400">
+                  <div className="flex justify-between items-center text-gray-300">
                     <span>Titulaire :</span>
                     <strong className="text-white">{customerName}</strong>
                   </div>
-                  <div className="flex justify-between items-center text-gray-400">
+                  <div className="flex justify-between items-center text-gray-300">
                     <span>Contact :</span>
                     <span className="text-gray-300 font-mono text-[11px]">
                       {phoneNumber ? `+221 ${phoneNumber}` : customerEmail}
@@ -1221,7 +1223,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                     type="button"
                     onClick={handleManualTransferCheckout}
                     disabled={isProcessing}
-                    className="text-[11px] text-gray-400 hover:text-[#00D2FF] underline transition-colors"
+                    className="text-[11px] text-gray-300 hover:text-[#00D2FF] underline transition-colors"
                   >
                     J'ai déjà transféré manuellement via Wave
                   </button>
@@ -1246,7 +1248,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
 
                 {/* Ticket Stub Card */}
                 <div className="p-3.5 rounded-2xl bg-[#10111A] border-2 border-[#00D2FF]/40 text-center max-w-sm mx-auto space-y-2 shadow-lg shadow-[#00D2FF]/10">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-gray-300">
                     Référence de Commande
                   </p>
                   <div className="flex items-center justify-center gap-2">
@@ -1270,7 +1272,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                   <p className="text-[11px] text-[#E9C349] font-medium leading-snug bg-[#241A00]/60 p-2 rounded-xl border border-[#E9C349]/20">
                     💡 Mentionnez ce code dans le motif de votre transfert Wave.
                   </p>
-                  <div className="text-right text-xs pt-1 border-t border-white/5 flex justify-between items-center text-gray-400">
+                  <div className="text-right text-xs pt-1 border-t border-white/5 flex justify-between items-center text-gray-300">
                     <span>Montant total :</span>
                     <strong className="text-[#E9C349] font-extrabold font-mono text-sm">
                       {activeOrder.totalAmount.toLocaleString('fr-FR')} FCFA
@@ -1323,7 +1325,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                     <button
                       type="button"
                       onClick={handleCloseModal}
-                      className="text-xs text-gray-400 hover:text-white transition-colors flex items-center justify-center gap-1 mx-auto"
+                      className="text-xs text-gray-300 hover:text-white transition-colors flex items-center justify-center gap-1 mx-auto"
                     >
                       <ArrowLeft className="w-3 h-3" />
                       <span>Retourner à la billetterie</span>
@@ -1377,7 +1379,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
           {flow === 'details' && (!isSalesUpcoming || isOwnerPromoter) && (
             <div className="p-3.5 sm:p-4 bg-[#10111A] border-t border-white/10 flex items-center justify-between gap-3 flex-shrink-0">
               <div>
-                <p className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">
+                <p className="text-[10px] uppercase tracking-wider text-gray-300 font-bold">
                   {isOwnerPromoter ? 'Mode Organisateur' : 'Tarif'}
                 </p>
                 <p className="font-heading text-lg font-extrabold text-[#E9C349]">
@@ -1453,7 +1455,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                 <span className="font-heading font-extrabold text-sm text-[#E9C349]">
                   {totalPrice.toLocaleString('fr-FR')} F
                 </span>
-                <p className="text-[9px] text-gray-400">Total</p>
+                <p className="text-[9px] text-gray-300">Total</p>
               </div>
 
               <button
@@ -1472,7 +1474,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
               <button
                 type="button"
                 onClick={() => setFlow('step_tickets')}
-                className="text-gray-400 hover:text-white transition-colors flex items-center gap-1"
+                className="text-gray-300 hover:text-white transition-colors flex items-center gap-1"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
                 <span>Modifier ma sélection</span>
@@ -1481,7 +1483,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
               <button
                 type="button"
                 onClick={handleCloseModal}
-                className="text-gray-400 hover:text-white transition-colors"
+                className="text-gray-300 hover:text-white transition-colors"
               >
                 Annuler
               </button>

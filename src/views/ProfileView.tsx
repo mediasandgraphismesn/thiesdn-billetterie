@@ -447,7 +447,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           </div>
           <div className="text-sm text-[#CFC2D7] font-medium flex flex-wrap items-center justify-center md:justify-start gap-1.5 sm:gap-2">
             <span className="break-all">{user.email || 'Client Thièsdn Billetterie'}</span>
-            <span className="text-gray-500 hidden sm:inline">•</span>
+            <span className="text-gray-300 hidden sm:inline">•</span>
             <span className="text-[#E9C349] font-bold uppercase text-xs px-2 py-0.5 rounded-md bg-[#E9C349]/10 border border-[#E9C349]/30">
               {user.role === 'admin' ? 'Administrateur' : user.role === 'promoter' ? 'Promoteur Officiel' : 'Espace Client'}
             </span>
@@ -498,7 +498,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           <div className="space-y-4">
             {/* Full Name */}
             <div className="flex flex-col">
-              <label className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-1">
+              <label className="text-[11px] font-bold uppercase tracking-wider text-gray-300 mb-1">
                 Nom complet
               </label>
               <div className="input-glass rounded-xl px-4 py-3 flex items-center gap-3">
@@ -515,7 +515,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
             {/* Email */}
             <div className="flex flex-col">
-              <label className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-1">
+              <label className="text-[11px] font-bold uppercase tracking-wider text-gray-300 mb-1">
                 Adresse Email
               </label>
               <div className="input-glass rounded-xl px-4 py-3 flex items-center gap-3">
@@ -532,13 +532,14 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
             {/* Phone Number */}
             <div className="flex flex-col">
-              <label className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-1">
+              <label className="text-[11px] font-bold uppercase tracking-wider text-gray-300 mb-1">
                 Numéro de téléphone (Wave / OM)
               </label>
               <div className="input-glass rounded-xl px-4 py-3 flex items-center gap-3">
                 <Phone className="w-4 h-4 text-[#8A2BE2]" />
                 <input
                   type="tel"
+                  inputMode="tel"
                   disabled={!isEditing}
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
@@ -552,7 +553,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* Ville */}
               <div className="flex flex-col">
-                <label className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-1.5">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-gray-300 mb-1.5">
                   Ville
                 </label>
                 {isEditing ? (
@@ -583,7 +584,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               {/* Quartier de la Ville de Thiès (33 Quartiers) */}
               <div className="flex flex-col">
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-gray-300">
                     Quartier (Ville de Thiès)
                   </label>
                   <span className="text-[10px] font-extrabold text-[#E9C349] bg-[#E9C349]/10 px-2.5 py-0.5 rounded-full border border-[#E9C349]/25 shadow-xs">
@@ -620,7 +621,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                           </option>
                         ))}
                       </optgroup>
-                      <optgroup label="🌍 Autre / Hors Thiès" className="bg-[#1A1A1A] text-gray-400 font-bold">
+                      <optgroup label="🌍 Autre / Hors Thiès" className="bg-[#1A1A1A] text-gray-300 font-bold">
                         <option value="Autre quartier / Autre ville" className="bg-[#1F1F1F] text-white font-normal">
                           Autre quartier / Hors Thiès (Saly, Mbour, Dakar...)
                         </option>
@@ -642,7 +643,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                             </span>
                           )}
                         </div>
-                        <p className="text-xs text-gray-400 mt-0.5">
+                        <p className="text-xs text-[#E5E2E1] mt-0.5">
                           {THIES_33_QUARTIERS.find((q) => q.name === (quartier || 'Grand Standing'))?.description || 'Ville de Thiès, Sénégal'}
                         </p>
                       </div>
@@ -654,7 +655,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
             {/* Complément d'adresse */}
             <div className="flex flex-col">
-              <label className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-1">
+              <label className="text-[11px] font-bold uppercase tracking-wider text-gray-300 mb-1">
                 Complément d'adresse / Rue / Repère
               </label>
               <div className="input-glass rounded-xl px-4 py-3 flex items-start gap-3">
@@ -680,7 +681,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               <h3 className="font-heading font-bold text-base text-[#E9C349]">
                 Réseaux Sociaux Officiels
               </h3>
-              <p className="text-xs text-gray-400 mt-0.5">
+              <p className="text-xs text-[#E5E2E1] mt-0.5">
                 Suivez Thièsdn pour les exclusivités, galas et préventes
               </p>
             </div>
@@ -699,7 +700,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                   </div>
                   <div>
                     <span className="text-sm font-semibold text-white block">Facebook</span>
-                    <span className="text-[11px] text-gray-400">@thiesdn</span>
+                    <span className="text-[11px] text-gray-300">@thiesdn</span>
                   </div>
                 </div>
                 <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[#E9C349] group-hover:underline bg-[#E9C349]/10 px-3 py-1 rounded-lg border border-[#E9C349]/20 transition-all">
@@ -721,7 +722,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                   </div>
                   <div>
                     <span className="text-sm font-semibold text-white block">Instagram</span>
-                    <span className="text-[11px] text-gray-400">@thiesdn</span>
+                    <span className="text-[11px] text-gray-300">@thiesdn</span>
                   </div>
                 </div>
                 <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[#E9C349] group-hover:underline bg-[#E9C349]/10 px-3 py-1 rounded-lg border border-[#E9C349]/20 transition-all">
@@ -743,7 +744,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                   </div>
                   <div>
                     <span className="text-sm font-semibold text-white block">TikTok</span>
-                    <span className="text-[11px] text-gray-400">@thiesdn</span>
+                    <span className="text-[11px] text-gray-300">@thiesdn</span>
                   </div>
                 </div>
                 <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[#E9C349] group-hover:underline bg-[#E9C349]/10 px-3 py-1 rounded-lg border border-[#E9C349]/20 transition-all">
@@ -765,7 +766,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h4 className="text-sm font-bold text-white">Visibilité du profil</h4>
-                  <p className="text-xs text-gray-400">
+                  <p className="text-xs text-[#E5E2E1]">
                     Autoriser l'affichage de mon nom sur les listes de réservations publiques.
                   </p>
                 </div>
@@ -787,7 +788,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                     <KeyRound className="w-4 h-4 text-[#E9C349]" />
                     <span>Mot de passe</span>
                   </h4>
-                  <p className="text-xs text-gray-400">
+                  <p className="text-xs text-[#E5E2E1]">
                     Modifiez le mot de passe d'accès à votre compte.
                   </p>
                 </div>
@@ -840,7 +841,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                   </div>
                   <div>
                     <h4 className="text-xs font-bold text-white">Notifications Push Système</h4>
-                    <p className="text-[11px] text-gray-400">
+                    <p className="text-[11px] text-gray-300">
                       Recevez des alertes sonores et vibrations sur cet appareil
                     </p>
                   </div>
@@ -860,7 +861,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
             {/* Grille des Interrupteurs Push / E-mail par Catégorie */}
             <div className="space-y-3 pt-2">
-              <h4 className="font-heading font-bold text-xs uppercase tracking-wider text-gray-400">
+              <h4 className="font-heading font-bold text-xs uppercase tracking-wider text-gray-300">
                 Canaux d'alerte par catégorie
               </h4>
 
@@ -876,7 +877,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                   <div key={key} className="p-3.5 rounded-2xl bg-[#141416] border border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="min-w-0">
                       <span className="text-xs font-bold text-white block">{label}</span>
-                      <span className="text-[11px] text-gray-400 block">{desc}</span>
+                      <span className="text-[11px] text-gray-300 block">{desc}</span>
                     </div>
 
                     <div className="flex items-center gap-4 shrink-0">
@@ -954,7 +955,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         </div>
 
         {tickets.length === 0 ? (
-          <p className="text-xs text-gray-400 py-4 text-center">
+          <p className="text-xs text-[#E5E2E1] py-4 text-center">
             Vous n'avez pas encore acheté de billet. Explorez nos soirées exclusives !
           </p>
         ) : (
@@ -995,7 +996,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                       <h4 className="font-heading font-bold text-sm text-white truncate">
                         {tkt.eventTitle}
                       </h4>
-                      <p className="text-xs text-gray-400 truncate">
+                      <p className="text-xs text-[#E5E2E1] truncate">
                         {tkt.eventDate}{tkt.eventTime ? ` • ${tkt.eventTime}` : ''}
                       </p>
                     </div>
@@ -1044,7 +1045,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                   <h3 className="font-heading font-bold text-base text-white">
                     Changer mon mot de passe
                   </h3>
-                  <p className="text-[11px] text-gray-400">
+                  <p className="text-[11px] text-gray-300">
                     Sécurisez l'accès à votre compte Thièsdn
                   </p>
                 </div>
@@ -1053,7 +1054,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               <button
                 type="button"
                 onClick={() => setShowPasswordModal(false)}
-                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white flex items-center justify-center transition-colors"
+                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white flex items-center justify-center transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1077,11 +1078,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             {/* Formulaire de saisie directe */}
             <form onSubmit={handleChangePassword} className="space-y-4">
               <div className="flex flex-col gap-1.5">
-                <label className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-gray-300">
                   Nouveau mot de passe
                 </label>
                 <div className="input-glass rounded-xl px-4 py-3 flex items-center gap-2.5">
-                  <Lock className="w-4 h-4 text-gray-400" />
+                  <Lock className="w-4 h-4 text-gray-300" />
                   <input
                     type={showNewPassword ? 'text' : 'password'}
                     required
@@ -1093,7 +1094,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                   <button
                     type="button"
                     onClick={() => setShowNewPassword(!showNewPassword)}
-                    className="text-gray-400 hover:text-white"
+                    className="text-gray-300 hover:text-white"
                   >
                     {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -1101,11 +1102,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-gray-300">
                   Confirmer le mot de passe
                 </label>
                 <div className="input-glass rounded-xl px-4 py-3 flex items-center gap-2.5">
-                  <Lock className="w-4 h-4 text-gray-400" />
+                  <Lock className="w-4 h-4 text-gray-300" />
                   <input
                     type={showNewPassword ? 'text' : 'password'}
                     required

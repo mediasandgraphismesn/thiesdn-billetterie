@@ -79,7 +79,7 @@ export const ExploreView: React.FC<ExploreViewProps> = ({
           <h1 className="font-heading text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
             Explorer les Événements au Sénégal
           </h1>
-          <p className="text-sm text-gray-400 mt-1">
+          <p className="text-sm text-[#E5E2E1] mt-1">
             Découvrez les meilleures soirées, galas et festivals à Thiès, Mbour, Saly et Dakar
           </p>
         </div>
@@ -91,7 +91,7 @@ export const ExploreView: React.FC<ExploreViewProps> = ({
             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
               viewMode === 'grid'
                 ? 'bg-[#8A2BE2] text-white shadow-md'
-                : 'text-gray-400 hover:text-white'
+                : 'text-gray-300 hover:text-white'
             }`}
           >
             Grille ({filteredEvents.length})
@@ -101,7 +101,7 @@ export const ExploreView: React.FC<ExploreViewProps> = ({
             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
               viewMode === 'map'
                 ? 'bg-[#8A2BE2] text-white shadow-md'
-                : 'text-gray-400 hover:text-white'
+                : 'text-gray-300 hover:text-white'
             }`}
           >
             <Compass className="w-3.5 h-3.5" />
@@ -114,13 +114,13 @@ export const ExploreView: React.FC<ExploreViewProps> = ({
       <div className="glass-panel p-4 rounded-2xl space-y-3">
         {/* Search */}
         <div className="relative flex items-center bg-[#131313] border border-white/10 rounded-xl px-4 py-2.5 focus-within:border-[#8A2BE2]">
-          <Search className="w-4 h-4 text-gray-400 mr-3" />
+          <Search className="w-4 h-4 text-gray-300 mr-3" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Rechercher par nom de soirée, artiste, club à Thiès, Saly, Dakar..."
-            className="w-full bg-transparent border-none outline-none text-sm text-white placeholder-gray-500 focus:ring-0 p-0"
+            className="w-full bg-transparent border-none outline-none text-sm text-white placeholder:text-gray-300/75 focus:ring-0 p-0"
           />
         </div>
 
@@ -187,7 +187,7 @@ export const ExploreView: React.FC<ExploreViewProps> = ({
 
           {/* Sort Selector */}
           <div className="flex items-center gap-2 text-xs">
-            <span className="text-gray-400">Trier par:</span>
+            <span className="text-gray-300">Trier par:</span>
             <select
               value={selectedSort}
               onChange={(e) => setSelectedSort(e.target.value as any)}
@@ -227,7 +227,7 @@ export const ExploreView: React.FC<ExploreViewProps> = ({
             <Calendar className="w-6 h-6" />
           </div>
           <h3 className="font-heading font-bold text-base text-white">Aucun événement disponible pour le moment</h3>
-          <p className="text-gray-400 text-xs max-w-md mx-auto">
+          <p className="text-[#E5E2E1] text-xs max-w-md mx-auto">
             Revenez bientôt pour découvrir les prochains événements officiels ou modifiez vos filtres de recherche.
           </p>
         </div>

@@ -98,7 +98,7 @@ export const OrdersTable: React.FC<OrdersTableProps> = ({
         );
       default:
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-gray-500/15 text-gray-400 border border-gray-500/30">
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-gray-500/15 text-gray-300 border border-gray-500/30">
             {status}
           </span>
         );
@@ -110,13 +110,13 @@ export const OrdersTable: React.FC<OrdersTableProps> = ({
       {/* Barre d'outils : Recherche, Filtres, Rafraîchir */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-gray-300 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Rechercher par référence, nom, téléphone, soirée..."
-            className="w-full bg-[#141414] border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#8A2BE2]"
+            className="w-full bg-[#141414] border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder:text-gray-300/75 focus:outline-none focus:border-[#8A2BE2]"
           />
         </div>
 
@@ -128,7 +128,7 @@ export const OrdersTable: React.FC<OrdersTableProps> = ({
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
                 statusFilter === 'all'
                   ? 'bg-[#8A2BE2] text-white shadow-md'
-                  : 'bg-[#1A1A1A] text-gray-400 hover:text-white border border-white/5'
+                  : 'bg-[#1A1A1A] text-gray-300 hover:text-white border border-white/5'
               }`}
             >
               Toutes ({orders.length})
@@ -138,7 +138,7 @@ export const OrdersTable: React.FC<OrdersTableProps> = ({
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
                 statusFilter === 'pending'
                   ? 'bg-amber-500 text-black shadow-md font-extrabold'
-                  : 'bg-[#1A1A1A] text-gray-400 hover:text-white border border-white/5'
+                  : 'bg-[#1A1A1A] text-gray-300 hover:text-white border border-white/5'
               }`}
             >
               À Vérifier ({orders.filter((o) => o.status === 'pending' || o.status === 'payment_signaled').length})
@@ -148,7 +148,7 @@ export const OrdersTable: React.FC<OrdersTableProps> = ({
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
                 statusFilter === 'confirmed'
                   ? 'bg-emerald-500 text-white shadow-md'
-                  : 'bg-[#1A1A1A] text-gray-400 hover:text-white border border-white/5'
+                  : 'bg-[#1A1A1A] text-gray-300 hover:text-white border border-white/5'
               }`}
             >
               Confirmées ({orders.filter((o) => o.status === 'confirmed').length})
@@ -171,10 +171,10 @@ export const OrdersTable: React.FC<OrdersTableProps> = ({
         {/* VUE CARTES MOBILES (< 768px - Normes WCAG & Liquid Glass) */}
         <div className="flex flex-col gap-3.5 p-3 md:hidden">
           {filteredOrders.length === 0 ? (
-            <div className="py-10 text-center text-gray-500">
+            <div className="py-10 text-center text-gray-300">
               <Clock className="w-8 h-8 mx-auto mb-2 opacity-40" />
-              <p className="font-semibold text-sm text-gray-400">Aucune commande trouvée</p>
-              <p className="text-xs text-gray-500 mt-1">Les commandes apparaîtront ici en direct.</p>
+              <p className="font-semibold text-sm text-[#E5E2E1]">Aucune commande trouvée</p>
+              <p className="text-xs text-[#E5E2E1] mt-1">Les commandes apparaîtront ici en direct.</p>
             </div>
           ) : (
             filteredOrders.map((order) => {
@@ -203,7 +203,7 @@ export const OrdersTable: React.FC<OrdersTableProps> = ({
                         <span className="text-[#E9C349]">{order.reference}</span>
                         <button
                           onClick={() => handleCopy(order.reference, order.id)}
-                          className="text-gray-400 hover:text-white p-1"
+                          className="text-gray-300 hover:text-white p-1"
                           title="Copier référence"
                         >
                           {copiedId === order.id ? (
@@ -213,7 +213,7 @@ export const OrdersTable: React.FC<OrdersTableProps> = ({
                           )}
                         </button>
                       </div>
-                      <span className="text-[10px] text-gray-400 block mt-0.5">
+                      <span className="text-[10px] text-gray-300 block mt-0.5">
                         {new Date(order.createdAt).toLocaleDateString('fr-FR', {
                           day: 'numeric',
                           month: 'short',
@@ -228,7 +228,7 @@ export const OrdersTable: React.FC<OrdersTableProps> = ({
                   {/* Client & Contact */}
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div className="min-w-0">
-                      <span className="text-[10px] text-gray-400 uppercase font-bold block">Client :</span>
+                      <span className="text-[10px] text-gray-300 uppercase font-bold block">Client :</span>
                       <p className="font-bold text-white truncate">{order.customerName}</p>
                       <a
                         href={`tel:${order.customerPhone}`}
@@ -239,12 +239,12 @@ export const OrdersTable: React.FC<OrdersTableProps> = ({
                       </a>
                     </div>
                     <div className="min-w-0">
-                      <span className="text-[10px] text-gray-400 uppercase font-bold block">Paiement :</span>
+                      <span className="text-[10px] text-gray-300 uppercase font-bold block">Paiement :</span>
                       <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-[#141414] border border-white/10 uppercase mt-0.5">
                         {order.paymentMethod === 'wave' ? 'Wave' : 'Orange Money'}
                       </span>
                       {order.paymentReference && (
-                        <p className="text-[10px] font-mono text-gray-400 truncate mt-0.5">
+                        <p className="text-[10px] font-mono text-gray-300 truncate mt-0.5">
                           Réf: {order.paymentReference}
                         </p>
                       )}
@@ -307,7 +307,7 @@ export const OrdersTable: React.FC<OrdersTableProps> = ({
                         )}
                       </div>
                     ) : (
-                      <span className="text-xs text-gray-500 italic block text-center py-1">
+                      <span className="text-xs text-gray-300 italic block text-center py-1">
                         Commande clôturée
                       </span>
                     )}
@@ -321,7 +321,7 @@ export const OrdersTable: React.FC<OrdersTableProps> = ({
         {/* VUE TABLEAU DESKTOP (>= 768px) */}
         <div className="overflow-x-auto hidden md:block">
           <table className="w-full text-left text-xs">
-            <thead className="bg-[#141414] text-gray-400 uppercase font-heading font-extrabold text-[10px] tracking-wider border-b border-white/10">
+            <thead className="bg-[#141414] text-gray-300 uppercase font-heading font-extrabold text-[10px] tracking-wider border-b border-white/10">
               <tr>
                 <th className="py-3.5 px-4">Référence</th>
                 <th className="py-3.5 px-4">Client & Contact</th>
@@ -335,10 +335,10 @@ export const OrdersTable: React.FC<OrdersTableProps> = ({
             <tbody className="divide-y divide-white/5 text-gray-300">
               {filteredOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-gray-500">
+                  <td colSpan={7} className="py-12 text-center text-gray-300">
                     <Clock className="w-8 h-8 mx-auto mb-2 opacity-40" />
-                    <p className="font-semibold text-sm text-gray-400">Aucune commande trouvée</p>
-                    <p className="text-xs text-gray-500 mt-1">Les commandes passées via Wave apparaîtront ici en direct.</p>
+                    <p className="font-semibold text-sm text-[#E5E2E1]">Aucune commande trouvée</p>
+                    <p className="text-xs text-[#E5E2E1] mt-1">Les commandes passées via Wave apparaîtront ici en direct.</p>
                   </td>
                 </tr>
               ) : (
@@ -357,7 +357,7 @@ export const OrdersTable: React.FC<OrdersTableProps> = ({
                           <span className="text-[#E9C349]">{order.reference}</span>
                           <button
                             onClick={() => handleCopy(order.reference, order.id)}
-                            className="text-gray-500 hover:text-white"
+                            className="text-gray-300 hover:text-white"
                             title="Copier référence"
                           >
                             {copiedId === order.id ? (
@@ -367,7 +367,7 @@ export const OrdersTable: React.FC<OrdersTableProps> = ({
                             )}
                           </button>
                         </div>
-                        <span className="text-[10px] text-gray-500 block font-sans">
+                        <span className="text-[10px] text-gray-300 block font-sans">
                           {new Date(order.createdAt).toLocaleDateString('fr-FR', {
                             day: 'numeric',
                             month: 'short',
@@ -383,7 +383,7 @@ export const OrdersTable: React.FC<OrdersTableProps> = ({
                           <User className="w-3.5 h-3.5 text-[#DCB8FF]" />
                           <span>{order.customerName}</span>
                         </div>
-                        <div className="text-[11px] text-gray-400 flex items-center gap-1 mt-0.5">
+                        <div className="text-[11px] text-gray-300 flex items-center gap-1 mt-0.5">
                           <Smartphone className="w-3 h-3 text-[#E9C349]" />
                           <span>{order.customerPhone}</span>
                         </div>
@@ -401,7 +401,7 @@ export const OrdersTable: React.FC<OrdersTableProps> = ({
 
                       {/* Montant Total */}
                       <td className="py-3.5 px-4 font-heading font-extrabold text-sm text-[#E9C349] tabular-nums">
-                        {order.totalAmount.toLocaleString('fr-FR')} <span className="text-[10px] font-sans text-gray-400">FCFA</span>
+                        {order.totalAmount.toLocaleString('fr-FR')} <span className="text-[10px] font-sans text-gray-300">FCFA</span>
                       </td>
 
                       {/* Méthode Paiement */}
@@ -410,7 +410,7 @@ export const OrdersTable: React.FC<OrdersTableProps> = ({
                           {order.paymentMethod === 'wave' ? 'Wave' : 'Orange Money'}
                         </span>
                         {order.paymentReference && (
-                          <span className="block text-[10px] font-mono text-gray-400 mt-0.5 truncate max-w-[120px]">
+                          <span className="block text-[10px] font-mono text-gray-300 mt-0.5 truncate max-w-[120px]">
                             Réf: {order.paymentReference}
                           </span>
                         )}
@@ -478,7 +478,7 @@ export const OrdersTable: React.FC<OrdersTableProps> = ({
                             })()}
                           </div>
                         ) : (
-                          <span className="text-[11px] text-gray-500 italic">
+                          <span className="text-[11px] text-gray-300 italic">
                             Clôturée
                           </span>
                         )}

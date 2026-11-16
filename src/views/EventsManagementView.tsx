@@ -797,7 +797,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
           <h1 className="font-heading text-2xl sm:text-3xl font-extrabold text-white mt-1">
             Gestion Complète des Événements
           </h1>
-          <p className="text-xs text-gray-400 mt-1">
+          <p className="text-xs text-[#E5E2E1] mt-1">
             Catalogue unifié de tous les événements en base • Modification en direct, suppression et archivage
           </p>
         </div>
@@ -820,7 +820,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
             className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
               selectedStatus === 'all'
                 ? 'bg-white text-black shadow-md'
-                : 'bg-white/5 text-gray-400 hover:text-white border border-white/5'
+                : 'bg-white/5 text-gray-300 hover:text-white border border-white/5'
             }`}
           >
             Tous ({countAll})
@@ -860,7 +860,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
             className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
               selectedStatus === 'archived'
                 ? 'bg-slate-600 text-white shadow-md'
-                : 'bg-white/5 text-gray-400 hover:text-white border border-white/5'
+                : 'bg-white/5 text-gray-300 hover:text-white border border-white/5'
             }`}
           >
             📦 Archivés ({countArchived})
@@ -870,13 +870,13 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
         {/* Ligne 2 : Recherche & Catégorie */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 border-t border-white/5">
           <div className="relative w-full sm:w-80">
-            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-300" />
             <input
               type="text"
               placeholder="Rechercher par titre, ville, promoteur..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-[#111111] border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#8A2BE2]"
+              className="w-full bg-[#111111] border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder:text-gray-300/75 focus:outline-none focus:border-[#8A2BE2]"
             />
           </div>
 
@@ -888,7 +888,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                 className={`px-3 py-1.5 rounded-xl text-[11px] font-semibold whitespace-nowrap transition-colors ${
                   selectedCategory === cat.value
                     ? 'bg-[#8A2BE2] text-white shadow-sm'
-                    : 'bg-[#111111] text-gray-400 hover:text-white border border-white/5'
+                    : 'bg-[#111111] text-gray-300 hover:text-white border border-white/5'
                 }`}
               >
                 {cat.label}
@@ -901,14 +901,14 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
       {/* Grille des Événements */}
       {filteredEvents.length === 0 ? (
         <div className="glass-panel p-12 rounded-3xl text-center space-y-4">
-          <div className="w-16 h-16 rounded-full bg-white/5 text-gray-400 flex items-center justify-center mx-auto border border-white/10">
+          <div className="w-16 h-16 rounded-full bg-white/5 text-gray-300 flex items-center justify-center mx-auto border border-white/10">
             <Layers className="w-8 h-8" />
           </div>
           <div>
             <h3 className="font-heading text-lg font-bold text-white">
               Aucun événement trouvé
             </h3>
-            <p className="text-xs text-gray-400 mt-1 max-w-sm mx-auto">
+            <p className="text-xs text-[#E5E2E1] mt-1 max-w-sm mx-auto">
               Aucun événement ne correspond à vos filtres actuels.
             </p>
           </div>
@@ -990,7 +990,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                         <Calendar className="w-3.5 h-3.5 text-[#E9C349] shrink-0" />
                         <span>{event.date} à {event.time}</span>
                       </div>
-                      <div className="flex items-center gap-1.5 text-gray-400">
+                      <div className="flex items-center gap-1.5 text-gray-300">
                         <MapPin className="w-3.5 h-3.5 text-[#8A2BE2] shrink-0" />
                         <span className="truncate">{event.venue}, {event.city}</span>
                       </div>
@@ -1000,7 +1000,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                     <div className="pt-2 border-t border-white/5 flex items-center justify-between text-xs">
                       <div className="flex items-center gap-2 min-w-0">
                         <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center shrink-0">
-                          <User className="w-3.5 h-3.5 text-gray-400" />
+                          <User className="w-3.5 h-3.5 text-gray-300" />
                         </div>
                         <span className="text-gray-300 truncate font-semibold">
                           {event.promoter?.name || 'Promoteur ThièsDN'}
@@ -1029,7 +1029,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                       <span className="flex items-center gap-1.5 truncate">
                         <UserCheck className="w-4 h-4 text-[#E9C349] shrink-0" />
                         <span>Assigner Promoteur</span>
-                        <span className="text-[10px] text-gray-400 font-normal truncate max-w-[120px] sm:max-w-[160px]">
+                        <span className="text-[10px] text-gray-300 font-normal truncate max-w-[120px] sm:max-w-[160px]">
                           ({event.promoter?.name || 'Non assigné'})
                         </span>
                       </span>
@@ -1125,7 +1125,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                       <h2 className="font-heading text-lg sm:text-xl font-black text-white leading-tight">
                         Gestion Avancée de l'Événement
                       </h2>
-                      <p className="text-xs text-gray-400 truncate max-w-xs sm:max-w-md">
+                      <p className="text-xs text-[#E5E2E1] truncate max-w-xs sm:max-w-md">
                         {editingEvent.title} • <span className="font-mono text-[10px] text-gray-300">{editingEvent.id}</span>
                       </p>
                     </div>
@@ -1133,7 +1133,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                   <button
                     type="button"
                     onClick={() => setEditingEvent(null)}
-                    className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-colors shrink-0"
+                    className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-300 hover:text-white transition-colors shrink-0"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -1147,7 +1147,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                     className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 ${
                       activeModalTab === 'details'
                         ? 'bg-[#8A2BE2] text-white shadow-lg shadow-[#8A2BE2]/30'
-                        : 'text-gray-400 hover:text-white hover:bg-white/5'
+                        : 'text-gray-300 hover:text-white hover:bg-white/5'
                     }`}
                   >
                     <FileText className="w-3.5 h-3.5" />
@@ -1160,7 +1160,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                     className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 ${
                       activeModalTab === 'tiers'
                         ? 'bg-[#8A2BE2] text-white shadow-lg shadow-[#8A2BE2]/30'
-                        : 'text-gray-400 hover:text-white hover:bg-white/5'
+                        : 'text-gray-300 hover:text-white hover:bg-white/5'
                     }`}
                   >
                     <Ticket className="w-3.5 h-3.5" />
@@ -1176,7 +1176,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                     className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 ${
                       activeModalTab === 'coproducers'
                         ? 'bg-[#8A2BE2] text-white shadow-lg shadow-[#8A2BE2]/30'
-                        : 'text-gray-400 hover:text-white hover:bg-white/5'
+                        : 'text-gray-300 hover:text-white hover:bg-white/5'
                     }`}
                   >
                     <Users className="w-3.5 h-3.5" />
@@ -1192,7 +1192,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                     className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 ${
                       activeModalTab === 'preregistrations'
                         ? 'bg-[#8A2BE2] text-white shadow-lg shadow-[#8A2BE2]/30'
-                        : 'text-gray-400 hover:text-white hover:bg-white/5'
+                        : 'text-gray-300 hover:text-white hover:bg-white/5'
                     }`}
                   >
                     <Bell className="w-3.5 h-3.5" />
@@ -1212,7 +1212,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                     className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 ${
                       activeModalTab === 'stats'
                         ? 'bg-[#8A2BE2] text-white shadow-lg shadow-[#8A2BE2]/30'
-                        : 'text-gray-400 hover:text-white hover:bg-white/5'
+                        : 'text-gray-300 hover:text-white hover:bg-white/5'
                     }`}
                   >
                     <BarChart3 className="w-3.5 h-3.5" />
@@ -1225,7 +1225,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                     className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 ${
                       activeModalTab === 'settings'
                         ? 'bg-[#8A2BE2] text-white shadow-lg shadow-[#8A2BE2]/30'
-                        : 'text-gray-400 hover:text-white hover:bg-white/5'
+                        : 'text-gray-300 hover:text-white hover:bg-white/5'
                     }`}
                   >
                     <Settings className="w-3.5 h-3.5" />
@@ -1304,7 +1304,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div className="space-y-1 sm:col-span-1">
-                        <label className="text-[10px] text-gray-400">Date textuelle *</label>
+                        <label className="text-[10px] text-gray-300">Date textuelle *</label>
                         <input
                           type="text"
                           required
@@ -1316,7 +1316,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                       </div>
 
                       <div className="space-y-1 sm:col-span-1">
-                        <label className="text-[10px] text-gray-400">Heure de début *</label>
+                        <label className="text-[10px] text-gray-300">Heure de début *</label>
                         <input
                           type="text"
                           required
@@ -1329,7 +1329,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
 
                       <div className="space-y-1 sm:col-span-1">
                         <div className="flex items-center justify-between">
-                          <label className="text-[10px] text-gray-400">Fin estimée</label>
+                          <label className="text-[10px] text-gray-300">Fin estimée</label>
                           <span className="text-[9px] text-[#DCB8FF]">Défaut: +6h</span>
                         </div>
                         <input
@@ -1348,7 +1348,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                         <label className="text-[10px] font-bold text-[#E9C349] uppercase tracking-wider flex items-center gap-1">
                           <Clock className="w-3 h-3" /> Date d'ouverture des ventes (Optionnel - Compte à rebours)
                         </label>
-                        <span className="text-[9px] text-gray-400">Vide = ventes ouvertes immédiatement</span>
+                        <span className="text-[9px] text-gray-300">Vide = ventes ouvertes immédiatement</span>
                       </div>
                       <input
                         type="datetime-local"
@@ -1360,7 +1360,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
                       <div className="space-y-1">
-                        <label className="text-[10px] text-gray-400">Lieu / Salle *</label>
+                        <label className="text-[10px] text-gray-300">Lieu / Salle *</label>
                         <input
                           type="text"
                           required
@@ -1372,7 +1372,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                       </div>
 
                       <div className="space-y-1">
-                        <label className="text-[10px] text-gray-400">Ville *</label>
+                        <label className="text-[10px] text-gray-300">Ville *</label>
                         <select
                           value={editForm.city}
                           onChange={(e) => setEditForm({ ...editForm, city: e.target.value })}
@@ -1387,7 +1387,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                       </div>
 
                       <div className="space-y-1">
-                        <label className="text-[10px] text-gray-400">Quartier (si Thiès)</label>
+                        <label className="text-[10px] text-gray-300">Quartier (si Thiès)</label>
                         {editForm.city === 'Thiès' ? (
                           <select
                             value={editForm.quartier}
@@ -1494,11 +1494,12 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="text-[10px] text-gray-400 flex items-center gap-1 mb-1">
+                        <label className="text-[10px] text-gray-300 flex items-center gap-1 mb-1">
                           <Phone className="w-3 h-3 text-emerald-400" /> WhatsApp Organisateur
                         </label>
                         <input
                           type="tel"
+                          inputMode="tel"
                           value={editForm.whatsappContact}
                           onChange={(e) => setEditForm({ ...editForm, whatsappContact: e.target.value })}
                           placeholder="+221 77 XXX XX XX"
@@ -1507,7 +1508,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                       </div>
 
                       <div>
-                        <label className="text-[10px] text-gray-400 flex items-center gap-1 mb-1">
+                        <label className="text-[10px] text-gray-300 flex items-center gap-1 mb-1">
                           <Facebook className="w-3 h-3 text-blue-400" /> Page Facebook
                         </label>
                         <input
@@ -1520,7 +1521,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                       </div>
 
                       <div>
-                        <label className="text-[10px] text-gray-400 flex items-center gap-1 mb-1">
+                        <label className="text-[10px] text-gray-300 flex items-center gap-1 mb-1">
                           <Instagram className="w-3 h-3 text-pink-400" /> Profil Instagram
                         </label>
                         <input
@@ -1533,7 +1534,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                       </div>
 
                       <div>
-                        <label className="text-[10px] text-gray-400 flex items-center gap-1 mb-1">
+                        <label className="text-[10px] text-gray-300 flex items-center gap-1 mb-1">
                           <TikTokIcon className="w-3 h-3 text-cyan-300" /> Compte TikTok
                         </label>
                         <input
@@ -1546,7 +1547,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                       </div>
 
                       <div>
-                        <label className="text-[10px] text-gray-400 flex items-center gap-1 mb-1">
+                        <label className="text-[10px] text-gray-300 flex items-center gap-1 mb-1">
                           <Youtube className="w-3 h-3 text-red-500" /> Vidéo Teaser / YouTube
                         </label>
                         <input
@@ -1559,7 +1560,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                       </div>
 
                       <div>
-                        <label className="text-[10px] text-gray-400 flex items-center gap-1 mb-1">
+                        <label className="text-[10px] text-gray-300 flex items-center gap-1 mb-1">
                           <Globe className="w-3 h-3 text-[#E9C349]" /> Site Web Officiel
                         </label>
                         <input
@@ -1595,7 +1596,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                       </p>
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div>
-                          <label className="text-[10px] text-gray-400 block mb-1">Pass Prévente</label>
+                          <label className="text-[10px] text-gray-300 block mb-1">Pass Prévente</label>
                           <input
                             type="url"
                             placeholder="https://pay.wave.com/..."
@@ -1605,7 +1606,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                           />
                         </div>
                         <div>
-                          <label className="text-[10px] text-gray-400 block mb-1">Pass Jour J</label>
+                          <label className="text-[10px] text-gray-300 block mb-1">Pass Jour J</label>
                           <input
                             type="url"
                             placeholder="https://pay.wave.com/..."
@@ -1615,7 +1616,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                           />
                         </div>
                         <div>
-                          <label className="text-[10px] text-gray-400 block mb-1">Pass VIP Prestige</label>
+                          <label className="text-[10px] text-gray-300 block mb-1">Pass VIP Prestige</label>
                           <input
                             type="url"
                             placeholder="https://pay.wave.com/..."
@@ -1639,7 +1640,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                         <Ticket className="w-4 h-4 text-[#E9C349]" />
                         <span>Grille Tarifaire Dynamique & Billetterie</span>
                       </h3>
-                      <p className="text-xs text-gray-400 mt-1">
+                      <p className="text-xs text-[#E5E2E1] mt-1">
                         Activez, désactivez ou ajoutez des catégories de billets. Seules les formules actives avec places disponibles sont proposées à l'achat.
                       </p>
                     </div>
@@ -1684,13 +1685,13 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                                     className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
                                       isActive
                                         ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                                        : 'bg-gray-800 text-gray-400 border border-gray-700'
+                                        : 'bg-gray-800 text-gray-300 border border-gray-700'
                                     }`}
                                   >
                                     {isActive ? 'Active' : 'Désactivée'}
                                   </span>
                                 </div>
-                                <p className="text-xs text-gray-400 mt-0.5">{tier.description}</p>
+                                <p className="text-xs text-[#E5E2E1] mt-0.5">{tier.description}</p>
                               </div>
                             </div>
 
@@ -1699,7 +1700,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                                 <span className="font-heading font-black text-base text-[#E9C349]">
                                   {tier.price.toLocaleString('fr-FR')} FCFA
                                 </span>
-                                <span className="block text-[11px] text-gray-400 font-mono">
+                                <span className="block text-[11px] text-gray-300 font-mono">
                                   {tier.available} place(s) dispo.
                                 </span>
                               </div>
@@ -1726,7 +1727,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                                   Lien Wave direct configuré
                                 </span>
                               ) : (
-                                <span className="text-[10px] text-gray-500 bg-white/5 px-2 py-0.5 rounded-lg">
+                                <span className="text-[10px] text-gray-300 bg-white/5 px-2 py-0.5 rounded-lg">
                                   Lien Wave événement par défaut
                                 </span>
                               )}
@@ -1768,7 +1769,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                           <Plus className="w-4 h-4 text-[#8A2BE2]" />
                           <span>Ajouter une Nouvelle Catégorie de Billet</span>
                         </h4>
-                        <span className="text-[10px] uppercase font-bold text-gray-400">
+                        <span className="text-[10px] uppercase font-bold text-gray-300">
                           {8 - modalTiers.length} emplacement(s) libre(s)
                         </span>
                       </div>
@@ -1883,7 +1884,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                       </div>
                     </div>
                   ) : (
-                    <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 text-center text-xs text-gray-400">
+                    <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 text-center text-xs text-gray-300">
                       Nombre maximum de formules atteint (8/8). Supprimez ou modifiez une formule existante pour en ajouter une nouvelle.
                     </div>
                   )}
@@ -1896,7 +1897,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                   <div className="flex items-center justify-between p-3.5 rounded-2xl bg-black/40 border border-white/10">
                     <div>
                       <p className="text-xs font-bold text-white">Partage des Recettes Co-Production</p>
-                      <p className="text-[10px] text-gray-400">
+                      <p className="text-[10px] text-gray-300">
                         {modalCoproducers.length} ayant(s)-droit enregistré(s) • Total quotes-parts :{' '}
                         <strong className="text-[#E9C349]">
                           {modalCoproducers.reduce((sum, c) => sum + (c.revenueShare || 0), 0)}%
@@ -1910,14 +1911,14 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
 
                   {/* Liste des Co-Producteurs */}
                   {isLoadingCoproducers ? (
-                    <div className="p-8 text-center text-gray-400 text-xs">
+                    <div className="p-8 text-center text-gray-300 text-xs">
                       Chargement des co-organisateurs...
                     </div>
                   ) : modalCoproducers.length === 0 ? (
                     <div className="p-6 rounded-2xl bg-white/5 border border-white/5 text-center space-y-2">
-                      <Users className="w-8 h-8 text-gray-500 mx-auto" />
+                      <Users className="w-8 h-8 text-gray-300 mx-auto" />
                       <p className="text-xs text-gray-300 font-semibold">Aucun co-organisateur associé</p>
-                      <p className="text-[11px] text-gray-400">
+                      <p className="text-[11px] text-gray-300">
                         Ajoutez des artistes vedettes, managers ou coproducteurs ci-dessous pour leur allouer une quote-part et des invitations.
                       </p>
                     </div>
@@ -1935,7 +1936,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                                 {coprod.roleType}
                               </span>
                             </div>
-                            <p className="text-[10px] text-gray-400 mt-0.5 flex items-center gap-2">
+                            <p className="text-[10px] text-gray-300 mt-0.5 flex items-center gap-2">
                               <span>📱 {coprod.phone}</span>
                               <span>•</span>
                               <strong className="text-[#E9C349]">{coprod.revenueShare}% du CA</strong>
@@ -1947,7 +1948,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                           <button
                             type="button"
                             onClick={() => handleDeleteCoproducer(coprod.id, coprod.name)}
-                            className="w-8 h-8 rounded-xl bg-white/5 hover:bg-rose-500/20 text-gray-400 hover:text-rose-400 flex items-center justify-center transition-all shrink-0 border border-white/5"
+                            className="w-8 h-8 rounded-xl bg-white/5 hover:bg-rose-500/20 text-gray-300 hover:text-rose-400 flex items-center justify-center transition-all shrink-0 border border-white/5"
                             title="Retirer cet ayant-droit"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -1966,7 +1967,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                       <div className="space-y-1 sm:col-span-1">
-                        <label className="text-[10px] text-gray-400">Nom / Structure *</label>
+                        <label className="text-[10px] text-gray-300">Nom / Structure *</label>
                         <input
                           type="text"
                           value={newCoprod.name}
@@ -1977,7 +1978,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                       </div>
 
                       <div className="space-y-1 sm:col-span-1">
-                        <label className="text-[10px] text-gray-400">Rôle</label>
+                        <label className="text-[10px] text-gray-300">Rôle</label>
                         <select
                           value={newCoprod.roleType}
                           onChange={(e) => setNewCoprod({ ...newCoprod, roleType: e.target.value as CoproducerRole })}
@@ -1991,9 +1992,10 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                       </div>
 
                       <div className="space-y-1 sm:col-span-1">
-                        <label className="text-[10px] text-gray-400">Téléphone Wave/OM *</label>
+                        <label className="text-[10px] text-gray-300">Téléphone Wave/OM *</label>
                         <input
                           type="tel"
+                          inputMode="tel"
                           value={newCoprod.phone}
                           onChange={(e) => setNewCoprod({ ...newCoprod, phone: e.target.value })}
                           placeholder="+221 77 XXX XX XX"
@@ -2004,7 +2006,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                       <div className="space-y-1">
-                        <label className="text-[10px] text-gray-400 flex justify-between">
+                        <label className="text-[10px] text-gray-300 flex justify-between">
                           <span>Quote-part de recettes</span>
                           <strong className="text-[#E9C349] font-mono">{newCoprod.revenueShare}%</strong>
                         </label>
@@ -2019,7 +2021,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                       </div>
 
                       <div className="space-y-1">
-                        <label className="text-[10px] text-gray-400 flex justify-between">
+                        <label className="text-[10px] text-gray-300 flex justify-between">
                           <span>Quota Invitations gratuites</span>
                           <strong className="text-white font-mono">{newCoprod.guestQuota} places</strong>
                         </label>
@@ -2143,16 +2145,16 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                   {/* Tableau des prospects */}
                   <div className="space-y-3">
                     {isLoadingPreReg ? (
-                      <div className="p-8 text-center text-gray-400 text-xs">
+                      <div className="p-8 text-center text-gray-300 text-xs">
                         Chargement des pré-inscriptions...
                       </div>
                     ) : modalPreRegistrations.length === 0 ? (
                       <div className="p-8 rounded-2xl bg-[#111111] border border-white/5 text-center space-y-2">
                         <Bell className="w-8 h-8 text-gray-600 mx-auto" />
-                        <p className="text-xs text-gray-400 font-medium">
+                        <p className="text-xs text-[#E5E2E1] font-medium">
                           Aucun prospect pré-inscrit pour le moment.
                         </p>
-                        <p className="text-[11px] text-gray-500 max-w-sm mx-auto">
+                        <p className="text-[11px] text-gray-300 max-w-sm mx-auto">
                           Lorsque vous configurez une date d'ouverture des ventes ultérieure (mode compte à rebours), les clients peuvent laisser leur numéro pour être prévenus en priorité.
                         </p>
                       </div>
@@ -2191,13 +2193,13 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                                     <p className="font-heading font-bold text-white text-sm">{lead.fullName}</p>
                                     <p className="font-mono text-xs text-[#DCB8FF]">{lead.phone}</p>
                                   </div>
-                                  <span className="text-[10px] text-gray-500 font-mono shrink-0">
+                                  <span className="text-[10px] text-gray-300 font-mono shrink-0">
                                     {formattedDate}
                                   </span>
                                 </div>
 
                                 {lead.email && (
-                                  <p className="text-xs text-gray-400 truncate">
+                                  <p className="text-xs text-[#E5E2E1] truncate">
                                     ✉️ {lead.email}
                                   </p>
                                 )}
@@ -2221,7 +2223,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                         <div className="overflow-x-auto rounded-2xl border border-white/10 bg-[#111111] hidden md:block">
                         <table className="w-full text-left border-collapse text-xs">
                           <thead>
-                            <tr className="border-b border-white/10 bg-black/40 text-[10px] uppercase font-bold text-gray-400 tracking-wider">
+                            <tr className="border-b border-white/10 bg-black/40 text-[10px] uppercase font-bold text-gray-300 tracking-wider">
                               <th className="py-3 px-3.5">Nom complet</th>
                               <th className="py-3 px-3.5">Téléphone / WhatsApp</th>
                               <th className="py-3 px-3.5">Email</th>
@@ -2263,10 +2265,10 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                                   <td className="py-3 px-3.5 font-mono text-[#DCB8FF]">
                                     {lead.phone}
                                   </td>
-                                  <td className="py-3 px-3.5 text-gray-400">
+                                  <td className="py-3 px-3.5 text-gray-300">
                                     {lead.email || '—'}
                                   </td>
-                                  <td className="py-3 px-3.5 text-gray-400 font-mono text-[11px]">
+                                  <td className="py-3 px-3.5 text-gray-300 font-mono text-[11px]">
                                     {formattedDate}
                                   </td>
                                   <td className="py-3 px-3.5 text-right">
@@ -2297,7 +2299,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
               {activeModalTab === 'stats' && (
                 <div className="space-y-5 animate-in fade-in duration-150">
                   {isLoadingStats ? (
-                    <div className="p-8 text-center text-gray-400 text-xs">
+                    <div className="p-8 text-center text-gray-300 text-xs">
                       Calcul des statistiques en direct...
                     </div>
                   ) : (
@@ -2305,13 +2307,13 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                       {/* 4 Cartes KPI */}
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                         <div className="p-3.5 rounded-2xl bg-black/40 border border-white/10 space-y-1">
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-gray-300 flex items-center gap-1">
                             <Ticket className="w-3 h-3 text-[#DCB8FF]" /> Billets Vendus
                           </p>
                           <p className="text-xl font-black text-white font-mono">
                             {modalStats.soldTickets}
                           </p>
-                          <p className="text-[9px] text-gray-400">Places validées</p>
+                          <p className="text-[9px] text-gray-300">Places validées</p>
                         </div>
 
                         <div className="p-3.5 rounded-2xl bg-black/40 border border-emerald-500/20 space-y-1">
@@ -2321,7 +2323,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                           <p className="text-lg font-black text-emerald-400 font-mono">
                             {modalStats.grossCA.toLocaleString('fr-FR')} <span className="text-[10px]">F</span>
                           </p>
-                          <p className="text-[9px] text-gray-400">Recettes brutes</p>
+                          <p className="text-[9px] text-gray-300">Recettes brutes</p>
                         </div>
 
                         <div className="p-3.5 rounded-2xl bg-black/40 border border-white/10 space-y-1">
@@ -2331,7 +2333,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                           <p className="text-xl font-black text-cyan-300 font-mono">
                             {modalStats.scannedTickets}
                           </p>
-                          <p className="text-[9px] text-gray-400">Validés au portique</p>
+                          <p className="text-[9px] text-gray-300">Validés au portique</p>
                         </div>
 
                         <div className="p-3.5 rounded-2xl bg-black/40 border border-amber-500/20 space-y-1">
@@ -2341,7 +2343,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                           <p className="text-xl font-black text-amber-300 font-mono">
                             {modalStats.scanRate}%
                           </p>
-                          <p className="text-[9px] text-gray-400">Taux de check-in</p>
+                          <p className="text-[9px] text-gray-300">Taux de check-in</p>
                         </div>
                       </div>
 
@@ -2349,13 +2351,13 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                       <div className="p-4 rounded-2xl bg-black/30 border border-white/10 space-y-3">
                         <div className="flex items-center justify-between">
                           <p className="text-xs font-bold text-white">Dernières Commandes Encaissées</p>
-                          <span className="text-[10px] text-gray-400 font-mono">
+                          <span className="text-[10px] text-gray-300 font-mono">
                             {modalStats.ordersCount} commande(s) totale(s)
                           </span>
                         </div>
 
                         {modalStats.orders.length === 0 ? (
-                          <p className="text-xs text-gray-400 text-center py-4">
+                          <p className="text-xs text-[#E5E2E1] text-center py-4">
                             Aucune commande enregistrée pour le moment.
                           </p>
                         ) : (
@@ -2367,9 +2369,9 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                               >
                                 <div className="min-w-0">
                                   <p className="font-bold text-white truncate">
-                                    {ord.customerName} • <span className="font-mono text-gray-400">{ord.reference}</span>
+                                    {ord.customerName} • <span className="font-mono text-gray-300">{ord.reference}</span>
                                   </p>
-                                  <p className="text-[10px] text-gray-400">
+                                  <p className="text-[10px] text-gray-300">
                                     {ord.tierName} (x{ord.quantity}) • {ord.customerPhone}
                                   </p>
                                 </div>
@@ -2409,14 +2411,14 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                         className={`p-3 rounded-2xl border text-left transition-all ${
                           editForm.status === 'approved'
                             ? 'bg-emerald-500/20 border-emerald-400 text-white shadow-lg shadow-emerald-950/40 ring-1 ring-emerald-400'
-                            : 'bg-black/30 border-white/10 text-gray-400 hover:text-white hover:bg-white/5'
+                            : 'bg-black/30 border-white/10 text-gray-300 hover:text-white hover:bg-white/5'
                         }`}
                       >
                         <div className="flex items-center gap-1.5 font-bold text-xs text-emerald-400">
                           <CheckCircle2 className="w-3.5 h-3.5" />
                           <span>Approuvé</span>
                         </div>
-                        <p className="text-[10px] text-gray-400 mt-1">Visible sur la billetterie publique</p>
+                        <p className="text-[10px] text-gray-300 mt-1">Visible sur la billetterie publique</p>
                       </button>
 
                       <button
@@ -2425,14 +2427,14 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                         className={`p-3 rounded-2xl border text-left transition-all ${
                           editForm.status === 'pending'
                             ? 'bg-amber-500/20 border-amber-400 text-white shadow-lg shadow-amber-950/40 ring-1 ring-amber-400'
-                            : 'bg-black/30 border-white/10 text-gray-400 hover:text-white hover:bg-white/5'
+                            : 'bg-black/30 border-white/10 text-gray-300 hover:text-white hover:bg-white/5'
                         }`}
                       >
                         <div className="flex items-center gap-1.5 font-bold text-xs text-amber-300">
                           <Clock className="w-3.5 h-3.5" />
                           <span>En Attente</span>
                         </div>
-                        <p className="text-[10px] text-gray-400 mt-1">En file de modération</p>
+                        <p className="text-[10px] text-gray-300 mt-1">En file de modération</p>
                       </button>
 
                       <button
@@ -2441,14 +2443,14 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                         className={`p-3 rounded-2xl border text-left transition-all ${
                           editForm.status === 'rejected'
                             ? 'bg-rose-500/20 border-rose-400 text-white shadow-lg shadow-rose-950/40 ring-1 ring-rose-400'
-                            : 'bg-black/30 border-white/10 text-gray-400 hover:text-white hover:bg-white/5'
+                            : 'bg-black/30 border-white/10 text-gray-300 hover:text-white hover:bg-white/5'
                         }`}
                       >
                         <div className="flex items-center gap-1.5 font-bold text-xs text-rose-400">
                           <AlertTriangle className="w-3.5 h-3.5" />
                           <span>Rejeté</span>
                         </div>
-                        <p className="text-[10px] text-gray-400 mt-1">Refusé par l'administrateur</p>
+                        <p className="text-[10px] text-gray-300 mt-1">Refusé par l'administrateur</p>
                       </button>
 
                       <button
@@ -2457,14 +2459,14 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                         className={`p-3 rounded-2xl border text-left transition-all ${
                           editForm.status === 'archived'
                             ? 'bg-purple-500/20 border-purple-400 text-white shadow-lg shadow-purple-950/40 ring-1 ring-purple-400'
-                            : 'bg-black/30 border-white/10 text-gray-400 hover:text-white hover:bg-white/5'
+                            : 'bg-black/30 border-white/10 text-gray-300 hover:text-white hover:bg-white/5'
                         }`}
                       >
                         <div className="flex items-center gap-1.5 font-bold text-xs text-purple-300">
                           <Archive className="w-3.5 h-3.5" />
                           <span>Archivé</span>
                         </div>
-                        <p className="text-[10px] text-gray-400 mt-1">Masqué, conservé en base</p>
+                        <p className="text-[10px] text-gray-300 mt-1">Masqué, conservé en base</p>
                       </button>
                     </div>
                   </div>
@@ -2477,7 +2479,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <p className="text-xs font-semibold text-white">Ventes de Billetterie Ouvertes</p>
-                        <p className="text-[10px] text-gray-400">
+                        <p className="text-[10px] text-gray-300">
                           Active ou suspend immédiatement les achats de billets en ligne sans dépublier la fiche
                         </p>
                       </div>
@@ -2487,7 +2489,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                         className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
                           editForm.salesActive
                             ? 'bg-emerald-600 text-white'
-                            : 'bg-white/10 text-gray-400 hover:text-white'
+                            : 'bg-white/10 text-gray-300 hover:text-white'
                         }`}
                       >
                         {editForm.salesActive ? 'Ventes Actives' : 'Ventes Suspendues'}
@@ -2501,7 +2503,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                           <Star className="w-3.5 h-3.5 text-[#E9C349]" />
                           <span>Mettre en Une (Featured)</span>
                         </p>
-                        <p className="text-[10px] text-gray-400">
+                        <p className="text-[10px] text-gray-300">
                           Affiche cet événement en grand dans le carrousel principal d'accueil
                         </p>
                       </div>
@@ -2511,7 +2513,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                         className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
                           editForm.featured
                             ? 'bg-[#E9C349] text-[#241A00]'
-                            : 'bg-white/10 text-gray-400 hover:text-white'
+                            : 'bg-white/10 text-gray-300 hover:text-white'
                         }`}
                       >
                         {editForm.featured ? '⭐ En Vedette' : 'Standard'}
@@ -2623,7 +2625,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
 
             {/* Diagnostic Commandes & Traçabilité */}
             {isLoadingDeleteInfo ? (
-              <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center justify-center gap-3 text-xs text-gray-400">
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center justify-center gap-3 text-xs text-gray-300">
                 <span className="w-4 h-4 border-2 border-[#8A2BE2] border-t-transparent rounded-full animate-spin" />
                 <span>Vérification de l'intégrité comptable et des commandes en base...</span>
               </div>
@@ -2684,7 +2686,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                       </>
                     )}
                   </button>
-                  <p className="text-[10px] text-gray-400 text-center italic">
+                  <p className="text-[10px] text-gray-300 text-center italic">
                     🔒 La suppression totale SQL est verrouillée pour garantir la réconciliation financière.
                   </p>
                 </>
@@ -2727,7 +2729,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                   setDeletingEvent(null);
                   setDeleteErrorMessage(null);
                 }}
-                className="w-full py-2 text-xs font-semibold text-gray-400 hover:text-white transition-colors cursor-pointer"
+                className="w-full py-2 text-xs font-semibold text-gray-300 hover:text-white transition-colors cursor-pointer"
               >
                 Annuler
               </button>
@@ -2750,7 +2752,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                   <h3 className="font-heading text-lg sm:text-xl font-black text-white">
                     Transférer la Propriété
                   </h3>
-                  <p className="text-xs text-gray-400 mt-0.5">
+                  <p className="text-xs text-[#E5E2E1] mt-0.5">
                     Assignez cet événement à un promoteur partenaire officiel
                   </p>
                 </div>
@@ -2758,7 +2760,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
               <button
                 type="button"
                 onClick={() => setTransferEvent(null)}
-                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-colors shrink-0"
+                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-300 hover:text-white transition-colors shrink-0"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -2775,13 +2777,13 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                 <h4 className="font-heading font-extrabold text-white text-sm truncate">
                   {transferEvent.title}
                 </h4>
-                <div className="text-[11px] text-gray-400 flex items-center gap-2 mt-0.5">
+                <div className="text-[11px] text-gray-300 flex items-center gap-2 mt-0.5">
                   <span>📅 {transferEvent.date}</span>
                   <span>•</span>
                   <span>📍 {transferEvent.city}</span>
                 </div>
                 <div className="text-[11px] text-gray-300 mt-1 flex items-center gap-1.5">
-                  <span className="text-gray-400">Propriétaire actuel :</span>
+                  <span className="text-gray-300">Propriétaire actuel :</span>
                   <strong className="text-[#E9C349] font-semibold truncate">
                     {transferEvent.promoter?.name || 'Non renseigné'}
                   </strong>
@@ -2793,19 +2795,19 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
             <div className="space-y-2">
               <label className="text-xs font-bold uppercase tracking-wider text-gray-300 flex items-center justify-between">
                 <span>Sélectionner le Nouveau Promoteur</span>
-                <span className="text-[11px] font-normal text-gray-400">
+                <span className="text-[11px] font-normal text-gray-300">
                   {promotersList.length} promoteur(s) éligible(s)
                 </span>
               </label>
 
               <div className="relative">
-                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-300" />
                 <input
                   type="text"
                   placeholder="Rechercher par nom, email, téléphone..."
                   value={searchPromoterQuery}
                   onChange={(e) => setSearchPromoterQuery(e.target.value)}
-                  className="w-full bg-[#181720] border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#8A2BE2]"
+                  className="w-full bg-[#181720] border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder:text-gray-300/75 focus:outline-none focus:border-[#8A2BE2]"
                 />
               </div>
             </div>
@@ -2813,12 +2815,12 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
             {/* Liste des comptes promoteurs */}
             <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
               {isLoadingPromoters ? (
-                <div className="py-8 text-center text-xs text-gray-400 flex flex-col items-center gap-2">
+                <div className="py-8 text-center text-xs text-gray-300 flex flex-col items-center gap-2">
                   <span className="w-5 h-5 border-2 border-[#8A2BE2] border-t-transparent rounded-full animate-spin" />
                   <span>Chargement des promoteurs en base...</span>
                 </div>
               ) : promotersList.length === 0 ? (
-                <div className="py-6 text-center text-xs text-gray-400 bg-white/5 rounded-2xl border border-white/5">
+                <div className="py-6 text-center text-xs text-gray-300 bg-white/5 rounded-2xl border border-white/5">
                   Aucun promoteur enregistré dans l'annuaire.
                 </div>
               ) : (
@@ -2868,7 +2870,7 @@ export const EventsManagementView: React.FC<EventsManagementViewProps> = ({
                                 </span>
                               )}
                             </div>
-                            <p className="text-[11px] text-gray-400 truncate mt-0.5">
+                            <p className="text-[11px] text-gray-300 truncate mt-0.5">
                               {promoter.email || promoter.phone || 'Sans contact renseigné'}
                             </p>
                           </div>

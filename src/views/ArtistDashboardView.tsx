@@ -313,7 +313,7 @@ export const ArtistDashboardView: React.FC<ArtistDashboardViewProps> = ({
             </span>
           </div>
 
-          <p className="text-sm text-gray-400 mt-2 max-w-2xl">
+          <p className="text-sm text-[#E5E2E1] mt-2 max-w-2xl">
             Suivez en temps réel et en toute transparence les ventes de billets, les recettes générées par votre nom, le taux de remplissage de la salle et gérez vos invités.
           </p>
         </div>
@@ -337,7 +337,7 @@ export const ArtistDashboardView: React.FC<ArtistDashboardViewProps> = ({
           className={`px-4 py-2 rounded-xl text-xs font-heading font-extrabold tracking-wider uppercase transition-all flex items-center gap-2 ${
             artistTab === 'cockpit'
               ? 'bg-[#E9C349] text-[#241A00] shadow-md shadow-[#E9C349]/20'
-              : 'text-gray-400 hover:text-white'
+              : 'text-gray-300 hover:text-white'
           }`}
         >
           <TrendingUp className="w-4 h-4" />
@@ -349,7 +349,7 @@ export const ArtistDashboardView: React.FC<ArtistDashboardViewProps> = ({
           className={`px-4 py-2 rounded-xl text-xs font-heading font-extrabold tracking-wider uppercase transition-all flex items-center gap-2 ${
             artistTab === 'accreditations'
               ? 'bg-gradient-to-r from-[#8A2BE2] to-indigo-600 text-white shadow-md shadow-[#8A2BE2]/40'
-              : 'text-gray-400 hover:text-white'
+              : 'text-gray-300 hover:text-white'
           }`}
         >
           <ShieldCheck className="w-4 h-4" />
@@ -375,7 +375,7 @@ export const ArtistDashboardView: React.FC<ArtistDashboardViewProps> = ({
               </div>
               <button
                 onClick={() => setDecompteSuccess(null)}
-                className="p-1 rounded-lg text-gray-400 hover:text-white"
+                className="p-1 rounded-lg text-gray-300 hover:text-white"
               >
                 ✕
               </button>
@@ -421,7 +421,7 @@ export const ArtistDashboardView: React.FC<ArtistDashboardViewProps> = ({
 
         {/* Détails légaux de signature si validé */}
         {activeCoproducer?.decompteValidated && activeCoproducer.decompteValidatedAt && (
-          <div className="pt-3 border-t border-white/10 flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-400 font-mono">
+          <div className="pt-3 border-t border-white/10 flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-300 font-mono">
             <span>Preuve numérique : {activeCoproducer.decompteSignature || 'CERTIFIE_CONFORME_THIESDN'}</span>
             <span className="text-emerald-400">
               Horodaté le {new Date(activeCoproducer.decompteValidatedAt).toLocaleString('fr-FR')}
@@ -437,11 +437,11 @@ export const ArtistDashboardView: React.FC<ArtistDashboardViewProps> = ({
           <div className="w-10 h-10 rounded-xl bg-sky-500/20 text-sky-400 flex items-center justify-center">
             <Ticket className="w-5 h-5" />
           </div>
-          <p className="text-xs uppercase tracking-wider text-gray-400 font-bold">Ventes Brutes</p>
+          <p className="text-xs uppercase tracking-wider text-gray-300 font-bold">Ventes Brutes</p>
           <h3 className="font-heading text-2xl font-black text-white">
             {totalSoldTicketsCount} <span className="text-xs text-sky-400 font-bold">places</span>
           </h3>
-          <p className="text-[11px] text-gray-400">Total réservations & boutiques</p>
+          <p className="text-[11px] text-gray-300">Total réservations & boutiques</p>
         </div>
 
         {/* 2. Chiffre d'Affaires Global Encaissé */}
@@ -449,11 +449,11 @@ export const ArtistDashboardView: React.FC<ArtistDashboardViewProps> = ({
           <div className="w-10 h-10 rounded-xl bg-[#8A2BE2]/20 text-[#DCB8FF] flex items-center justify-center">
             <DollarSign className="w-5 h-5" />
           </div>
-          <p className="text-xs uppercase tracking-wider text-gray-400 font-bold">CA Global Encaissé</p>
+          <p className="text-xs uppercase tracking-wider text-gray-300 font-bold">CA Global Encaissé</p>
           <h3 className="font-heading text-2xl font-black text-white">
             {totalGrossCA.toLocaleString('fr-FR')} <span className="text-xs text-[#DCB8FF] font-bold">FCFA</span>
           </h3>
-          <p className="text-[11px] text-gray-400">Recettes brutes plateforme</p>
+          <p className="text-[11px] text-gray-300">Recettes brutes plateforme</p>
         </div>
 
         {/* 3. Part Nette Artiste (Revenue Share) */}
@@ -475,11 +475,11 @@ export const ArtistDashboardView: React.FC<ArtistDashboardViewProps> = ({
           <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
             <QrCode className="w-5 h-5" />
           </div>
-          <p className="text-xs uppercase tracking-wider text-gray-400 font-bold">Scans à la Porte</p>
+          <p className="text-xs uppercase tracking-wider text-gray-300 font-bold">Scans à la Porte</p>
           <h3 className="font-heading text-2xl font-black text-emerald-300">
             {totalScannedCount} <span className="text-xs text-white font-bold">/ {totalSoldTicketsCount}</span>
           </h3>
-          <p className="text-[11px] text-gray-400">
+          <p className="text-[11px] text-gray-300">
             {totalSoldTicketsCount > 0
               ? `${Math.round((totalScannedCount / totalSoldTicketsCount) * 100)}% de présence en salle`
               : 'Contrôle en direct'}
@@ -496,32 +496,32 @@ export const ArtistDashboardView: React.FC<ArtistDashboardViewProps> = ({
               Ventilation des Ventes par Catégorie de Billet
             </h3>
           </div>
-          <span className="text-xs text-gray-400">Lecture Seule Sécurisée</span>
+          <span className="text-xs text-gray-300">Lecture Seule Sécurisée</span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="p-4 rounded-2xl bg-black/40 border border-sky-500/20 space-y-1">
             <p className="text-xs text-sky-400 font-bold uppercase">Pass Prévente</p>
             <p className="font-heading text-xl font-black text-white">
-              {statsByCategory.preventeCount} <span className="text-xs text-gray-400">vendus</span>
+              {statsByCategory.preventeCount} <span className="text-xs text-gray-300">vendus</span>
             </p>
-            <p className="text-[11px] text-gray-400">Tarif early-bird</p>
+            <p className="text-[11px] text-gray-300">Tarif early-bird</p>
           </div>
 
           <div className="p-4 rounded-2xl bg-black/40 border border-[#8A2BE2]/20 space-y-1">
             <p className="text-xs text-[#DCB8FF] font-bold uppercase">Pass Jour J</p>
             <p className="font-heading text-xl font-black text-white">
-              {statsByCategory.jourJCount} <span className="text-xs text-gray-400">vendus</span>
+              {statsByCategory.jourJCount} <span className="text-xs text-gray-300">vendus</span>
             </p>
-            <p className="text-[11px] text-gray-400">Tarif standard</p>
+            <p className="text-[11px] text-gray-300">Tarif standard</p>
           </div>
 
           <div className="p-4 rounded-2xl bg-black/40 border border-[#E9C349]/20 space-y-1">
             <p className="text-xs text-[#E9C349] font-bold uppercase">Pass VIP Prestige</p>
             <p className="font-heading text-xl font-black text-white">
-              {statsByCategory.vipCount} <span className="text-xs text-gray-400">vendus</span>
+              {statsByCategory.vipCount} <span className="text-xs text-gray-300">vendus</span>
             </p>
-            <p className="text-[11px] text-gray-400">Salon VIP & cocktails</p>
+            <p className="text-[11px] text-gray-300">Salon VIP & cocktails</p>
           </div>
         </div>
       </div>
@@ -536,7 +536,7 @@ export const ArtistDashboardView: React.FC<ArtistDashboardViewProps> = ({
                 Guest List Artiste & Invitations Officielles
               </h3>
             </div>
-            <p className="text-xs text-gray-400 mt-0.5">
+            <p className="text-xs text-[#E5E2E1] mt-0.5">
               Émettez vos laissez-passer gratuits dans la limite de votre quota et suivez leurs entrées en direct.
             </p>
           </div>
@@ -569,7 +569,7 @@ export const ArtistDashboardView: React.FC<ArtistDashboardViewProps> = ({
               )}
               <button
                 onClick={() => setGuestSuccessMsg(null)}
-                className="p-1 rounded-lg text-gray-400 hover:text-white"
+                className="p-1 rounded-lg text-gray-300 hover:text-white"
               >
                 ✕
               </button>
@@ -606,6 +606,7 @@ export const ArtistDashboardView: React.FC<ArtistDashboardViewProps> = ({
                 </label>
                 <input
                   type="tel"
+                  inputMode="tel"
                   required
                   value={newGuestPhone}
                   onChange={(e) => setNewGuestPhone(e.target.value)}
@@ -637,12 +638,12 @@ export const ArtistDashboardView: React.FC<ArtistDashboardViewProps> = ({
 
         {/* Liste des Invités Déjà Enregistrés */}
         <div className="space-y-3">
-          <label className="text-xs font-bold uppercase tracking-wider text-gray-400">
+          <label className="text-xs font-bold uppercase tracking-wider text-gray-300">
             Suivi des Invitations ({myGuestTickets.length})
           </label>
 
           {myGuestTickets.length === 0 ? (
-            <p className="text-xs text-gray-500 italic py-2">
+            <p className="text-xs text-[#E5E2E1] italic py-2">
               Aucun invité enregistré pour le moment.
             </p>
           ) : (
@@ -654,7 +655,7 @@ export const ArtistDashboardView: React.FC<ArtistDashboardViewProps> = ({
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <p className="font-heading font-bold text-white text-sm">{gst.guestName}</p>
-                        <p className="font-mono text-xs text-gray-400">{gst.guestPhone}</p>
+                        <p className="font-mono text-xs text-[#E5E2E1]">{gst.guestPhone}</p>
                       </div>
                       <span
                         className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase shrink-0 ${
@@ -668,7 +669,7 @@ export const ArtistDashboardView: React.FC<ArtistDashboardViewProps> = ({
                     </div>
 
                     <div className="flex items-center justify-between text-xs bg-black/30 p-2.5 rounded-xl border border-white/5">
-                      <span className="text-gray-400">Pass QR :</span>
+                      <span className="text-gray-300">Pass QR :</span>
                       <span className="font-mono font-bold text-xs text-[#DCB8FF]">{gst.qrCode}</span>
                     </div>
 
@@ -692,7 +693,7 @@ export const ArtistDashboardView: React.FC<ArtistDashboardViewProps> = ({
               <div className="overflow-x-auto hidden md:block">
               <table className="w-full text-left text-xs">
                 <thead>
-                  <tr className="border-b border-white/10 text-gray-400 uppercase font-heading tracking-wider">
+                  <tr className="border-b border-white/10 text-gray-300 uppercase font-heading tracking-wider">
                     <th className="pb-3 px-3">Nom de l'Invité</th>
                     <th className="pb-3 px-3">Contact Téléphone</th>
                     <th className="pb-3 px-3">Code Pass QR</th>
@@ -762,7 +763,7 @@ export const ArtistDashboardView: React.FC<ArtistDashboardViewProps> = ({
               </div>
               <button
                 onClick={() => setShowDecompteModal(false)}
-                className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white"
+                className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white"
               >
                 ✕
               </button>
@@ -776,15 +777,15 @@ export const ArtistDashboardView: React.FC<ArtistDashboardViewProps> = ({
               {/* Récapitulatif Inviolable */}
               <div className="p-4 rounded-2xl bg-black/50 border border-white/10 space-y-2">
                 <div className="flex justify-between items-center">
-                  <span className="text-gray-400">Total Billets Vendus :</span>
+                  <span className="text-gray-300">Total Billets Vendus :</span>
                   <strong className="text-white font-mono text-sm">{totalSoldTicketsCount} places</strong>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-gray-400">Total Scans Validés à l'Entrée :</span>
+                  <span className="text-gray-300">Total Scans Validés à l'Entrée :</span>
                   <strong className="text-emerald-400 font-mono text-sm">{totalScannedCount} spectateurs</strong>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-gray-400">Chiffre d'Affaires Brut Collecté :</span>
+                  <span className="text-gray-300">Chiffre d'Affaires Brut Collecté :</span>
                   <strong className="text-white font-mono text-sm">{totalGrossCA.toLocaleString('fr-FR')} FCFA</strong>
                 </div>
                 <div className="flex justify-between items-center pt-2 border-t border-white/10">

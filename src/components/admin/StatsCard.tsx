@@ -58,7 +58,7 @@ export const StatsCard: React.FC<StatsCardProps> = ({
       } ${getGlowClasses()} ${alert ? 'border-rose-500/60 bg-[#241315]' : 'border-white/10'}`}
     >
       <div className="flex items-center justify-between mb-3">
-        <span className="text-xs font-bold uppercase tracking-wider text-gray-400">
+        <span className="text-xs font-bold uppercase tracking-wider text-gray-300">
           {title}
         </span>
         <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-transform duration-300 group-hover:scale-110 ${getIconContainerStyle()}`}>
@@ -71,7 +71,7 @@ export const StatsCard: React.FC<StatsCardProps> = ({
           {value}
         </div>
         {subtitle && (
-          <p className="text-xs text-gray-400 flex items-center gap-1.5 font-medium">
+          <p className="text-xs text-[#E5E2E1] flex items-center gap-1.5 font-medium">
             {badge && (
               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${badgeColor || 'bg-white/10 text-white'}`}>
                 {badge}

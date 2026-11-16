@@ -203,7 +203,7 @@ export const PosAuthView: React.FC<PosAuthViewProps> = ({
               Email Vendeur / Collaborateur
             </label>
             <div className="relative">
-              <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
               <input
                 type="email"
                 required
@@ -216,7 +216,7 @@ export const PosAuthView: React.FC<PosAuthViewProps> = ({
                   }
                 }}
                 placeholder="vendeur@thiesdn.site"
-                className="w-full bg-black/60 border border-white/15 rounded-2xl pl-10 pr-4 py-3 text-sm text-white placeholder-gray-500 focus:border-[#E9C349] focus:ring-1 focus:ring-[#E9C349] outline-none transition-all font-mono"
+                className="w-full bg-black/60 border border-white/15 rounded-2xl pl-10 pr-4 py-3 text-sm text-white placeholder:text-gray-300/75 focus:border-[#E9C349] focus:ring-1 focus:ring-[#E9C349] outline-none transition-all font-mono"
               />
             </div>
           </div>
@@ -226,19 +226,19 @@ export const PosAuthView: React.FC<PosAuthViewProps> = ({
               Mot de passe
             </label>
             <div className="relative">
-              <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
               <input
                 type={showPassword ? 'text' : 'password'}
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full bg-black/60 border border-white/15 rounded-2xl pl-10 pr-11 py-3 text-sm text-white placeholder-gray-500 focus:border-[#E9C349] focus:ring-1 focus:ring-[#E9C349] outline-none transition-all font-mono"
+                className="w-full bg-black/60 border border-white/15 rounded-2xl pl-10 pr-11 py-3 text-sm text-white placeholder:text-gray-300/75 focus:border-[#E9C349] focus:ring-1 focus:ring-[#E9C349] outline-none transition-all font-mono"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-300 hover:text-white transition-colors"
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>

@@ -37,9 +37,12 @@ import {
   AlertTriangle,
   Lock,
   Upload,
+  Loader2,
 } from 'lucide-react';
 import { SalesAgent, UserTicket, EventItem, UserProfile } from '../types';
 import { usePushNotifications } from '../hooks/usePushNotifications';
+import { useToast } from '../contexts/ToastContext';
+import { useVisualViewport } from '../hooks/useVisualViewport';
 import {
   startOptimizedScanner,
   preloadScannerEngine,
@@ -136,7 +139,9 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
   onNavigateBack,
   onSignOut,
 }) => {
+  const { showToast } = useToast();
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [isSubmittingSettlement, setIsSubmittingSettlement] = useState(false);
   const {
     isSupported: isPushSupported,
     isSubscribed: isPushSubscribed,
@@ -185,6 +190,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
 
   // Modale de déclaration de vente avec deux méthodes : Scan unitaire vs Déclaration manuelle
   const [showSaleModal, setShowSaleModal] = useState(false);
+  const saleModalViewport = useVisualViewport(showSaleModal);
   const [saleMode, setSaleMode] = useState<'scan' | 'manual'>('scan');
   const [manualTicketCode, setManualTicketCode] = useState('');
   const [selectedManualTicketCode, setSelectedManualTicketCode] = useState('');
@@ -878,6 +884,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
       setPendingOfflineCount(offlineRes.queuedCount);
       setSaleSuccessIsOffline(true);
       playPosFeedbackTone('success');
+      showToast('Vente validée', 'success');
       setSaleSuccessMessage(offlineRes.message);
       setPendingTicketForConfirm(null);
       setBuyerName('');
@@ -942,6 +949,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
     setIsSubmittingSale(false);
     setSaleSuccessIsOffline(false);
     playPosFeedbackTone('success');
+    showToast('Vente validée', 'success');
     setSaleSuccessMessage(res.message);
     setPendingTicketForConfirm(null);
     setBuyerName('');
@@ -1011,6 +1019,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
       }
 
       playPosFeedbackTone('success');
+      showToast('Clôture enregistrée', 'success');
       setShiftCloseError(null);
       setShiftCloseSuccess({
         countedAmount: res.record.countedAmount,
@@ -1025,16 +1034,24 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
 
   const handleDeclareSettlement = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeAgent || settlementAmount <= 0) return;
+    if (!activeAgent || settlementAmount <= 0 || isSubmittingSettlement) return;
 
-    const res = await recordAgentSettlement(activeAgent.id, settlementAmount);
-    if (res.success) {
-      setSettlementSuccessMessage(res.message);
-      handleRefresh();
-      setTimeout(() => {
-        setShowSettlementModal(false);
-        setSettlementSuccessMessage(null);
-      }, 1800);
+    setIsSubmittingSettlement(true);
+    try {
+      const res = await recordAgentSettlement(activeAgent.id, settlementAmount);
+      if (res.success) {
+        setSettlementSuccessMessage(res.message);
+        showToast('Reversement enregistré', 'success');
+        handleRefresh();
+        setTimeout(() => {
+          setShowSettlementModal(false);
+          setSettlementSuccessMessage(null);
+        }, 1800);
+      } else {
+        showToast(res.message || 'Erreur lors du reversement.', 'error');
+      }
+    } finally {
+      setIsSubmittingSettlement(false);
     }
   };
 
@@ -1073,7 +1090,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
           <h2 className="font-heading text-lg font-bold text-white">
             Chargement de votre caisse POS...
           </h2>
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-[#E5E2E1]">
             Synchronisation de vos stocks physiques et ventes depuis Supabase.
           </p>
         </div>
@@ -1081,12 +1098,27 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
     }
 
     return (
-      <div className="max-w-2xl mx-auto p-8 text-center space-y-5 glass-panel rounded-3xl animate-in fade-in">
+      <div className="max-w-2xl mx-auto p-8 text-center space-y-5 glass-panel rounded-3xl animate-in fade-in relative">
+        {(onNavigateBack || onSignOut) && (
+          <button
+            type="button"
+            onClick={() => {
+              if (onNavigateBack) onNavigateBack();
+              else void handlePosLogout();
+            }}
+            disabled={isSigningOut}
+            aria-label="Quitter le mode guichet"
+            title="Quitter le mode guichet"
+            className="absolute top-4 left-4 w-10 h-10 min-w-[40px] min-h-[40px] flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 text-gray-300 hover:text-white transition-all cursor-pointer disabled:opacity-50"
+          >
+            {onNavigateBack ? <ArrowLeft className="w-4 h-4" /> : <LogOut className="w-4 h-4" />}
+          </button>
+        )}
         <Store className="w-12 h-12 text-[#E9C349] mx-auto" />
         <h2 className="font-heading text-lg font-bold text-white">
           Aucun point de vente affilié trouvé
         </h2>
-        <p className="text-xs text-gray-400">
+        <p className="text-xs text-[#E5E2E1]">
           Votre compte n'est pas encore associé à un réseau de vente physique. Contactez votre promoteur Thièsdn pour recevoir votre lot de billets.
         </p>
         {onSignOut && (
@@ -1109,23 +1141,41 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
   }
 
   return (
-    <div className="w-full max-w-4xl mx-auto space-y-6 pb-24 animate-in fade-in duration-300">
+    <div className="w-full max-w-4xl mx-auto space-y-6 pb-[calc(80px+env(safe-area-inset-bottom))] animate-in fade-in duration-300">
       {/* Header Collaborateur Mobile-First */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 glass-panel p-5 sm:p-6 rounded-3xl border border-[#E9C349]/30 relative overflow-hidden bg-gradient-to-br from-[#1C1A14] to-[#121212]">
         <div className="absolute top-0 right-0 w-48 h-48 bg-[#E9C349]/10 rounded-full blur-3xl pointer-events-none" />
 
         <div className="space-y-1.5 relative z-10">
           <div className="flex flex-wrap items-center gap-2">
-            {onNavigateBack && (
+            {onNavigateBack ? (
               <button
                 type="button"
                 onClick={onNavigateBack}
-                className="p-1 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-all mr-1"
-                title="Retour"
+                className="w-10 h-10 min-w-[40px] min-h-[40px] flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 text-gray-300 hover:text-white transition-all mr-1 cursor-pointer"
+                title="Quitter le mode guichet"
+                aria-label="Quitter le mode guichet"
               >
                 <ArrowLeft className="w-4 h-4" />
               </button>
-            )}
+            ) : onSignOut ? (
+              <button
+                type="button"
+                onClick={() => {
+                  void handlePosLogout();
+                }}
+                disabled={isSigningOut}
+                className="w-10 h-10 min-w-[40px] min-h-[40px] flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 text-gray-300 hover:text-white transition-all mr-1 cursor-pointer disabled:opacity-50"
+                title="Quitter le mode guichet"
+                aria-label="Quitter le mode guichet"
+              >
+                {isSigningOut ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <LogOut className="w-4 h-4" />
+                )}
+              </button>
+            ) : null}
             <span className="p-1.5 rounded-lg bg-[#E9C349]/20 text-[#E9C349] border border-[#E9C349]/30">
               <Store className="w-4 h-4" />
             </span>
@@ -1192,7 +1242,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
               {activeAgent.gerantName}
             </span>
             <span>•</span>
-            <span className="flex items-center gap-1 font-mono text-gray-400">
+            <span className="flex items-center gap-1 font-mono text-gray-300">
               <Phone className="w-3.5 h-3.5 text-[#1DC3F4]" />
               {activeAgent.telephone}
             </span>
@@ -1323,7 +1373,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
       <div className="glass-panel p-5 rounded-3xl border border-white/10 space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
           <div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-300 block">
               Événement en cours de vente
             </span>
             <h3 className="font-heading font-extrabold text-base sm:text-lg text-white">
@@ -1357,11 +1407,11 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* 1. Billets Reçus */}
         <div className="glass-panel p-4 rounded-2xl border border-white/10 space-y-1">
-          <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Billets Reçus</p>
+          <p className="text-[10px] uppercase font-bold text-gray-300 tracking-wider">Billets Reçus</p>
           <h4 className="font-heading text-xl sm:text-2xl font-black text-white">
-            {allocatedCountDisplay} <span className="text-xs text-gray-400 font-bold">billets</span>
+            {allocatedCountDisplay} <span className="text-xs text-gray-300 font-bold">billets</span>
           </h4>
-          <p className="text-[10px] text-gray-400">Dépôt total confié</p>
+          <p className="text-[10px] text-gray-300">Dépôt total confié</p>
         </div>
 
         {/* 2. Billets Vendus */}
@@ -1383,7 +1433,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
           <h4 className="font-heading text-xl sm:text-2xl font-black text-[#DCB8FF]">
             {remainingTickets} <span className="text-xs text-white font-bold">en caisse</span>
           </h4>
-          <p className="text-[10px] text-gray-400">Prêts à être vendus</p>
+          <p className="text-[10px] text-gray-300">Prêts à être vendus</p>
         </div>
 
         {/* 4. Montant à Reverser au Promoteur */}
@@ -1439,7 +1489,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
             setShowSaleModal(true);
           }}
           disabled={remainingTickets <= 0}
-          className="py-4 px-4 rounded-2xl bg-[#1C1B1B] hover:bg-[#252525] border border-[#E9C349]/40 text-[#E9C349] font-heading font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-md active:scale-98 disabled:opacity-50"
+          className="py-4 px-4 rounded-2xl bg-transparent hover:bg-white/5 border border-white/20 text-white font-heading font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all active:scale-98 disabled:opacity-50 cursor-pointer"
         >
           <Ticket className="w-4 h-4" />
           <span>Déclaration Manuelle</span>
@@ -1451,7 +1501,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
             setSettlementAmount(netDueToPromoter);
             setShowSettlementModal(true);
           }}
-          className="btn-primary-glow py-4 px-4 rounded-2xl font-heading font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-lg active:scale-98"
+          className="py-4 px-4 rounded-2xl bg-transparent hover:bg-white/5 border border-white/20 text-white font-heading font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all active:scale-98 cursor-pointer"
         >
           <DollarSign className="w-4 h-4" />
           <span>Déclarer Reversement</span>
@@ -1474,17 +1524,30 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
 
       {/* MODALE 1 : ACTIVATION PAR VENTE (SCAN UNITAIRE OU DÉCLARATION MANUELLE) */}
       {showSaleModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in">
-          <div className="bg-[#1C1B1B] border border-[#E9C349]/40 w-full max-w-md rounded-3xl p-6 space-y-5 shadow-2xl relative max-h-[90vh] overflow-y-auto">
-            {/* Header Modale */}
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+        <div
+          style={{
+            paddingBottom:
+              saleModalViewport.keyboardOffset > 0
+                ? `${saleModalViewport.keyboardOffset + 8}px`
+                : undefined,
+          }}
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in"
+        >
+          <div
+            style={{
+              maxHeight: `${Math.max(320, saleModalViewport.height - 16)}px`,
+            }}
+            className="bg-[#1C1B1B] border border-[#E9C349]/40 w-full max-w-md rounded-3xl shadow-2xl relative flex flex-col overflow-hidden"
+          >
+            {/* Header Modale (Fixe en haut) */}
+            <div className="shrink-0 flex items-center justify-between border-b border-white/10 px-5 sm:px-6 pt-5 pb-3 bg-[#1C1B1B]">
               <div className="flex items-center gap-2">
                 <ShieldCheck className="w-5 h-5 text-[#E9C349]" />
                 <div>
                   <h3 className="font-heading font-extrabold text-base text-white">
                     Activation par Vente
                   </h3>
-                  <span className="text-[10px] text-gray-400">
+                  <span className="text-[10px] text-gray-300">
                     Passe le statut du billet de printed_not_sold à sold_valid
                   </span>
                 </div>
@@ -1499,11 +1562,14 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                   setBuyerName('');
                   setBuyerPhone('');
                 }}
-                className="text-gray-400 hover:text-white text-xs font-bold p-1 rounded-lg bg-white/5"
+                className="text-gray-300 hover:text-white text-xs font-bold p-1.5 rounded-lg bg-white/5 cursor-pointer"
               >
                 ✕
               </button>
             </div>
+
+            {/* Corps scrollable de la Modale */}
+            <div className="flex-1 overflow-y-auto overscroll-contain px-5 sm:px-6 py-4 space-y-5">
 
             {/* Sélecteur des 2 Méthodes demandées */}
             <div className="grid grid-cols-2 gap-1.5 p-1 bg-black/40 rounded-xl border border-white/10">
@@ -1518,7 +1584,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                 className={`py-2 rounded-lg text-xs font-heading font-bold uppercase transition-all flex items-center justify-center gap-1.5 ${
                   saleMode === 'scan'
                     ? 'bg-[#E9C349] text-[#241A00] shadow'
-                    : 'text-gray-400 hover:text-white'
+                    : 'text-gray-300 hover:text-white'
                 }`}
               >
                 <Scan className="w-3.5 h-3.5" />
@@ -1536,7 +1602,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                 className={`py-2 rounded-lg text-xs font-heading font-bold uppercase transition-all flex items-center justify-center gap-1.5 ${
                   saleMode === 'manual'
                     ? 'bg-[#8A2BE2] text-white shadow'
-                    : 'text-gray-400 hover:text-white'
+                    : 'text-gray-300 hover:text-white'
                 }`}
               >
                 <Ticket className="w-3.5 h-3.5" />
@@ -1621,7 +1687,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                               <p className="text-xs font-bold uppercase tracking-wider">
                                 Ouverture de la caméra arrière...
                               </p>
-                              <p className="text-[11px] text-gray-400 max-w-xs">
+                              <p className="text-[11px] text-gray-300 max-w-xs">
                                 Acceptez la demande d&apos;autorisation caméra si votre navigateur l&apos;affiche.
                               </p>
                             </div>
@@ -1653,7 +1719,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                               >
                                 Démarrer la caméra
                               </button>
-                              <p className="text-[11px] text-gray-400">
+                              <p className="text-[11px] text-gray-300">
                                 Démarre directement la caméra arrière (iOS / Android)
                               </p>
                             </>
@@ -1663,7 +1729,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                     </div>
 
                     {isCameraScanning && scannerMetrics && (
-                      <div className="px-3 py-1 bg-black/80 border-t border-white/10 flex items-center justify-between text-[10px] text-gray-400 font-mono">
+                      <div className="px-3 py-1 bg-black/80 border-t border-white/10 flex items-center justify-between text-[10px] text-gray-300 font-mono">
                         <span>{scannerMetrics.engineLabel}</span>
                         <span>
                           {scannerMetrics.fps} FPS (1/{scannerMetrics.fpsDecimation}) • Prêt en {scannerMetrics.cameraStartMs} ms
@@ -1682,7 +1748,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                         }}
                         className="hidden"
                       />
-                      <span className="text-[11px] text-gray-400">
+                      <span className="text-[11px] text-gray-300">
                         Caméra bloquée ou hors service ?
                       </span>
                       <button
@@ -1709,7 +1775,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
 
                 {/* Saisie manuelle de secours (codes abîmés / sans caméra) */}
                 <div className="space-y-1.5">
-                  <label className="text-[10px] uppercase font-bold text-gray-400 tracking-wider flex items-center justify-between">
+                  <label className="text-[10px] uppercase font-bold text-gray-300 tracking-wider flex items-center justify-between">
                     <span>Saisie manuelle (si QR abîmé)</span>
                     <span className="text-[#E9C349] font-mono">BPT-PHY-...</span>
                   </label>
@@ -1759,29 +1825,29 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
 
                     <div className="p-2.5 rounded-xl bg-black/40 border border-white/5 space-y-1 text-xs">
                       <div className="flex justify-between">
-                        <span className="text-gray-400">Événement :</span>
+                        <span className="text-gray-300">Événement :</span>
                         <span className="font-bold text-white truncate max-w-full min-w-0">
                           {pendingTicketForConfirm.eventTitle}
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-400">Catégorie :</span>
+                        <span className="text-gray-300">Catégorie :</span>
                         <span className="font-bold text-[#E9C349]">
                           {pendingTicketForConfirm.tierName}
                         </span>
                       </div>
                       <div className="flex justify-between font-mono text-[11px]">
-                        <span className="text-gray-400">Code QR :</span>
+                        <span className="text-gray-300">Code QR :</span>
                         <span className="text-white">{pendingTicketForConfirm.qrCode}</span>
                       </div>
                       <div className="flex justify-between text-[11px] pt-1 border-t border-white/5">
-                        <span className="text-gray-400">Nouveau statut :</span>
+                        <span className="text-gray-300">Nouveau statut :</span>
                         <span className="text-emerald-400 font-extrabold uppercase">
                           sold_valid (Actif pour entrée)
                         </span>
                       </div>
                       <div className="flex justify-between text-[11px] pt-1 border-t border-white/5">
-                        <span className="text-gray-400">Mode d&apos;activation :</span>
+                        <span className="text-gray-300">Mode d&apos;activation :</span>
                         <span
                           className={`font-bold ${
                             pendingSaleIsManual ? 'text-amber-300' : 'text-emerald-300'
@@ -1802,8 +1868,9 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                         autoComplete="name"
                         value={buyerName}
                         onChange={(e) => setBuyerName(e.target.value)}
+                        onFocus={(e) => e.currentTarget.scrollIntoView({ block: 'nearest', behavior: 'smooth' })}
                         placeholder="Nom complet du client *"
-                        className="w-full px-3 py-2.5 rounded-xl bg-black/60 border border-white/15 focus:border-[#E9C349] outline-none text-sm text-white placeholder:text-gray-500"
+                        className="w-full px-3 py-2.5 rounded-xl bg-black/60 border border-white/15 focus:border-[#E9C349] outline-none text-base sm:text-sm text-white placeholder:text-gray-300/70"
                       />
                       <input
                         type="tel"
@@ -1811,36 +1878,10 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                         autoComplete="tel"
                         value={buyerPhone}
                         onChange={(e) => setBuyerPhone(e.target.value.replace(/[^0-9+\s]/g, ''))}
+                        onFocus={(e) => e.currentTarget.scrollIntoView({ block: 'nearest', behavior: 'smooth' })}
                         placeholder="Téléphone * (ex : 77 555 12 34)"
-                        className="w-full px-3 py-2.5 rounded-xl bg-black/60 border border-white/15 focus:border-[#E9C349] outline-none text-sm text-white font-mono placeholder:text-gray-500"
+                        className="w-full px-3 py-2.5 rounded-xl bg-black/60 border border-white/15 focus:border-[#E9C349] outline-none text-base sm:text-sm text-white font-mono placeholder:text-gray-300/70"
                       />
-                    </div>
-
-                    <div className="flex gap-2 pt-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setPendingTicketForConfirm(null);
-                          setManualTicketCode('');
-                          setBuyerName('');
-                          setBuyerPhone('');
-                        }}
-                        className="w-1/3 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-gray-300 text-xs font-bold"
-                      >
-                        Annuler
-                      </button>
-
-                      <button
-                        type="button"
-                        disabled={isSubmittingSale}
-                        onClick={handleConfirmSingleSale}
-                        className="flex-1 btn-gold-glow py-2.5 rounded-xl font-heading font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-lg"
-                      >
-                        <Check className="w-4 h-4 text-[#241A00]" />
-                        <span>
-                          {isSubmittingSale ? 'Activation...' : 'Oui, Confirmer la Vente'}
-                        </span>
-                      </button>
                     </div>
                   </div>
                 )}
@@ -1848,7 +1889,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                 {/* Billets inactifs prêts à être vendus en raccourcis */}
                 {!pendingTicketForConfirm && unsoldAgentTickets.length > 0 && (
                   <div className="space-y-1.5 pt-1">
-                    <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">
+                    <p className="text-[10px] uppercase font-bold text-gray-300 tracking-wider">
                       Billets en stock prêts pour la vente rapide :
                     </p>
                     <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto pr-1">
@@ -1864,7 +1905,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                         >
                           <QrCode className="w-3 h-3 text-[#E9C349]" />
                           <span>{t.qrCode.split('-').slice(-2).join('-')}</span>
-                          <span className="text-[10px] text-gray-500">
+                          <span className="text-[10px] text-gray-300">
                             ({t.price.toLocaleString('fr-FR')} F)
                           </span>
                         </button>
@@ -1883,7 +1924,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                 </p>
 
                 {unsoldAgentTickets.length === 0 ? (
-                  <div className="p-4 rounded-2xl bg-black/40 border border-white/10 text-center text-xs text-gray-400">
+                  <div className="p-4 rounded-2xl bg-black/40 border border-white/10 text-center text-xs text-gray-300">
                     Aucun billet disponible en stock pour ce guichet.
                   </div>
                 ) : (
@@ -1891,18 +1932,18 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                     {/* Recherche rapide dans le stock */}
                     <div className="space-y-2">
                       <div className="relative">
-                        <Search className="w-3.5 h-3.5 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <Search className="w-3.5 h-3.5 text-gray-300 absolute left-3 top-1/2 -translate-y-1/2" />
                         <input
                           type="text"
                           value={manualFilterQuery}
                           onChange={(e) => setManualFilterQuery(e.target.value)}
                           placeholder="Filtrer par code QR, #série ou catégorie..."
-                          className="w-full pl-9 pr-3 py-2 rounded-xl bg-black/40 border border-white/10 focus:border-[#8A2BE2] outline-none text-xs text-white placeholder:text-gray-500"
+                          className="w-full pl-9 pr-3 py-2 rounded-xl bg-black/40 border border-white/10 focus:border-[#8A2BE2] outline-none text-xs text-white placeholder:text-gray-300/75"
                         />
                       </div>
 
                       <div className="space-y-1">
-                        <label className="text-[10px] uppercase font-bold text-gray-400 tracking-wider block">
+                        <label className="text-[10px] uppercase font-bold text-gray-300 tracking-wider block">
                           Billet à activer ({filteredManualUnsoldTickets.length} disponible(s)) *
                         </label>
                         <select
@@ -1932,7 +1973,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                           <p className="font-mono font-bold text-white truncate">
                             {selectedManualTicket.qrCode}
                           </p>
-                          <p className="text-[11px] text-gray-400">
+                          <p className="text-[11px] text-gray-300">
                             {selectedManualTicket.tierName} • Statut : printed_not_sold → sold_valid
                           </p>
                         </div>
@@ -1949,8 +1990,9 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                         autoComplete="name"
                         value={buyerName}
                         onChange={(e) => setBuyerName(e.target.value)}
+                        onFocus={(e) => e.currentTarget.scrollIntoView({ block: 'nearest', behavior: 'smooth' })}
                         placeholder="Nom complet du client *"
-                        className="w-full px-3 py-2.5 rounded-xl bg-black/60 border border-white/15 focus:border-[#E9C349] outline-none text-sm text-white placeholder:text-gray-500"
+                        className="w-full px-3 py-2.5 rounded-xl bg-black/60 border border-white/15 focus:border-[#E9C349] outline-none text-base sm:text-sm text-white placeholder:text-gray-300/70"
                       />
                       <input
                         type="tel"
@@ -1958,31 +2000,11 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                         autoComplete="tel"
                         value={buyerPhone}
                         onChange={(e) => setBuyerPhone(e.target.value.replace(/[^0-9+\s]/g, ''))}
+                        onFocus={(e) => e.currentTarget.scrollIntoView({ block: 'nearest', behavior: 'smooth' })}
                         placeholder="Téléphone * (ex : 77 555 12 34)"
-                        className="w-full px-3 py-2.5 rounded-xl bg-black/60 border border-white/15 focus:border-[#E9C349] outline-none text-sm text-white font-mono placeholder:text-gray-500"
+                        className="w-full px-3 py-2.5 rounded-xl bg-black/60 border border-white/15 focus:border-[#E9C349] outline-none text-base sm:text-sm text-white font-mono placeholder:text-gray-300/70"
                       />
                     </div>
-
-                    <button
-                      type="button"
-                      disabled={
-                        isSubmittingSale ||
-                        !selectedManualTicket ||
-                        !buyerName.trim() ||
-                        !buyerPhone.trim()
-                      }
-                      onClick={() => {
-                        void handleConfirmManualSingleSale();
-                      }}
-                      className="w-full btn-gold-glow py-3.5 rounded-xl font-heading font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      <CheckCheck className="w-4 h-4 text-[#241A00]" />
-                      <span>
-                        {isSubmittingSale
-                          ? 'Activation en cours...'
-                          : 'Activer ce Billet Nominatif'}
-                      </span>
-                    </button>
                   </>
                 )}
               </div>
@@ -2010,6 +2032,71 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                 <span>{saleErrorMessage}</span>
               </div>
             )}
+            </div>
+
+            {/* Footer Sticky au-dessus du clavier iOS pour le bouton Confirmer */}
+            {((saleMode === 'scan' && pendingTicketForConfirm) ||
+              (saleMode === 'manual' && unsoldAgentTickets.length > 0)) && (
+              <div className="shrink-0 sticky bottom-0 z-20 bg-[#1C1B1B]/95 backdrop-blur-md border-t border-white/10 px-5 sm:px-6 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+                {saleMode === 'scan' && pendingTicketForConfirm ? (
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPendingTicketForConfirm(null);
+                        setManualTicketCode('');
+                        setBuyerName('');
+                        setBuyerPhone('');
+                      }}
+                      className="w-1/3 py-3 rounded-xl bg-white/10 hover:bg-white/15 text-[#E5E2E1] text-xs font-bold cursor-pointer"
+                    >
+                      Annuler
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={isSubmittingSale}
+                      onClick={handleConfirmSingleSale}
+                      className="flex-1 btn-gold-glow py-3 rounded-xl font-heading font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg disabled:opacity-50 cursor-pointer"
+                    >
+                      {isSubmittingSale ? (
+                        <Loader2 className="w-4 h-4 animate-spin text-[#241A00]" />
+                      ) : (
+                        <Check className="w-4 h-4 text-[#241A00]" />
+                      )}
+                      <span>
+                        {isSubmittingSale ? 'Activation...' : 'Oui, Confirmer la Vente'}
+                      </span>
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={
+                      isSubmittingSale ||
+                      !selectedManualTicket ||
+                      !buyerName.trim() ||
+                      !buyerPhone.trim()
+                    }
+                    onClick={() => {
+                      void handleConfirmManualSingleSale();
+                    }}
+                    className="w-full btn-gold-glow py-3.5 rounded-xl font-heading font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    {isSubmittingSale ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-[#241A00]" />
+                    ) : (
+                      <CheckCheck className="w-4 h-4 text-[#241A00]" />
+                    )}
+                    <span>
+                      {isSubmittingSale
+                        ? 'Activation en cours...'
+                        : 'Confirmer & Activer ce Billet'}
+                    </span>
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -2022,7 +2109,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
               <Ticket className="w-4 h-4 text-[#E9C349]" />
               <span>Inventaire des Billets Physiques ({sortedFilteredInventoryTickets.length})</span>
             </h3>
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-[#E5E2E1]">
               Liste textuelle compacte • Aucun QR code affiché ici : cliquez sur « Scanner/Vendre » pour activer un billet.
             </p>
           </div>
@@ -2052,18 +2139,18 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
 
         {/* Recherche rapide dans l'inventaire */}
         <div className="relative">
-          <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <Search className="w-4 h-4 text-gray-300 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
             value={inventorySearch}
             onChange={(e) => setInventorySearch(e.target.value)}
             placeholder="Rechercher un code billet, acheteur, catégorie..."
-            className="w-full pl-9 pr-3 py-2 rounded-xl bg-black/30 border border-white/10 text-xs sm:text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-[#E9C349]"
+            className="w-full pl-9 pr-3 py-2 rounded-xl bg-black/30 border border-white/10 text-xs sm:text-sm text-white placeholder:text-gray-300/75 focus:outline-none focus:border-[#E9C349]"
           />
         </div>
 
         {sortedFilteredInventoryTickets.length === 0 ? (
-          <p className="text-xs text-gray-500 py-4 text-center">
+          <p className="text-xs text-[#E5E2E1] py-4 text-center">
             {agentTickets.length === 0
               ? "Aucun billet n'a encore été attribué à ce guichet pour le moment."
               : 'Aucun billet ne correspond à ce filtre.'}
@@ -2107,7 +2194,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                       <p className="font-mono font-bold text-xs sm:text-sm text-white truncate">
                         {t.qrCode}
                       </p>
-                      <p className="text-[11px] text-gray-400 truncate">
+                      <p className="text-[11px] text-gray-300 truncate">
                         {t.tierName} • {(t.price || 0).toLocaleString('fr-FR')} F
                         {!isUnsold && t.holderName && t.holderName !== 'Billet Physique Non Vendu'
                           ? ` • ${t.holderName}`
@@ -2133,12 +2220,12 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                             setManualTicketCode(t.qrCode);
                             handleCheckTicketForSale(t.qrCode);
                           }}
-                          className="px-2.5 py-1.5 rounded-lg bg-[#E9C349]/20 hover:bg-[#E9C349]/30 text-[#E9C349] font-bold text-[11px] border border-[#E9C349]/40 transition-colors whitespace-nowrap"
+                          className="px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white font-bold text-[11px] border border-white/20 transition-colors whitespace-nowrap cursor-pointer"
                         >
                           Scanner/Vendre
                         </button>
                       ) : (
-                        <span className="inline-block px-2 py-1 text-[10px] font-medium text-gray-500">
+                        <span className="inline-block px-2 py-1 text-[10px] font-medium text-gray-300">
                           Validé
                         </span>
                       )}
@@ -2149,7 +2236,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
             </div>
 
             {/* Pagination 25 billets par page */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-1 text-xs text-gray-400">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-1 text-xs text-gray-300">
               <span>
                 Affichage{' '}
                 <strong className="text-white">
@@ -2211,7 +2298,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
               <button
                 type="button"
                 onClick={() => setShowSettlementModal(false)}
-                className="text-gray-400 hover:text-white text-xs font-bold"
+                className="text-gray-300 hover:text-white text-xs font-bold"
               >
                 Fermer
               </button>
@@ -2222,18 +2309,19 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
             </p>
 
             <div className="space-y-1.5">
-              <label className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">
+              <label className="text-[10px] uppercase font-bold text-gray-300 tracking-wider">
                 Montant versé (FCFA)
               </label>
               <input
                 type="number"
+                inputMode="decimal"
                 min="1000"
                 step="500"
                 value={settlementAmount}
                 onChange={(e) => setSettlementAmount(Number(e.target.value))}
                 className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-3 text-base font-heading font-bold text-[#E9C349] focus:border-emerald-500 outline-none"
               />
-              <p className="text-[10px] text-gray-400">
+              <p className="text-[10px] text-gray-300">
                 Solde actuel total dû : <strong className="text-white">{netDueToPromoter.toLocaleString('fr-FR')} FCFA</strong>
               </p>
             </div>
@@ -2256,9 +2344,11 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
 
               <button
                 type="submit"
-                className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-heading font-extrabold text-xs uppercase tracking-wider transition-all shadow-lg"
+                disabled={isSubmittingSettlement || settlementAmount <= 0}
+                className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-heading font-extrabold text-xs uppercase tracking-wider transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
               >
-                Confirmer le Versement
+                {isSubmittingSettlement && <Loader2 className="w-4 h-4 animate-spin" />}
+                <span>{isSubmittingSettlement ? 'Enregistrement...' : 'Confirmer le Versement'}</span>
               </button>
             </div>
           </form>
@@ -2282,7 +2372,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
               <button
                 type="button"
                 onClick={() => setShowShiftCloseModal(false)}
-                className="text-gray-400 hover:text-white text-xs font-bold cursor-pointer"
+                className="text-gray-300 hover:text-white text-xs font-bold cursor-pointer"
               >
                 Fermer
               </button>
@@ -2290,16 +2380,16 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
 
             <div className="p-3.5 rounded-2xl bg-black/40 border border-white/10 space-y-1.5 text-xs">
               <div className="flex items-center justify-between">
-                <span className="text-gray-400">Point de vente :</span>
+                <span className="text-gray-300">Point de vente :</span>
                 <span className="font-bold text-white">{activeAgent.pointDeVente}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-gray-400">Billets déclarés vendus :</span>
+                <span className="text-gray-300">Billets déclarés vendus :</span>
                 <span className="font-bold text-[#E9C349]">{soldCountDisplay} billet(s)</span>
               </div>
               {manualSoldCount > 0 && (
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-400">Dont ventes manuelles :</span>
+                  <span className="text-gray-300">Dont ventes manuelles :</span>
                   <span className="font-bold text-amber-300">{manualSoldCount}</span>
                 </div>
               )}
@@ -2312,7 +2402,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                 </p>
 
                 <div className="space-y-1.5">
-                  <label className="text-[10px] uppercase font-bold text-gray-400 tracking-wider block">
+                  <label className="text-[10px] uppercase font-bold text-gray-300 tracking-wider block">
                     Montant total en espèces compté (FCFA) *
                   </label>
                   <input
@@ -2325,7 +2415,7 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                       if (shiftCloseError) setShiftCloseError(null);
                     }}
                     placeholder="Ex : 35000"
-                    className="w-full bg-black/50 border border-white/15 focus:border-[#E9C349] rounded-xl px-4 py-3 text-lg font-heading font-black text-white placeholder:text-gray-500 outline-none"
+                    className="w-full bg-black/50 border border-white/15 focus:border-[#E9C349] rounded-xl px-4 py-3 text-lg font-heading font-black text-white placeholder:text-gray-300/75 outline-none"
                   />
                   {countedCashInput && (
                     <p className="text-[11px] text-[#E9C349] font-semibold">
@@ -2360,9 +2450,10 @@ export const SalesAgentDashboardView: React.FC<SalesAgentDashboardViewProps> = (
                   <button
                     type="submit"
                     disabled={isSubmittingShiftClose || !countedCashInput.trim() || Boolean(shiftCloseError)}
-                    className="flex-1 py-3 rounded-xl btn-gold-glow text-[#241A00] font-heading font-extrabold text-xs uppercase tracking-wider transition-all shadow-lg disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                    className="flex-1 py-3 rounded-xl btn-gold-glow text-[#241A00] font-heading font-extrabold text-xs uppercase tracking-wider transition-all shadow-lg disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
                   >
-                    {isSubmittingShiftClose ? 'Vérification...' : 'Valider la clôture'}
+                    {isSubmittingShiftClose && <Loader2 className="w-4 h-4 animate-spin text-[#241A00]" />}
+                    <span>{isSubmittingShiftClose ? 'Vérification...' : 'Valider la clôture'}</span>
                   </button>
                 </div>
               </>
