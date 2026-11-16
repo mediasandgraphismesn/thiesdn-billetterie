@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import { SafeImage } from './SafeImage';
@@ -68,6 +69,37 @@ export const TicketDetailModal: React.FC<TicketDetailModalProps> = ({
   isOpen,
   onClose,
   mode = 'client',
+}) => {
+  if (!isOpen || !ticket) return null;
+
+  const modalNode = (
+    <TicketDetailModalContent
+      key={ticket.id || ticket.qrCode}
+      ticket={ticket}
+      isOpen={isOpen}
+      onClose={onClose}
+      mode={mode}
+    />
+  );
+
+  if (typeof document !== 'undefined') {
+    return createPortal(modalNode, document.body);
+  }
+  return modalNode;
+};
+
+interface TicketDetailModalContentProps {
+  ticket: UserTicket;
+  isOpen: boolean;
+  onClose: () => void;
+  mode: 'client' | 'admin';
+}
+
+const TicketDetailModalContent: React.FC<TicketDetailModalContentProps> = ({
+  ticket,
+  isOpen,
+  onClose,
+  mode,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const scratchCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -549,7 +581,7 @@ export const TicketDetailModal: React.FC<TicketDetailModalProps> = ({
     window.open(`https://wa.me/${validPhone}?text=${msg}`, '_blank');
   };
 
-  if (!isOpen || !ticket) return null;
+  if (!ticket) return null;
 
   const statusMeta = getTicketStatusLabel(ticket.status);
   const posPointLabel =
@@ -557,31 +589,35 @@ export const TicketDetailModal: React.FC<TicketDetailModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200"
       onClick={onClose}
     >
       <motion.div
-        initial={{ opacity: 0, y: 40, scale: 0.96 }}
+        initial={{ opacity: 0, y: 24, scale: 0.96 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+        transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-sm sm:max-w-md max-h-[92dvh] overflow-y-auto overscroll-contain bg-gradient-to-b from-[#1C1824] via-[#0A0A0A] to-[#121118] border border-[#8A2BE2]/40 rounded-3xl shadow-2xl my-2 sm:my-6"
+        className="relative w-full max-w-sm sm:max-w-md max-h-[90vh] overflow-y-auto overscroll-contain bg-gradient-to-b from-[#1C1824] via-[#0A0A0A] to-[#121118] border border-[#8A2BE2]/40 rounded-3xl shadow-2xl"
       >
-        {/* TOP BAR STICKY AVEC LOGO OFFICIEL THIÈSDN */}
-        <div className="sticky top-0 z-50 p-3.5 sm:p-4 flex items-center justify-between border-b border-white/10 bg-[#0A0A0A]/95 backdrop-blur-md">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="h-8 px-2 py-0.5 rounded-lg bg-white/10 border border-white/10 flex items-center justify-center shrink-0">
+        {/* TOP BAR STICKY AVEC LOGO OFFICIEL THIÈSDN CONTRAINT */}
+        <div className="sticky top-0 z-50 p-3.5 sm:p-4 flex items-center justify-between gap-2 border-b border-white/10 bg-[#0A0A0A]/95 backdrop-blur-md">
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+            <div className="h-8 px-2 py-1 rounded-lg bg-white/10 border border-white/10 flex items-center justify-center shrink-0 overflow-hidden">
               <img
                 src="/logo-tight.png"
                 alt="Thièsdn Logo"
-                loading="lazy"
+                width={80}
+                height={22}
+                loading="eager"
                 decoding="async"
-                className="h-5 w-auto object-contain"
+                className="w-20 max-w-[120px] max-h-5 h-auto object-contain block"
               />
             </div>
             <span className="font-heading font-extrabold text-xs text-[#E9C349] flex items-center gap-1.5 uppercase tracking-wider truncate">
               <ShieldCheck className="w-3.5 h-3.5 text-[#E9C349] shrink-0" />
-              {isAdminMode ? 'Contrôle & Détail Billet' : 'Pass Billet Officiel'}
+              <span className="truncate">
+                {isAdminMode ? 'Contrôle & Détail Billet' : 'Pass Billet Officiel'}
+              </span>
             </span>
           </div>
 
@@ -716,7 +752,7 @@ export const TicketDetailModal: React.FC<TicketDetailModalProps> = ({
                         <Ticket className="w-3.5 h-3.5 text-[#E9C349]" />
                         <span>Frottez pour révéler votre billet</span>
                       </span>
-                      <p className="text-[10px] text-gray-300 font-medium">
+                      <p className="text-[10px] text-slate-600 font-medium">
                         Glissez votre doigt ou la souris sur la surface dorée
                       </p>
                     </div>
@@ -729,11 +765,19 @@ export const TicketDetailModal: React.FC<TicketDetailModalProps> = ({
                 </>
               )}
 
-              {/* Canvas QR Code généré uniquement à l'ouverture */}
-              <div className="relative p-2 rounded-xl bg-gray-50 border border-gray-200 mb-2 flex items-center justify-center overflow-hidden touch-none select-none">
+              {/* Canvas QR Code généré uniquement à l'ouverture avec dimensions explicites */}
+              <div className="relative p-2 rounded-xl bg-gray-50 border border-gray-200 mb-2 flex items-center justify-center overflow-hidden touch-none select-none w-full max-w-[250px] aspect-square mx-auto">
+                {!isQrReady && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-slate-600 text-xs font-semibold">
+                    <span className="w-6 h-6 border-2 border-[#8A2BE2] border-t-transparent rounded-full animate-spin" />
+                    <span>Génération du QR...</span>
+                  </div>
+                )}
                 <canvas
                   ref={canvasRef}
-                  className={`w-48 h-48 sm:w-52 sm:h-52 transition-opacity duration-300 ${
+                  width={260}
+                  height={260}
+                  className={`w-full h-full max-w-[250px] aspect-square block transition-opacity duration-300 ${
                     isQrReady ? 'opacity-100' : 'opacity-20'
                   }`}
                 />
@@ -785,7 +829,7 @@ export const TicketDetailModal: React.FC<TicketDetailModalProps> = ({
                 </p>
               </div>
 
-              <p className="text-[10px] text-gray-300 mt-1 flex items-center gap-1 font-sans">
+              <p className="text-[10px] text-slate-600 mt-1 flex items-center gap-1 font-sans">
                 <CheckCircle className="w-3 h-3 text-emerald-600" />
                 QR Code certifié avec signature visuelle Thièsdn
               </p>
