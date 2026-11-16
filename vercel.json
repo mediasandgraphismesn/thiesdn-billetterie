@@ -65,7 +65,7 @@
       "destination": "/api/preview?id=:id"
     },
     {
-      "source": "/((?!api/|event/|robots\\.txt|sitemap\\.xml).*)",
+      "source": "/((?!api/|event/|assets/|sw\\.js|manifest\\.webmanifest|manifest\\.json|robots\\.txt|sitemap\\.xml|favicon\\.ico|.*\\.(?:js|css|mjs|wasm|png|jpg|jpeg|webp|svg|ico|woff2?|json|map)$).*)",
       "destination": "/index.html"
     }
   ]

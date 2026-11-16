@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { motion } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import { SafeImage } from './SafeImage';
 import {
@@ -115,6 +114,16 @@ const TicketDetailModalContent: React.FC<TicketDetailModalContentProps> = ({
 
   const isPendingPayment =
     ticket?.status === 'pending' || ticket?.status === 'payment_signaled';
+
+  // Verrouillage du scroll de l'arrière-plan tant que la modale est ouverte
+  useEffect(() => {
+    if (!isOpen || typeof document === 'undefined') return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [isOpen]);
 
   // Confettis festifs uniquement côté client pour un billet confirmé
   useEffect(() => {
@@ -589,18 +598,18 @@ const TicketDetailModalContent: React.FC<TicketDetailModalContentProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 overflow-hidden animate-in fade-in duration-200"
       onClick={onClose}
     >
-      <motion.div
-        initial={{ opacity: 0, y: 24, scale: 0.96 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Détail du billet"
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-sm sm:max-w-md max-h-[90vh] overflow-y-auto overscroll-contain bg-gradient-to-b from-[#1C1824] via-[#0A0A0A] to-[#121118] border border-[#8A2BE2]/40 rounded-3xl shadow-2xl"
+        className="relative w-full max-w-sm sm:max-w-md max-h-[90vh] overflow-y-auto overscroll-contain flex flex-col bg-gradient-to-b from-[#1C1824] via-[#0A0A0A] to-[#121118] border border-[#8A2BE2]/40 rounded-3xl shadow-2xl"
       >
         {/* TOP BAR STICKY AVEC LOGO OFFICIEL THIÈSDN CONTRAINT */}
-        <div className="sticky top-0 z-50 p-3.5 sm:p-4 flex items-center justify-between gap-2 border-b border-white/10 bg-[#0A0A0A]/95 backdrop-blur-md">
+        <div className="sticky top-0 z-50 shrink-0 p-3.5 sm:p-4 flex items-center justify-between gap-2 border-b border-white/10 bg-[#0A0A0A]/95 backdrop-blur-md">
           <div className="flex items-center gap-2.5 min-w-0 flex-1">
             <div className="h-8 px-2 py-1 rounded-lg bg-white/10 border border-white/10 flex items-center justify-center shrink-0 overflow-hidden">
               <img
@@ -623,9 +632,12 @@ const TicketDetailModalContent: React.FC<TicketDetailModalContentProps> = ({
 
           <button
             type="button"
-            onClick={onClose}
+            onClick={(e) => {
+              e.stopPropagation();
+              onClose();
+            }}
             aria-label="Fermer le pass"
-            className="w-10 h-10 min-h-[40px] min-w-[40px] rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors cursor-pointer shrink-0"
+            className="relative z-[100] w-10 h-10 min-h-[40px] min-w-[40px] rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors cursor-pointer shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
@@ -765,10 +777,10 @@ const TicketDetailModalContent: React.FC<TicketDetailModalContentProps> = ({
                 </>
               )}
 
-              {/* Canvas QR Code généré uniquement à l'ouverture avec dimensions explicites */}
-              <div className="relative p-2 rounded-xl bg-gray-50 border border-gray-200 mb-2 flex items-center justify-center overflow-hidden touch-none select-none w-full max-w-[250px] aspect-square mx-auto">
+              {/* Canvas QR Code centré et contraint (max-w-[220px]) pour préserver l'espace des boutons sur mobile */}
+              <div className="relative p-2 rounded-xl bg-gray-50 border border-gray-200 mb-2 flex items-center justify-center overflow-hidden touch-none select-none w-full max-w-[220px] aspect-square mx-auto">
                 {!isQrReady && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-slate-600 text-xs font-semibold">
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-gray-50 text-slate-600 text-xs font-semibold z-10">
                     <span className="w-6 h-6 border-2 border-[#8A2BE2] border-t-transparent rounded-full animate-spin" />
                     <span>Génération du QR...</span>
                   </div>
@@ -777,8 +789,10 @@ const TicketDetailModalContent: React.FC<TicketDetailModalContentProps> = ({
                   ref={canvasRef}
                   width={260}
                   height={260}
-                  className={`w-full h-full max-w-[250px] aspect-square block transition-opacity duration-300 ${
-                    isQrReady ? 'opacity-100' : 'opacity-20'
+                  className={`w-full h-full max-w-[220px] aspect-square block transition-opacity duration-300 ${
+                    isQrReady && (isAdminMode || isRevealed)
+                      ? 'opacity-100'
+                      : 'opacity-0 pointer-events-none'
                   }`}
                 />
 
@@ -816,9 +830,9 @@ const TicketDetailModalContent: React.FC<TicketDetailModalContentProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsRevealed(true)}
-                  className="mt-1 text-[11px] font-bold text-[#8A2BE2] hover:text-[#7822c9] underline transition-colors cursor-pointer"
+                  className="mt-1 px-3.5 py-2 min-h-[38px] rounded-xl bg-[#8A2BE2]/10 hover:bg-[#8A2BE2]/20 border border-[#8A2BE2]/30 text-xs font-bold text-[#8A2BE2] transition-colors cursor-pointer"
                 >
-                  Passer le grattage et afficher directement
+                  Révéler le QR Code
                 </button>
               )}
 
@@ -865,8 +879,10 @@ const TicketDetailModalContent: React.FC<TicketDetailModalContentProps> = ({
               />
             </div>
           )}
+        </div>
 
-          {/* Boutons d'Action */}
+        {/* BARRE D'ACTION STICKY EN BAS (TÉLÉCHARGER & FERMER TOUJOURS ACCESSIBLES SUR MOBILE) */}
+        <div className="sticky bottom-0 z-50 shrink-0 bg-[#121118]/95 backdrop-blur-md p-4 border-t border-white/10 space-y-2 rounded-b-3xl">
           {isPendingPayment ? (
             <div className="flex gap-2">
               <button
@@ -876,6 +892,16 @@ const TicketDetailModalContent: React.FC<TicketDetailModalContentProps> = ({
               >
                 <FileText className="w-4 h-4" />
                 <span>Télécharger mon reçu PDF</span>
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClose();
+                }}
+                className="h-11 min-h-[44px] px-4 rounded-xl bg-transparent hover:bg-white/5 border border-white/20 text-[#E5E2E1] font-heading font-bold text-xs flex items-center justify-center transition-all cursor-pointer shrink-0"
+              >
+                Fermer
               </button>
             </div>
           ) : isAdminMode ? (
@@ -912,7 +938,7 @@ const TicketDetailModalContent: React.FC<TicketDetailModalContentProps> = ({
                   ) : (
                     <Copy className="w-3.5 h-3.5 text-[#DCB8FF]" />
                   )}
-                  <span>{copiedLink ? 'Lien copié !' : 'Copier lien du pass'}</span>
+                  <span>{copiedLink ? 'Lien copié !' : 'Copier lien'}</span>
                 </button>
 
                 {ticket.holderPhone && (
@@ -922,57 +948,80 @@ const TicketDetailModalContent: React.FC<TicketDetailModalContentProps> = ({
                     className="flex-1 h-10 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/35 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                   >
                     <MessageCircle className="w-3.5 h-3.5" />
-                    <span>Envoyer WhatsApp</span>
+                    <span>WhatsApp</span>
                   </button>
                 )}
+
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onClose();
+                  }}
+                  className="h-10 px-3.5 rounded-xl bg-transparent hover:bg-white/5 border border-white/20 text-[#E5E2E1] text-xs font-bold flex items-center justify-center transition-all cursor-pointer shrink-0"
+                >
+                  Fermer
+                </button>
               </div>
             </div>
           ) : (
-            <div className="flex gap-2">
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleDownloadPassPng}
+                  disabled={!isQrReady}
+                  className="flex-1 h-11 min-h-[44px] px-4 rounded-xl btn-gold-glow disabled:opacity-50 font-heading font-extrabold text-xs flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 cursor-pointer"
+                >
+                  <Download className="w-4 h-4 text-[#241A00]" />
+                  <span>Télécharger QR (PNG)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDownloadTicketPdf}
+                  disabled={!isQrReady}
+                  title="Billet PDF A4"
+                  aria-label="Télécharger le billet PDF A4"
+                  className="h-11 min-h-[44px] px-3 rounded-xl bg-transparent hover:bg-white/5 text-white border border-white/20 font-heading font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer shrink-0 disabled:opacity-50"
+                >
+                  <FileText className="w-4 h-4" />
+                  <span className="hidden min-[380px]:inline">PDF A4</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (navigator.share) {
+                      navigator
+                        .share({
+                          title: ticket.eventTitle,
+                          text: `Mon pass officiel pour ${ticket.eventTitle} sur Thièsdn Billetterie : ${ticket.qrCode}`,
+                        })
+                        .catch(() => {});
+                    } else {
+                      navigator.clipboard.writeText(ticket.qrCode);
+                      showToast('Code du pass copié dans le presse-papier !');
+                    }
+                  }}
+                  aria-label="Partager le billet"
+                  className="w-11 h-11 min-h-[44px] min-w-[44px] rounded-xl bg-[#1F1F1F] hover:bg-[#2A2A2A] text-[#DCB8FF] border border-white/10 font-heading font-bold text-xs flex items-center justify-center transition-all cursor-pointer shrink-0"
+                >
+                  <Share2 className="w-4 h-4" />
+                </button>
+              </div>
               <button
                 type="button"
-                onClick={handleDownloadPassPng}
-                disabled={!isQrReady}
-                className="flex-1 h-11 min-h-[44px] px-4 rounded-xl btn-gold-glow disabled:opacity-50 font-heading font-extrabold text-xs flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 cursor-pointer"
-              >
-                <Download className="w-4 h-4 text-[#241A00]" />
-                <span>Télécharger QR (PNG)</span>
-              </button>
-              <button
-                type="button"
-                onClick={handleDownloadTicketPdf}
-                disabled={!isQrReady}
-                title="Billet PDF A4"
-                aria-label="Télécharger le billet PDF A4"
-                className="h-11 min-h-[44px] px-3 rounded-xl bg-transparent hover:bg-white/5 text-white border border-white/20 font-heading font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer shrink-0 disabled:opacity-50"
-              >
-                <FileText className="w-4 h-4" />
-                <span className="hidden min-[380px]:inline">PDF A4</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (navigator.share) {
-                    navigator
-                      .share({
-                        title: ticket.eventTitle,
-                        text: `Mon pass officiel pour ${ticket.eventTitle} sur Thièsdn Billetterie : ${ticket.qrCode}`,
-                      })
-                      .catch(() => {});
-                  } else {
-                    navigator.clipboard.writeText(ticket.qrCode);
-                    showToast('Code du pass copié dans le presse-papier !');
-                  }
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClose();
                 }}
-                aria-label="Partager le billet"
-                className="w-11 h-11 min-h-[44px] min-w-[44px] rounded-xl bg-[#1F1F1F] hover:bg-[#2A2A2A] text-[#DCB8FF] border border-white/10 font-heading font-bold text-xs flex items-center justify-center transition-all cursor-pointer shrink-0"
+                className="w-full h-10 min-h-[40px] rounded-xl bg-transparent hover:bg-white/5 border border-white/15 text-[#E5E2E1] font-heading font-bold text-xs flex items-center justify-center transition-all cursor-pointer"
               >
-                <Share2 className="w-4 h-4" />
+                Fermer
               </button>
             </div>
           )}
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 };

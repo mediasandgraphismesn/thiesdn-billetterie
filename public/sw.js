@@ -3,28 +3,123 @@
 // Compilé via vite-plugin-pwa (injectManifest) -> pré-cache offline + Web Push
 // ============================================================================
 
-import { clientsClaim } from 'workbox-core';
+import { clientsClaim, setCacheNameDetails } from 'workbox-core';
 import {
   cleanupOutdatedCaches,
-  createHandlerBoundToURL,
+  matchPrecache,
   precacheAndRoute,
 } from 'workbox-precaching';
 import { NavigationRoute, registerRoute } from 'workbox-routing';
-import { NetworkOnly, StaleWhileRevalidate } from 'workbox-strategies';
+import { NetworkFirst, NetworkOnly, StaleWhileRevalidate } from 'workbox-strategies';
 import { ExpirationPlugin } from 'workbox-expiration';
+
+const CACHE_VERSION = 'v2026-11-16-2';
+
+setCacheNameDetails({
+  prefix: 'thiesdn',
+  suffix: CACHE_VERSION,
+  precache: 'precache',
+  runtime: 'runtime',
+});
 
 self.skipWaiting();
 clientsClaim();
+
+// Purge immédiate des anciens caches ne correspondant pas à la version courante
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys().then((cacheNames) =>
+      Promise.all(
+        cacheNames
+          .filter((name) => !name.includes(CACHE_VERSION) && name !== 'weserv-images-cache')
+          .map((name) => caches.delete(name))
+      )
+    )
+  );
+});
+
+// Empêche de servir ou mettre en cache une réponse HTML à la place d'un bundle JS/CSS
+const rejectHtmlForAssetPlugin = {
+  fetchDidSucceed: async ({ response }) => {
+    const contentType = (response.headers.get('content-type') || '').toLowerCase();
+    if (contentType.includes('text/html')) {
+      throw new Error('Invalid MIME type text/html received for JS/CSS asset');
+    }
+    return response;
+  },
+  cacheWillUpdate: async ({ response }) => {
+    const contentType = (response.headers.get('content-type') || '').toLowerCase();
+    if (!response || !response.ok || contentType.includes('text/html')) {
+      return null;
+    }
+    return response;
+  },
+};
+
+const assetsNetworkFirst = new NetworkFirst({
+  cacheName: `thiesdn-assets-${CACHE_VERSION}`,
+  networkTimeoutSeconds: 4,
+  plugins: [
+    rejectHtmlForAssetPlugin,
+    new ExpirationPlugin({
+      maxEntries: 80,
+      maxAgeSeconds: 7 * 24 * 60 * 60,
+    }),
+  ],
+});
+
+// Stratégie NetworkFirst pour .js, .css et .html (zéro chunk obsolète / zéro erreur MIME text/html)
+registerRoute(
+  ({ request, url }) =>
+    url.origin === self.location.origin &&
+    (request.destination === 'script' ||
+      request.destination === 'style' ||
+      /\.(?:js|mjs|css)$/i.test(url.pathname)),
+  async (params) => {
+    try {
+      const response = await assetsNetworkFirst.handle(params);
+      if (response) return response;
+    } catch {
+      // Fallback vers le precache offline si réseau indisponible
+    }
+    const precached = await matchPrecache(params.request.url);
+    return precached || Response.error();
+  },
+  'GET'
+);
 
 // Pré-cache offline des assets Vite, WASM scanner et Shell SPA
 cleanupOutdatedCaches();
 precacheAndRoute(self.__WB_MANIFEST || []);
 
-// Routage SPA offline (exclut les routes serverless /api et aperçus OG /event)
+const pagesNetworkFirst = new NetworkFirst({
+  cacheName: `thiesdn-pages-${CACHE_VERSION}`,
+  networkTimeoutSeconds: 4,
+  plugins: [
+    new ExpirationPlugin({
+      maxEntries: 20,
+      maxAgeSeconds: 24 * 60 * 60,
+    }),
+  ],
+});
+
+// Routage SPA NetworkFirst pour les pages HTML (exclut /api, /event, /assets et extensions fichiers)
 registerRoute(
-  new NavigationRoute(createHandlerBoundToURL('index.html'), {
-    denylist: [/^\/api\//, /^\/event\//],
-  })
+  new NavigationRoute(
+    async (params) => {
+      try {
+        const response = await pagesNetworkFirst.handle(params);
+        if (response) return response;
+      } catch {
+        // Fallback offline vers le shell index.html pré-caché
+      }
+      const cached = await matchPrecache('index.html');
+      return cached || Response.error();
+    },
+    {
+      denylist: [/^\/api\//, /^\/event\//, /^\/assets\//, /\.[a-zA-Z0-9]{1,8}$/],
+    }
+  )
 );
 
 // Ne jamais mettre en cache les requêtes temps réel / base de données Supabase

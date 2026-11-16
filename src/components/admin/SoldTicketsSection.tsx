@@ -14,6 +14,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Filter,
+  MoreVertical,
 } from 'lucide-react';
 import { EventItem, UserTicket } from '../../types';
 
@@ -73,8 +74,24 @@ export const SoldTicketsSection: React.FC<SoldTicketsSectionProps> = ({
   const [channelFilter, setChannelFilter] = useState<'all' | 'online' | 'physical'>('all');
   const [filterStatus, setFilterStatus] = useState<'all' | 'valid' | 'scanned' | 'disabled'>('all');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [copiedCodeId, setCopiedCodeId] = useState<string | null>(null);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(25);
+
+  useEffect(() => {
+    if (!openMenuId) return;
+    const handleCloseMenu = () => setOpenMenuId(null);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpenMenuId(null);
+    };
+    window.addEventListener('click', handleCloseMenu);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('click', handleCloseMenu);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [openMenuId]);
 
   const eventOptions = useMemo(() => {
     const map = new Map<string, string>();
@@ -156,6 +173,16 @@ export const SoldTicketsSection: React.FC<SoldTicketsSectionProps> = ({
     setCopiedId(ticket.id);
     window.setTimeout(() => {
       setCopiedId((prev) => (prev === ticket.id ? null : prev));
+    }, 1800);
+  };
+
+  const handleCopyCode = (ticket: UserTicket, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!ticket.qrCode) return;
+    navigator.clipboard?.writeText(ticket.qrCode);
+    setCopiedCodeId(ticket.id);
+    window.setTimeout(() => {
+      setCopiedCodeId((prev) => (prev === ticket.id ? null : prev));
     }, 1800);
   };
 
@@ -464,11 +491,11 @@ export const SoldTicketsSection: React.FC<SoldTicketsSectionProps> = ({
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="relative flex items-center gap-2">
                     <button
                       type="button"
                       onClick={() => onOpenTicketModal(ticket)}
-                      className="flex-1 py-2 px-3 rounded-xl bg-[#8A2BE2] hover:bg-[#7A1FD2] text-white text-xs font-bold inline-flex items-center justify-center gap-1.5 transition-colors"
+                      className="flex-1 min-h-[44px] py-2 px-3 rounded-xl bg-[#8A2BE2] hover:bg-[#7A1FD2] text-white text-xs font-bold inline-flex items-center justify-center gap-1.5 transition-colors"
                     >
                       <QrCode className="w-3.5 h-3.5" />
                       <span>Voir le QR</span>
@@ -476,25 +503,67 @@ export const SoldTicketsSection: React.FC<SoldTicketsSectionProps> = ({
 
                     <button
                       type="button"
-                      title="Copier le lien"
-                      onClick={(e) => handleCopyLink(ticket, e)}
-                      className="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300"
+                      aria-label="Plus d'actions pour ce billet"
+                      aria-expanded={openMenuId === ticket.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenMenuId((prev) => (prev === ticket.id ? null : ticket.id));
+                      }}
+                      className="min-w-[44px] min-h-[44px] rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-[#E5E2E1] flex items-center justify-center transition-colors shrink-0"
                     >
-                      {copiedId === ticket.id ? (
-                        <Check className="w-4 h-4 text-emerald-400" />
-                      ) : (
-                        <Copy className="w-4 h-4" />
-                      )}
+                      <MoreVertical className="w-5 h-5" />
                     </button>
 
-                    <button
-                      type="button"
-                      title="Envoyer via WhatsApp"
-                      onClick={(e) => handleWhatsAppShare(ticket, e)}
-                      className="p-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 text-emerald-400"
-                    >
-                      <Send className="w-4 h-4" />
-                    </button>
+                    {openMenuId === ticket.id && (
+                      <div
+                        onClick={(e) => e.stopPropagation()}
+                        className="absolute right-0 bottom-full mb-2 w-56 rounded-2xl bg-[#1A1822] border border-white/15 shadow-2xl p-1.5 z-50 space-y-1"
+                      >
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            handleCopyLink(ticket, e);
+                            setOpenMenuId(null);
+                          }}
+                          className="w-full px-3 py-2.5 rounded-xl text-left text-xs font-semibold text-[#E5E2E1] hover:bg-white/10 flex items-center gap-2.5 transition-colors"
+                        >
+                          {copiedId === ticket.id ? (
+                            <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                          ) : (
+                            <Copy className="w-4 h-4 text-[#DCB8FF] shrink-0" />
+                          )}
+                          <span>{copiedId === ticket.id ? 'Lien copié !' : 'Copier le lien du billet'}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            handleCopyCode(ticket, e);
+                            setOpenMenuId(null);
+                          }}
+                          className="w-full px-3 py-2.5 rounded-xl text-left text-xs font-semibold text-[#E5E2E1] hover:bg-white/10 flex items-center gap-2.5 transition-colors"
+                        >
+                          {copiedCodeId === ticket.id ? (
+                            <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                          ) : (
+                            <QrCode className="w-4 h-4 text-[#E9C349] shrink-0" />
+                          )}
+                          <span>{copiedCodeId === ticket.id ? 'Code copié !' : 'Copier le code QR'}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            handleWhatsAppShare(ticket, e);
+                            setOpenMenuId(null);
+                          }}
+                          className="w-full px-3 py-2.5 rounded-xl text-left text-xs font-semibold text-emerald-300 hover:bg-emerald-500/15 flex items-center gap-2.5 transition-colors"
+                        >
+                          <Send className="w-4 h-4 shrink-0" />
+                          <span>Envoyer sur WhatsApp</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               );
