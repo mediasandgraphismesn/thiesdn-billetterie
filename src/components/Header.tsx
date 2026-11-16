@@ -57,6 +57,9 @@ export const Header: React.FC<HeaderProps> = ({
           <img
             src="/logo-tight.png"
             alt="Thièsdn Logo"
+            width={48}
+            height={24}
+            decoding="async"
             className="h-5 sm:h-6 w-auto object-contain"
           />
         </div>

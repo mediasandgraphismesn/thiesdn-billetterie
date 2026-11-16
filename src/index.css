@@ -172,6 +172,9 @@ html, body, #root {
 /* RÈGLES RESPONSIVE MOBILE-FIRST & MÉDIAS FLUIDES */
 img, video, svg, canvas {
   max-width: 100%;
+}
+
+video {
   height: auto;
 }
 

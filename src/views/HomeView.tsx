@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
-import { Search, SlidersHorizontal, TrendingUp, ChevronRight, Calendar, MapPin } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, TrendingUp, ChevronRight, Calendar, MapPin } from 'lucide-react';
 import { EventItem, CATEGORIES } from '../types';
 import { EventCard } from '../components/EventCard';
 import { EventCardSkeleton } from '../components/EventCardSkeleton';
 import { getEventEndDatetime } from '../services/supabase';
+import { getOptimizedImageUrl } from '../utils/imageOptimizer';
+import { CITY_GUIDES, applySeoMetadata, buildLocalBusinessSchema, buildWebSiteSchema } from '../utils/seo';
 
 interface HomeViewProps {
   events: EventItem[];
@@ -12,6 +14,7 @@ interface HomeViewProps {
   currentUserId?: string;
   currentRole?: string;
   onSelectEvent: (event: EventItem) => void;
+  onNavigatePath?: (path: string) => void;
   onManageEvent?: (event: EventItem) => void;
   onNavigateToExplore: () => void;
   onNavigateToCreate: () => void;
@@ -24,6 +27,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   currentUserId,
   currentRole,
   onSelectEvent,
+  onNavigatePath,
   onManageEvent,
   onNavigateToExplore,
   onNavigateToCreate,
@@ -75,6 +79,20 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
   const featuredEvents = displayPool.filter((e) => e && e.featured);
   const upcomingEvents = filteredEvents.slice(0, 8);
+  const lcpEvent = featuredEvents[0] || upcomingEvents[0];
+  const lcpImageUrl = lcpEvent ? getOptimizedImageUrl(lcpEvent.posterUrl, 800, 80) : undefined;
+
+  useEffect(() => {
+    if (isPromoterView) return;
+    applySeoMetadata({
+      title: 'Thiès Days and Nights — Billetterie Officielle Sénégal (Thiès, Dakar, Saly)',
+      description:
+        'Réservez vos billets officiels de concerts, galas et soirées VIP à Thiès, Dakar, Saly et Mbour. Paiement sécurisé Wave & Orange Money en FCFA avec pass QR certifié.',
+      canonicalPath: '/',
+      preloadHeroImage: lcpImageUrl,
+      schemas: [buildLocalBusinessSchema(), buildWebSiteSchema()],
+    });
+  }, [isPromoterView, lcpImageUrl]);
 
   return (
     <div className="space-y-8 pb-12 animate-in fade-in duration-300">
@@ -120,8 +138,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
         })}
       </div>
 
-      {/* Featured Events Horizontal Scroll Section matching Image 2 : Masquée si 0 résultat */}
-      {(isLoading || featuredEvents.length > 0) && (
+      {/* Featured Events Horizontal Scroll Section : Masquée pendant chargement ou si 0 résultat pour éviter tout CLS */}
+      {!isLoading && featuredEvents.length > 0 && (
         <section className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -141,23 +159,17 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
           {/* Horizontal Carousel */}
           <div className="flex gap-4 overflow-x-auto pb-3 pt-1 scrollbar-none snap-x snap-mandatory">
-            {isLoading ? (
-              Array.from({ length: 3 }).map((_, idx) => (
-                <div key={`featured-skel-${idx}`} className="snap-start flex-shrink-0">
-                  <EventCardSkeleton variant="featured" />
-                </div>
-              ))
-            ) : (
-              featuredEvents.map((event) => (
-                <div key={event.id} className="snap-start flex-shrink-0">
-                  <EventCard
-                    event={event}
-                    variant="featured"
-                    onSelect={onSelectEvent}
-                  />
-                </div>
-              ))
-            )}
+            {featuredEvents.map((event, idx) => (
+              <div key={event.id} className="snap-start flex-shrink-0">
+                <EventCard
+                  event={event}
+                  variant="featured"
+                  priority={idx === 0}
+                  onSelect={onSelectEvent}
+                  onNavigateEventUrl={(path) => onNavigatePath?.(path)}
+                />
+              </div>
+            ))}
           </div>
         </section>
       )}
@@ -177,7 +189,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
         {isLoading ? (
           <div className="space-y-3">
-            {Array.from({ length: 6 }).map((_, idx) => (
+            {Array.from({ length: 2 }).map((_, idx) => (
               <EventCardSkeleton key={`upcoming-skel-${idx}`} variant="list" />
             ))}
           </div>
@@ -232,12 +244,14 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </div>
         ) : (
           <div className="space-y-3">
-            {upcomingEvents.map((event) => (
+            {upcomingEvents.map((event, idx) => (
               <EventCard
                 key={event.id}
                 event={event}
                 variant="list"
+                priority={featuredEvents.length === 0 && idx === 0}
                 onSelect={onSelectEvent}
+                onNavigateEventUrl={(path) => onNavigatePath?.(path)}
                 currentUserId={currentUserId}
                 currentRole={currentRole}
                 isOwnerPromoter={isPromoterView}
@@ -247,6 +261,47 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </div>
         )}
       </section>
+
+      {/* Maillage SEO Local : Guides par Ville (Sénégal) */}
+      {!isPromoterView && (
+        <section aria-label="Guides billetterie par ville au Sénégal" className="glass-panel rounded-3xl p-5 border border-white/10 space-y-3">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <h2 className="font-heading text-sm sm:text-base font-bold text-white flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-[#E9C349]" />
+              <span>Billetterie Officielle par Ville au Sénégal</span>
+            </h2>
+            <a
+              href="/explorer"
+              onClick={(e) => {
+                e.preventDefault();
+                if (onNavigatePath) onNavigatePath('/explorer');
+                else onNavigateToExplore();
+              }}
+              className="text-xs font-bold text-[#DCB8FF] hover:text-white transition-colors"
+            >
+              Explorer la carte →
+            </a>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            {Object.values(CITY_GUIDES).map((cg) => (
+              <a
+                key={cg.slug}
+                href={`/evenements/${cg.slug}`}
+                onClick={(e) => {
+                  if (onNavigatePath) {
+                    e.preventDefault();
+                    onNavigatePath(`/evenements/${cg.slug}`);
+                  }
+                }}
+                className="px-3.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#E9C349]/40 text-xs font-heading font-bold text-[#E5E2E1] hover:text-white flex items-center justify-between transition-all"
+              >
+                <span>Événements {cg.cityName}</span>
+                <ChevronRight className="w-3.5 h-3.5 text-[#E9C349]" />
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* VIP Promotion Banner (Masquée pour les promoteurs déjà certifiés) */}
       {!isPromoterView && (

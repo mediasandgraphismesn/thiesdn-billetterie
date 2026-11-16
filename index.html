@@ -3,8 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <title>Thiès Days and Nights — Événements & Accès Exclusif</title>
-    <meta name="description" content="Plateforme haut de gamme de billetterie d'événements et hub promoteurs." />
+    <title>Thiès Days and Nights — Billetterie Officielle Sénégal (Thiès, Dakar, Saly)</title>
+    <meta name="description" content="Réservez vos billets officiels de concerts, galas et soirées VIP à Thiès, Dakar, Saly et Mbour. Paiement sécurisé Wave & Orange Money en FCFA." />
+    <link rel="canonical" href="https://billetterie.thiesdn.site/" />
 
     <!-- Lien vers le manifest -->
     <link rel="manifest" href="/manifest.json" />
@@ -18,11 +19,55 @@
     <!-- Couleur de la barre du navigateur sur mobile -->
     <meta name="theme-color" content="#0A0A0A" />
 
-    <!-- Preconnect & DNS-Prefetch pour Supabase et le proxy WebP Images -->
+    <!-- Preload LCP & Preconnect critiques -->
+    <link rel="preload" as="image" href="/logo-tight.png" fetchpriority="high" />
+    <link rel="preload" as="image" href="/poster-kmou-jango.jpg" />
     <link rel="preconnect" href="https://jgvuzlchemqcfygsylln.supabase.co" crossorigin />
     <link rel="dns-prefetch" href="https://jgvuzlchemqcfygsylln.supabase.co" />
     <link rel="preconnect" href="https://images.weserv.nl" crossorigin />
     <link rel="dns-prefetch" href="https://images.weserv.nl" />
+    <link rel="preconnect" href="https://i.imgur.com" crossorigin />
+    <link rel="dns-prefetch" href="https://i.imgur.com" />
+
+    <!-- Schema.org LocalBusiness (SEO Local Sénégal / Google Business Profile) -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "LocalBusiness",
+        "@id": "https://billetterie.thiesdn.site/#localbusiness",
+        "name": "Thièsdn Billetterie",
+        "alternateName": "Thiès Days and Nights — Billetterie Officielle",
+        "description": "Billetterie officielle au Sénégal pour concerts, galas, soirées VIP et festivals à Thiès, Dakar, Saly et Mbour. Paiement sécurisé Wave & Orange Money en FCFA.",
+        "url": "https://billetterie.thiesdn.site",
+        "logo": "https://billetterie.thiesdn.site/logo-tight.png",
+        "image": "https://billetterie.thiesdn.site/logo-tight.png",
+        "telephone": "+221 77 458 74 74",
+        "email": "contact@mgartswork.site",
+        "priceRange": "FCFA (XOF)",
+        "currenciesAccepted": "XOF",
+        "paymentAccepted": "Wave, Orange Money, Cash",
+        "address": {
+          "@type": "PostalAddress",
+          "streetAddress": "Grand Standing",
+          "addressLocality": "Thiès",
+          "addressRegion": "Thiès",
+          "addressCountry": "SN"
+        },
+        "geo": {
+          "@type": "GeoCoordinates",
+          "latitude": 14.791005,
+          "longitude": -16.93586
+        },
+        "hasMap": "https://maps.app.goo.gl/NmftZjQ1fEU3eFZk9",
+        "sameAs": [
+          "https://maps.app.goo.gl/NmftZjQ1fEU3eFZk9",
+          "https://www.facebook.com/Thiesdn",
+          "https://www.instagram.com/thies_dn",
+          "https://tiktok.com/@thiesdn",
+          "https://youtube.com/@thiesdn"
+        ]
+      }
+    </script>
 
     <!-- Open Graph / WhatsApp / Facebook -->
     <meta property="og:title" content="Thiès Days and Nights - Billetterie Officielle" />
@@ -42,11 +87,21 @@
     <meta name="twitter:image" content="https://billetterie.thiesdn.site/logo-tight.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Montserrat:wght@400;500;600;700;800&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@600;700;800&display=swap"
+      rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
+    />
+    <noscript>
+      <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@600;700;800&display=swap"
+        rel="stylesheet"
+      />
+    </noscript>
   </head>
   <body class="bg-[#0F0F0F] text-[#E5E2E1] antialiased selection:bg-[#8A2BE2] selection:text-white">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-

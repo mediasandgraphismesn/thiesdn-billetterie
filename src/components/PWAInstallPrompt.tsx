@@ -98,6 +98,8 @@ export const PWAInstallPrompt: React.FC = () => {
             <img
               src="/logo-tight.png"
               alt="Thièsdn Logo"
+              width={40}
+              height={20}
               className="w-full h-full object-contain"
               loading="eager"
             />

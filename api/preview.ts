@@ -98,10 +98,17 @@ export default async function handler(req: any, res: any) {
     }
   }
 
+  const userAgent = String(req.headers?.['user-agent'] || '').toLowerCase();
+  const isCrawlerBot =
+    /(googlebot|bingbot|yandex|baiduspider|duckduckbot|slurp|applebot|gptbot|oai-searchbot|chatgpt-user|claudebot|anthropic-ai|perplexitybot|google-extended|facebookexternalhit|whatsapp|twitterbot|linkedinbot|slackbot|discordbot|telegrambot|crawler|spider|bot)/i.test(
+      userAgent
+    );
+
   let title = DEFAULT_TITLE;
   let description = DEFAULT_DESC;
   let imageUrl = DEFAULT_LOGO;
   let targetUrl = SITE_URL;
+  let eventRecord: Record<string, any> | null = null;
 
   if (eventId) {
     try {
@@ -116,26 +123,37 @@ export default async function handler(req: any, res: any) {
         .maybeSingle();
 
       if (!error && event) {
+        eventRecord = event;
+        const cityLabel = event.city || 'Thiès';
         title = event.title
-          ? `${event.title} — Thiès Days and Nights`
+          ? `Billets ${event.title} - ${cityLabel} - Thiesdn`
           : DEFAULT_TITLE;
 
-        const dateStr = event.event_date ? ` • ${event.event_date}` : '';
+        const dateStr = event.event_date ? ` le ${event.event_date}` : '';
         const placeStr =
-          event.lieu || event.city ? ` à ${event.lieu || event.city}` : '';
+          event.lieu || event.city ? ` au ${event.lieu || event.city}` : '';
         const priceStr = event.prix_standard
           ? ` dès ${Number(event.prix_standard).toLocaleString('fr-FR')} FCFA`
           : '';
 
         if (event.description && event.description.trim()) {
-          description = `${event.description.trim().substring(0, 240)}${placeStr}${dateStr}`;
+          description = `${event.title} se déroule${dateStr}${placeStr} (${cityLabel}). ${event.description.trim().substring(0, 220)}${priceStr}.`;
         } else {
-          description = `Réservez votre place pour ${event.title}${placeStr}${dateStr}${priceStr} sur la billetterie officielle.`;
+          description = `Réservez votre place pour ${event.title}${dateStr}${placeStr} (${cityLabel})${priceStr} sur la billetterie officielle Thièsdn via Wave et Orange Money.`;
         }
 
         // Optimisation stricte de l'affiche pour WhatsApp (< 300 Ko garanti)
         imageUrl = getOptimizedOgImageUrl(event.affiche_url);
-        targetUrl = `${SITE_URL}/?event=${encodeURIComponent(eventId)}`;
+        const slugTitle = String(event.title || 'evenement')
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '')
+          .slice(0, 60);
+        targetUrl = slugTitle
+          ? `${SITE_URL}/evenement/${slugTitle}--${encodeURIComponent(eventId)}`
+          : `${SITE_URL}/evenement/${encodeURIComponent(eventId)}`;
       }
     } catch (err) {
       console.error('Erreur API preview serverless:', err);
@@ -146,11 +164,65 @@ export default async function handler(req: any, res: any) {
   const safeDesc = escapeHtml(description);
   const safeImage = escapeHtml(imageUrl);
   const safeTargetUrl = escapeHtml(targetUrl);
-  // URL canonique épurée pour les robots WhatsApp / Facebook / Twitter
-  const canonicalUrl = eventId
-    ? `${SITE_URL}/event/${encodeURIComponent(eventId)}`
-    : SITE_URL;
+  const canonicalUrl = eventRecord ? targetUrl : eventId ? `${SITE_URL}/event/${encodeURIComponent(eventId)}` : SITE_URL;
   const safeCanonicalUrl = escapeHtml(canonicalUrl);
+
+  const startIso = eventRecord?.datetime_iso
+    ? String(eventRecord.datetime_iso).replace(/Z$/i, '+00:00')
+    : new Date().toISOString().replace(/\.\d{3}Z$/, '+00:00');
+  const organizerName = eventRecord?.organizer_name || 'Thièsdn Billetterie';
+  const venueName = eventRecord?.lieu || 'Thiès';
+  const cityName = eventRecord?.city || 'Thiès';
+  const basePrice = Number(eventRecord?.prix_standard) || 0;
+
+  const eventJsonLd = eventRecord
+    ? JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'Event',
+        name: eventRecord.title || title,
+        description,
+        startDate: startIso,
+        eventStatus: 'https://schema.org/EventScheduled',
+        eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
+        image: [imageUrl],
+        url: canonicalUrl,
+        location: {
+          '@type': 'Place',
+          name: venueName,
+          address: {
+            '@type': 'PostalAddress',
+            streetAddress: venueName,
+            addressLocality: cityName,
+            addressCountry: 'SN',
+          },
+        },
+        organizer: {
+          '@type': 'Organization',
+          name: organizerName,
+          url: SITE_URL,
+        },
+        offers: {
+          '@type': 'Offer',
+          price: basePrice,
+          priceCurrency: 'XOF',
+          availability: 'https://schema.org/InStock',
+          url: canonicalUrl,
+        },
+      })
+    : '';
+
+  const botRedirectMeta = isCrawlerBot
+    ? ''
+    : `<meta http-equiv="refresh" content="0;url=${safeTargetUrl}" />`;
+  const botRedirectScript = isCrawlerBot
+    ? ''
+    : `<script>
+      try {
+        window.location.replace(${JSON.stringify(targetUrl)});
+      } catch (e) {
+        window.location.href = ${JSON.stringify(targetUrl)};
+      }
+    </script>`;
 
   const html = `<!DOCTYPE html>
 <html lang="fr">
@@ -159,6 +231,7 @@ export default async function handler(req: any, res: any) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>${safeTitle}</title>
     <meta name="description" content="${safeDesc}" />
+    <link rel="canonical" href="${safeCanonicalUrl}" />
 
     <!-- Open Graph / WhatsApp / Facebook -->
     <meta property="og:type" content="website" />
@@ -180,8 +253,8 @@ export default async function handler(req: any, res: any) {
     <meta name="twitter:description" content="${safeDesc}" />
     <meta name="twitter:image" content="${safeImage}" />
 
-    <!-- Redirection automatique vers la billetterie pour les visiteurs humains -->
-    <meta http-equiv="refresh" content="0;url=${safeTargetUrl}" />
+    ${eventJsonLd ? `<script type="application/ld+json">${eventJsonLd}</script>` : ''}
+    ${botRedirectMeta}
 
     <style>
       body {
@@ -201,26 +274,31 @@ export default async function handler(req: any, res: any) {
         border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: 20px;
         padding: 30px;
-        max-width: 420px;
+        max-width: 520px;
         box-shadow: 0 20px 40px rgba(0,0,0,0.6);
       }
       .poster {
         width: 100%;
-        height: 200px;
+        height: 220px;
         object-fit: cover;
         border-radius: 12px;
         margin-bottom: 20px;
       }
       h1 {
-        font-size: 1.1rem;
+        font-size: 1.25rem;
         margin-bottom: 10px;
         color: #FFF;
       }
+      h2 {
+        font-size: 0.95rem;
+        margin-top: 16px;
+        color: #E9C349;
+      }
       p {
-        font-size: 0.85rem;
-        color: #AAA;
-        line-height: 1.4;
-        margin-bottom: 20px;
+        font-size: 0.9rem;
+        color: #E5E2E1;
+        line-height: 1.5;
+        margin-bottom: 16px;
       }
       .btn {
         display: inline-block;
@@ -235,21 +313,23 @@ export default async function handler(req: any, res: any) {
     </style>
   </head>
   <body>
-    <div class="card">
+    <main class="card">
       <img src="${safeImage}" alt="${safeTitle}" class="poster" />
       <h1>${safeTitle}</h1>
       <p>${safeDesc}</p>
-      <a href="${safeTargetUrl}" class="btn">Accéder à la billetterie &rarr;</a>
-    </div>
-
-    <script>
-      // Redirection instantanée côté navigateur
-      try {
-        window.location.replace(${JSON.stringify(targetUrl)});
-      } catch (e) {
-        window.location.href = ${JSON.stringify(targetUrl)};
+      ${
+        eventRecord
+          ? `<section>
+        <h2>Comment acheter un billet ?</h2>
+        <p>Réservez directement votre place en FCFA via Wave Sénégal ou Orange Money sur Thièsdn Billetterie et recevez votre pass QR officiel certifié.</p>
+        <h2>Lieu et organisateur</h2>
+        <p>Lieu : ${escapeHtml(venueName)}, ${escapeHtml(cityName)}. Organisé par ${escapeHtml(organizerName)}.</p>
+      </section>`
+          : ''
       }
-    </script>
+      <a href="${safeTargetUrl}" class="btn">Accéder à la billetterie &rarr;</a>
+    </main>
+    ${botRedirectScript}
   </body>
 </html>`;
 

@@ -1,16 +1,18 @@
 import React from 'react';
-import { motion } from 'framer-motion';
 import { Calendar, MapPin, ShieldCheck, Eye, Radio } from 'lucide-react';
 import { EventItem } from '../types';
 import { CountdownTimer } from './CountdownTimer';
 import { getEventEndDatetime } from '../services/supabase';
 import { getOptimizedImageUrl } from '../utils/imageOptimizer';
+import { getEventUrlPath } from '../utils/seo';
 import { SafeImage } from './SafeImage';
 
 interface EventCardProps {
   event: EventItem;
   variant?: 'featured' | 'list' | 'grid';
+  priority?: boolean;
   onSelect: (event: EventItem) => void;
+  onNavigateEventUrl?: (path: string, event: EventItem) => void;
   currentUserId?: string;
   currentRole?: string;
   isOwnerPromoter?: boolean;
@@ -20,7 +22,9 @@ interface EventCardProps {
 export const EventCard: React.FC<EventCardProps> = ({
   event,
   variant = 'grid',
+  priority = false,
   onSelect,
+  onNavigateEventUrl,
   currentUserId,
   currentRole,
   isOwnerPromoter,
@@ -47,21 +51,29 @@ export const EventCard: React.FC<EventCardProps> = ({
   );
 
   const optimizedPoster = getOptimizedImageUrl(event.posterUrl, 800, 80);
+  const eventPath = getEventUrlPath(event);
+
+  const handleLinkNavigation = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    e.stopPropagation();
+    if (onNavigateEventUrl) {
+      e.preventDefault();
+      onNavigateEventUrl(eventPath, event);
+    }
+  };
 
   if (variant === 'featured') {
     return (
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        whileHover={{ scale: 1.02 }}
-        transition={{ duration: 0.3, ease: 'easeOut' }}
+      <div
         onClick={() => onSelect(event)}
-        className="relative group cursor-pointer flex-shrink-0 w-80 sm:w-96 h-64 rounded-2xl overflow-hidden border border-white/10 shadow-xl transition-shadow duration-300 hover:shadow-2xl hover:shadow-[#8A2BE2]/20"
+        className="relative group cursor-pointer flex-shrink-0 w-80 sm:w-96 h-64 rounded-2xl overflow-hidden border border-white/10 shadow-xl transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl hover:shadow-[#8A2BE2]/20"
       >
         <SafeImage
           src={optimizedPoster}
           rawSrc={event.posterUrl}
           alt={event.title}
+          priority={priority}
+          width={384}
+          height={256}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent" />
@@ -103,9 +115,13 @@ export const EventCard: React.FC<EventCardProps> = ({
 
         {/* Bottom Details */}
         <div className="absolute bottom-3 inset-x-4 z-10 min-w-0">
-          <h3 className="font-heading font-bold text-lg sm:text-xl text-white line-clamp-1 group-hover:text-[#DCB8FF] transition-colors">
+          <a
+            href={eventPath}
+            onClick={handleLinkNavigation}
+            className="font-heading font-bold text-lg sm:text-xl text-white line-clamp-1 group-hover:text-[#DCB8FF] hover:underline transition-colors block"
+          >
             {event.title}
-          </h3>
+          </a>
           <div className="mt-1.5 space-y-1 text-xs text-gray-300">
             <div className="flex items-center gap-1.5">
               <Calendar className="w-3.5 h-3.5 text-[#DCB8FF] shrink-0" />
@@ -117,25 +133,24 @@ export const EventCard: React.FC<EventCardProps> = ({
             </div>
           </div>
         </div>
-      </motion.div>
+      </div>
     );
   }
 
   if (variant === 'list') {
     return (
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        whileHover={{ scale: 1.02 }}
-        transition={{ duration: 0.25, ease: 'easeOut' }}
+      <div
         onClick={() => onSelect(event)}
-        className="glass-panel p-3.5 rounded-2xl flex items-center gap-3 sm:gap-4 cursor-pointer hover:border-[#8A2BE2]/50 hover:bg-[#252328] transition-colors group min-w-0"
+        className="glass-panel p-3.5 rounded-2xl flex items-center gap-3 sm:gap-4 cursor-pointer hover:border-[#8A2BE2]/50 hover:bg-[#252328] hover:scale-[1.01] transition-all duration-200 group min-w-0"
       >
-        <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden flex-shrink-0 relative">
+        <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden flex-shrink-0 relative bg-[#121118]">
           <SafeImage
             src={getOptimizedImageUrl(event.posterUrl, 400, 80)}
             rawSrc={event.posterUrl}
             alt={event.title}
+            priority={priority}
+            width={96}
+            height={96}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
           />
           <div className="absolute top-1 left-1">
@@ -154,9 +169,13 @@ export const EventCard: React.FC<EventCardProps> = ({
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <h4 className="font-heading font-bold text-sm sm:text-base text-white truncate group-hover:text-[#DCB8FF] transition-colors">
+            <a
+              href={eventPath}
+              onClick={handleLinkNavigation}
+              className="font-heading font-bold text-sm sm:text-base text-white truncate group-hover:text-[#DCB8FF] hover:underline transition-colors"
+            >
               {event.title}
-            </h4>
+            </a>
             {isOngoing && (
               <span className="hidden sm:inline-flex bg-red-600/20 border border-red-500/40 text-red-400 text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full animate-pulse">
                 En Direct
@@ -227,26 +246,25 @@ export const EventCard: React.FC<EventCardProps> = ({
             )}
           </button>
         </div>
-      </motion.div>
+      </div>
     );
   }
 
   // Grid variant (Mobile Vertical 16/9, Desktop élégant)
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      whileHover={{ scale: 1.02 }}
-      transition={{ duration: 0.25, ease: 'easeOut' }}
+    <div
       onClick={() => onSelect(event)}
-      className="glass-panel rounded-2xl overflow-hidden flex flex-col cursor-pointer hover:border-[#8A2BE2]/50 transition-shadow duration-300 group shadow-lg min-w-0"
+      className="glass-panel rounded-2xl overflow-hidden flex flex-col cursor-pointer hover:border-[#8A2BE2]/50 hover:scale-[1.01] transition-all duration-200 group shadow-lg min-w-0"
     >
       {/* Vignette Hero 16/9 */}
-      <div className="h-44 sm:h-48 relative overflow-hidden aspect-[16/9] sm:aspect-auto">
+      <div className="h-44 sm:h-48 relative overflow-hidden aspect-[16/9] sm:aspect-auto bg-[#121118]">
         <SafeImage
           src={optimizedPoster}
           rawSrc={event.posterUrl}
           alt={event.title}
+          priority={priority}
+          width={600}
+          height={338}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent" />
@@ -276,11 +294,15 @@ export const EventCard: React.FC<EventCardProps> = ({
           </div>
         )}
 
-        {/* Titre superposé avec ombre */}
+        {/* Titre superposé avec ombre + lien SEO direct */}
         <div className="absolute bottom-2.5 left-3 right-3 text-white min-w-0">
-          <p className="font-heading font-bold text-sm sm:text-base line-clamp-1 group-hover:text-[#DCB8FF] transition-colors drop-shadow-md">
+          <a
+            href={eventPath}
+            onClick={handleLinkNavigation}
+            className="font-heading font-bold text-sm sm:text-base line-clamp-1 group-hover:text-[#DCB8FF] hover:underline transition-colors drop-shadow-md block"
+          >
             {event.title}
-          </p>
+          </a>
         </div>
       </div>
 
@@ -304,6 +326,8 @@ export const EventCard: React.FC<EventCardProps> = ({
                   <img
                     src={getOptimizedImageUrl(event.promoter.avatar, 120, 80)}
                     alt={event.promoter.name}
+                    width={20}
+                    height={20}
                     loading="lazy"
                     decoding="async"
                     className="w-5 h-5 rounded-full object-cover flex-shrink-0"
@@ -369,7 +393,7 @@ export const EventCard: React.FC<EventCardProps> = ({
           </button>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 };
 

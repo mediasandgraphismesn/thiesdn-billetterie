@@ -15,10 +15,20 @@ export const ShaderBackground: React.FC<ShaderBackgroundProps> = ({
     const canvas = canvasRef.current;
     if (!canvas) return;
 
+    if (
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ) {
+      return;
+    }
+
     const gl = (canvas.getContext('webgl') || canvas.getContext('experimental-webgl')) as WebGLRenderingContext | null;
     if (!gl) return;
 
-    let animationFrameId: number;
+    let animationFrameId = 0;
+    let isVisible = typeof document === 'undefined' ? true : !document.hidden;
+    let lastFrameTime = 0;
+    const FRAME_INTERVAL_MS = 1000 / 30; // Plafonné à 30 FPS pour préserver l'INP mobile
 
     const vs = `
       attribute vec2 a_position;
@@ -30,7 +40,7 @@ export const ShaderBackground: React.FC<ShaderBackgroundProps> = ({
     `;
 
     const fs = `
-      precision highp float;
+      precision mediump float;
       varying vec2 v_texCoord;
       uniform float u_time;
       uniform vec2 u_resolution;
@@ -130,21 +140,37 @@ export const ShaderBackground: React.FC<ShaderBackgroundProps> = ({
     gl.viewport(0, 0, canvas.width, canvas.height);
 
     const render = (time: number) => {
-      if (!gl || !canvas) return;
-      gl.viewport(0, 0, canvas.width, canvas.height);
-      if (uTime) gl.uniform1f(uTime, time * 0.001);
-      if (uRes) gl.uniform2f(uRes, canvas.width, canvas.height);
-      if (uMouse) gl.uniform2f(uMouse, mouse.x, mouse.y);
-      if (uInt) gl.uniform1f(uInt, intensity);
-
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      if (!gl || !canvas || !isVisible) return;
+      if (time - lastFrameTime >= FRAME_INTERVAL_MS) {
+        lastFrameTime = time;
+        if (uTime) gl.uniform1f(uTime, time * 0.001);
+        if (uRes) gl.uniform2f(uRes, canvas.width, canvas.height);
+        if (uMouse) gl.uniform2f(uMouse, mouse.x, mouse.y);
+        if (uInt) gl.uniform1f(uInt, intensity);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      }
       animationFrameId = requestAnimationFrame(render);
     };
 
-    animationFrameId = requestAnimationFrame(render);
+    const handleVisibilityChange = () => {
+      isVisible = !document.hidden;
+      if (isVisible) {
+        lastFrameTime = 0;
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = requestAnimationFrame(render);
+      } else {
+        cancelAnimationFrame(animationFrameId);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    if (isVisible) {
+      animationFrameId = requestAnimationFrame(render);
+    }
 
     return () => {
       cancelAnimationFrame(animationFrameId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('mousemove', handleMouseMove);
       resizeObserver.disconnect();
     };

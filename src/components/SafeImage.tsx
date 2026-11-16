@@ -5,6 +5,7 @@ interface SafeImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   src?: string | null;
   rawSrc?: string | null;
   alt: string;
+  priority?: boolean;
   className?: string;
   fallbackClassName?: string;
 }
@@ -19,6 +20,7 @@ export const SafeImage: React.FC<SafeImageProps> = ({
   src,
   rawSrc,
   alt,
+  priority = false,
   className = '',
   fallbackClassName = '',
   ...rest
@@ -62,8 +64,9 @@ export const SafeImage: React.FC<SafeImageProps> = ({
     <img
       src={currentSrc}
       alt={alt}
-      loading="lazy"
-      decoding="async"
+      loading={priority ? 'eager' : rest.loading || 'lazy'}
+      fetchPriority={priority ? 'high' : rest.fetchPriority}
+      decoding={priority ? 'sync' : 'async'}
       onError={handleError}
       className={`${className} object-cover`}
       {...rest}

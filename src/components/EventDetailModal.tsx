@@ -37,6 +37,7 @@ import {
 } from 'lucide-react';
 import { EventItem, TicketTier, UserTicket, OrderRecord } from '../types';
 import { getOptimizedImageUrl } from '../utils/imageOptimizer';
+import { getEventUrlPath } from '../utils/seo';
 import {
   createOrderWithStockCheck,
   registerEventPreRegistration,
@@ -71,6 +72,7 @@ interface EventDetailModalProps {
   currentUserId?: string;
   currentRole?: string;
   onManageEvent?: (event: EventItem) => void;
+  onOpenEventLanding?: (path: string, event: EventItem) => void;
 }
 
 export const EventDetailModal: React.FC<EventDetailModalProps> = ({
@@ -88,6 +90,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
   currentUserId,
   currentRole,
   onManageEvent,
+  onOpenEventLanding,
 }) => {
   if (!isOpen || !event) return null;
 
@@ -631,6 +634,21 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                 </div>
 
                 <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <a
+                    href={getEventUrlPath(event)}
+                    onClick={(e) => {
+                      if (onOpenEventLanding) {
+                        e.preventDefault();
+                        onOpenEventLanding(getEventUrlPath(event), event);
+                      }
+                    }}
+                    className="h-9 px-3 rounded-full bg-[#1C1B1B]/90 hover:bg-[#2A2930] backdrop-blur-md text-[#E9C349] text-[11px] font-heading font-extrabold flex items-center gap-1.5 border border-[#E9C349]/40 transition-all shadow-lg whitespace-nowrap"
+                    title="Ouvrir la page dédiée de l'événement"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span className="hidden min-[380px]:inline">Fiche complète &amp; Infos</span>
+                    <span className="min-[380px]:hidden">Fiche</span>
+                  </a>
                   <a
                     href={whatsappShareEventUrl}
                     target="_blank"

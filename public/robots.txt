@@ -1,0 +1,16 @@
+User-agent: *
+Allow: /
+Allow: /explorer
+Allow: /evenements/
+Allow: /evenement/
+Allow: /event/
+Allow: /cgv
+Allow: /showcase
+Disallow: /admin
+Disallow: /pos
+Disallow: /vendeur
+Disallow: /api/
+Allow: /api/sitemap
+Allow: /api/preview
+
+Sitemap: https://billetterie.thiesdn.site/sitemap.xml

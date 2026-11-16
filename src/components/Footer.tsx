@@ -10,6 +10,7 @@ import {
   Youtube,
   FileText,
   HelpCircle,
+  MapPin,
   X,
 } from 'lucide-react';
 
@@ -31,9 +32,10 @@ import { TermsOfServiceModal } from './TermsOfServiceModal';
 interface FooterProps {
   onNavigateAdmin?: () => void;
   onNavigateCGV?: () => void;
+  onNavigatePath?: (path: string) => void;
 }
 
-export const Footer: React.FC<FooterProps> = ({ onNavigateAdmin, onNavigateCGV }) => {
+export const Footer: React.FC<FooterProps> = ({ onNavigateAdmin, onNavigateCGV, onNavigatePath }) => {
   const [legalModal, setLegalModal] = useState<'confidentialite' | 'faq' | 'cgv' | null>(null);
   const [isCGVModalOpen, setIsCGVModalOpen] = useState(false);
 
@@ -41,13 +43,13 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateAdmin, onNavigateCGV }
   const socialLinks = [
     {
       name: 'Facebook',
-      url: 'https://facebook.com/thiesdn',
+      url: 'https://www.facebook.com/Thiesdn',
       icon: Facebook,
       hoverColor: 'hover:text-[#8A2BE2] hover:border-[#8A2BE2]/50 hover:bg-[#8A2BE2]/10',
     },
     {
       name: 'Instagram',
-      url: 'https://instagram.com/thiesdn',
+      url: 'https://www.instagram.com/thies_dn',
       icon: Instagram,
       hoverColor: 'hover:text-[#E9C349] hover:border-[#E9C349]/50 hover:bg-[#E9C349]/10',
     },
@@ -124,6 +126,17 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateAdmin, onNavigateCGV }
                 </a>
 
                 <a
+                  href="https://maps.app.goo.gl/NmftZjQ1fEU3eFZk9"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 text-gray-300 hover:text-[#E9C349] transition-colors py-0.5"
+                >
+                  <MapPin className="w-4 h-4 text-[#E9C349] shrink-0" />
+                  <span>Grand Standing, Thiès, Sénégal (Google Maps)</span>
+                  <ExternalLink className="w-3 h-3 text-gray-300 shrink-0" />
+                </a>
+
+                <a
                   href="https://thiesdn.mgartswork.site/"
                   target="_blank"
                   rel="noopener noreferrer"
@@ -131,8 +144,33 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateAdmin, onNavigateCGV }
                 >
                   <Globe className="w-4 h-4 text-[#E9C349] shrink-0" />
                   <span>thiesdn.mgartswork.site</span>
-                  <ExternalLink className="w-3 h-3 text-gray-600 shrink-0" />
+                  <ExternalLink className="w-3 h-3 text-gray-300 shrink-0" />
                 </a>
+              </div>
+
+              {/* Guides SEO Villes */}
+              <div className="pt-2 border-t border-white/5 w-full flex flex-wrap items-center justify-center md:justify-start gap-x-3 gap-y-1.5 text-[11px]">
+                {[
+                  { label: 'Thiès', path: '/evenements/thies' },
+                  { label: 'Dakar', path: '/evenements/dakar' },
+                  { label: 'Saly', path: '/evenements/saly' },
+                  { label: 'Mbour', path: '/evenements/mbour' },
+                  { label: 'Explorer', path: '/explorer' },
+                ].map((item) => (
+                  <a
+                    key={item.path}
+                    href={item.path}
+                    onClick={(e) => {
+                      if (onNavigatePath) {
+                        e.preventDefault();
+                        onNavigatePath(item.path);
+                      }
+                    }}
+                    className="text-gray-300 hover:text-[#E9C349] transition-colors font-semibold"
+                  >
+                    {item.label}
+                  </a>
+                ))}
               </div>
 
               {/* Liens légaux & Admin */}

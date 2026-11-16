@@ -49,6 +49,14 @@
   ],
   "rewrites": [
     {
+      "source": "/sitemap.xml",
+      "destination": "/api/sitemap"
+    },
+    {
+      "source": "/robots.txt",
+      "destination": "/robots.txt"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/$1"
     },
@@ -57,7 +65,7 @@
       "destination": "/api/preview?id=:id"
     },
     {
-      "source": "/((?!api/|event/).*)",
+      "source": "/((?!api/|event/|robots\\.txt|sitemap\\.xml).*)",
       "destination": "/index.html"
     }
   ]

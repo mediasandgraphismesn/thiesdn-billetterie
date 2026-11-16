@@ -2,11 +2,6 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { BottomNav } from './components/BottomNav';
-import { ShaderBackground } from './components/ShaderBackground';
-import { EventDetailModal } from './components/EventDetailModal';
-import { TicketDetailModal } from './components/TicketDetailModal';
-import { Footer } from './components/Footer';
-import { PWAInstallPrompt } from './components/PWAInstallPrompt';
 import { ShieldAlert, Eye, ArrowRight, X } from 'lucide-react';
 
 import { HomeView } from './views/HomeView';
@@ -19,6 +14,16 @@ import {
   playNotificationChime,
 } from './services/userNotificationService';
 import LoadingIntro from './components/LoadingIntro';
+import { extractEventIdFromPath, getCitySlug, applySeoMetadata } from './utils/seo';
+
+// Optimisation React 19 + Core Web Vitals (INP) : Code Splitting intégral des composants lourds
+const ShaderBackground = React.lazy(() => import('./components/ShaderBackground').then((m) => ({ default: m.ShaderBackground })));
+const EventDetailModal = React.lazy(() => import('./components/EventDetailModal').then((m) => ({ default: m.EventDetailModal })));
+const TicketDetailModal = React.lazy(() => import('./components/TicketDetailModal').then((m) => ({ default: m.TicketDetailModal })));
+const PWAInstallPrompt = React.lazy(() => import('./components/PWAInstallPrompt').then((m) => ({ default: m.PWAInstallPrompt })));
+const Footer = React.lazy(() => import('./components/Footer').then((m) => ({ default: m.Footer })));
+const EventLandingView = React.lazy(() => import('./views/EventLandingView').then((m) => ({ default: m.EventLandingView })));
+const CityGuideView = React.lazy(() => import('./views/CityGuideView').then((m) => ({ default: m.CityGuideView })));
 
 // Optimisation React 19 : Code Splitting intégral pour affichage instantané mobile
 const ExploreView = React.lazy(() => import('./views/ExploreView').then((m) => ({ default: m.ExploreView })));
@@ -224,6 +229,9 @@ export default function App() {
   const [userAlertToast, setUserAlertToast] = useState<{ id: string; title: string; body: string; url?: string } | null>(null);
 
   const [activeTab, setActiveTab] = useState<string>('home');
+  const [cityGuideSlug, setCityGuideSlug] = useState<string>('thies');
+  const [landingEventId, setLandingEventId] = useState<string | null>(null);
+  const [shouldMountShader, setShouldMountShader] = useState<boolean>(false);
   const [orderFilter, setOrderFilter] = useState<string | null>(null);
   const [hasGuestOrderToken, setHasGuestOrderToken] = useState<boolean>(false);
   // Rôle de session réel provenant de Supabase Auth (synchronisé en temps réel avec le contexte)
@@ -333,6 +341,20 @@ export default function App() {
         setActiveTab('showcase');
       }
 
+      // 6.5 Routes SEO Publiques : Guides Villes (/evenements/:city), Fiches Événement (/evenement/:slug--:id) et Explorer (/explorer)
+      const cityMatch = path.match(/^\/evenements\/([a-zA-Z0-9_-]+)/i);
+      const eventPathId = extractEventIdFromPath(path);
+      const urlEventParam = new URLSearchParams(search).get('event');
+      if (cityMatch && cityMatch[1]) {
+        setCityGuideSlug(getCitySlug(cityMatch[1]));
+        setActiveTab('city_guide');
+      } else if (eventPathId || urlEventParam) {
+        setLandingEventId(eventPathId || urlEventParam);
+        setActiveTab('event_detail');
+      } else if (path === '/explorer' || path === '/explore') {
+        setActiveTab('explore');
+      }
+
       // 7. Routes Authentification, Inscription & Profil
       if (
         path === '/inscription' ||
@@ -410,8 +432,18 @@ export default function App() {
         setPosLinkedAgentId(null);
 
         const currentPath = window.location.pathname;
+        const popCityMatch = currentPath.match(/^\/evenements\/([a-zA-Z0-9_-]+)/i);
+        const popEventId = extractEventIdFromPath(currentPath);
         if (currentPath === '/admin') {
           setActiveTab('dashboard');
+        } else if (popCityMatch && popCityMatch[1]) {
+          setCityGuideSlug(getCitySlug(popCityMatch[1]));
+          setActiveTab('city_guide');
+        } else if (popEventId) {
+          setLandingEventId(popEventId);
+          setActiveTab('event_detail');
+        } else if (currentPath === '/explorer' || currentPath === '/explore') {
+          setActiveTab('explore');
         } else if (currentPath === '/create-event') {
           setActiveTab('create');
         } else if (currentPath === '/cgv') {
@@ -663,6 +695,35 @@ export default function App() {
     };
   }, [isAuthenticated, user?.id]);
 
+  // Optimisation Core Web Vitals (INP) : Différer le montage du Shader WebGL jusqu'à l'état idle du thread principal
+  useEffect(() => {
+    if (typeof window === 'undefined' || !ambientShader) return;
+    let cancelled = false;
+    const win = window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    if (typeof win.requestIdleCallback === 'function') {
+      const id = win.requestIdleCallback(
+        () => {
+          if (!cancelled) setShouldMountShader(true);
+        },
+        { timeout: 1800 }
+      );
+      return () => {
+        cancelled = true;
+        win.cancelIdleCallback?.(id);
+      };
+    }
+    const timer = window.setTimeout(() => {
+      if (!cancelled) setShouldMountShader(true);
+    }, 1500);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [ambientShader]);
+
   // Contrôle d'accès strict par rôle aux onglets (Route Guards)
   const isTabAllowedForRole = (tab: string, role: 'user' | 'promoter' | 'admin' | 'sales_agent' | 'artist', isAuth: boolean): boolean => {
     // Verrouillage hermétique des comptes POS : aucun onglet client/profil/admin/CGV autorisé
@@ -670,8 +731,8 @@ export default function App() {
       return tab === 'sales_agent';
     }
 
-    // Les Conditions Générales de Vente et la Vitrine Showcase sont d'ordre public et consultables par tous
-    if (tab === 'cgv' || tab === 'showcase' || tab === 'presentation') {
+    // Les pages SEO publiques (guides villes, fiches événements, CGV, showcase) sont consultables par tous
+    if (tab === 'cgv' || tab === 'showcase' || tab === 'presentation' || tab === 'city_guide' || tab === 'event_detail') {
       return true;
     }
 
@@ -686,7 +747,7 @@ export default function App() {
     }
 
     if (!isAuth) {
-      return ['home', 'explore', 'cgv', 'showcase', 'presentation', ...(hasGuestOrderToken ? ['tickets'] : [])].includes(tab);
+      return ['home', 'explore', 'city_guide', 'event_detail', 'cgv', 'showcase', 'presentation', ...(hasGuestOrderToken ? ['tickets'] : [])].includes(tab);
     }
     if (role === 'admin') {
       return true; // Accès complet
@@ -732,6 +793,8 @@ export default function App() {
     if (typeof window !== 'undefined') {
       if (targetTab === 'dashboard' && window.location.pathname !== '/admin') {
         window.history.pushState(null, '', '/admin');
+      } else if (targetTab === 'explore' && window.location.pathname !== '/explorer') {
+        window.history.pushState(null, '', '/explorer');
       } else if (targetTab === 'create' && window.location.pathname !== '/create-event') {
         window.history.pushState(null, '', '/create-event');
       } else if (targetTab === 'cgv' && window.location.pathname !== '/cgv') {
@@ -743,6 +806,44 @@ export default function App() {
       }
     }
   };
+
+  const navigateToPath = (rawPath: string) => {
+    if (typeof window === 'undefined') return;
+    const cleanPath = rawPath.startsWith('/') ? rawPath : `/${rawPath}`;
+    if (window.location.pathname !== cleanPath) {
+      window.history.pushState(null, '', cleanPath);
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    const cityMatch = cleanPath.match(/^\/evenements\/([a-zA-Z0-9_-]+)/i);
+    const evtId = extractEventIdFromPath(cleanPath);
+    if (cityMatch && cityMatch[1]) {
+      setCityGuideSlug(getCitySlug(cityMatch[1]));
+      setActiveTab('city_guide');
+    } else if (evtId) {
+      setLandingEventId(evtId);
+      setActiveTab('event_detail');
+    } else if (cleanPath === '/explorer' || cleanPath === '/explore') {
+      setActiveTab('explore');
+    } else if (cleanPath === '/cgv') {
+      setActiveTab('cgv');
+    } else if (cleanPath === '/showcase') {
+      setActiveTab('showcase');
+    } else {
+      setActiveTab('home');
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'explore') {
+      applySeoMetadata({
+        title: 'Explorer les Événements au Sénégal (Thiès, Dakar, Saly, Mbour) | Thiesdn',
+        description:
+          'Découvrez tous les concerts, galas, festivals et soirées VIP à Thiès, Dakar, Saly et Mbour. Filtrez par ville ou catégorie et réservez avec Wave ou Orange Money.',
+        canonicalPath: '/explorer',
+      });
+    }
+  }, [activeTab]);
 
   // Chargement des événements réels depuis Supabase (Source Unique de Vérité avec Résilience Totale)
   const refreshEvents = async () => {
@@ -1322,8 +1423,12 @@ export default function App() {
       {/* African pattern overlay */}
       <div className="bg-pattern" />
 
-      {/* WebGL Ambient Neon Fluid Background Shader */}
-      {ambientShader && <ShaderBackground intensity={0.55} />}
+      {/* WebGL Ambient Neon Fluid Background Shader (Différé après idle pour optimiser INP) */}
+      {ambientShader && shouldMountShader && (
+        <React.Suspense fallback={null}>
+          <ShaderBackground intensity={0.55} />
+        </React.Suspense>
+      )}
 
       {/* Main App Layout */}
       <div className="flex-1 flex flex-col relative z-10">
@@ -1606,9 +1711,37 @@ export default function App() {
                   currentUserId={user.id}
                   currentRole={effectiveRole}
                   onSelectEvent={(evt) => setSelectedEventForDetail(evt)}
+                  onNavigatePath={navigateToPath}
                   onManageEvent={() => handleTabChange('finances')}
                   onNavigateToExplore={() => handleTabChange('explore')}
                   onNavigateToCreate={() => handleTabChange('create')}
+                />
+              )}
+
+              {/* GUIDES PAR VILLE SEO LOCAL (/evenements/thies, /evenements/dakar, /evenements/saly, /evenements/mbour) */}
+              {activeTab === 'city_guide' && (
+                <CityGuideView
+                  citySlug={cityGuideSlug}
+                  events={publicEvents}
+                  isLoading={isLoadingEvents}
+                  onSelectEvent={(evt) => setSelectedEventForDetail(evt)}
+                  onNavigatePath={navigateToPath}
+                />
+              )}
+
+              {/* PAGE DE DESTINATION SEO / GEO PAR ÉVÉNEMENT (/evenement/:slug--:id) */}
+              {activeTab === 'event_detail' && (
+                <EventLandingView
+                  event={
+                    safeEvents.find((e) => e.id === landingEventId) ||
+                    publicEvents.find((e) => e.id === landingEventId) ||
+                    null
+                  }
+                  allEvents={publicEvents}
+                  isLoading={isLoadingEvents}
+                  onBuyTicket={(evt) => setSelectedEventForDetail(evt)}
+                  onNavigatePath={navigateToPath}
+                  onSelectOtherEvent={(evt) => setSelectedEventForDetail(evt)}
                 />
               )}
 
@@ -1826,9 +1959,12 @@ export default function App() {
 
           {/* Pied de page Officiel (Footer) complet et responsive */}
           {activeTab !== 'showcase' && activeTab !== 'presentation' && !isKioskPosMode && (
-            <Footer
-              onNavigateCGV={() => handleTabChange('cgv')}
-            />
+            <React.Suspense fallback={null}>
+              <Footer
+                onNavigateCGV={() => handleTabChange('cgv')}
+                onNavigatePath={navigateToPath}
+              />
+            </React.Suspense>
           )}
         </main>
       </div>
@@ -1846,53 +1982,67 @@ export default function App() {
         />
       )}
 
-      {/* Event Details & VIP Booking Modal */}
-      <EventDetailModal
-        event={selectedEventForDetail}
-        isOpen={selectedEventForDetail !== null}
-        onClose={() => setSelectedEventForDetail(null)}
-        onOrderCreated={(order) => {
-          const newNotif: NotificationItem = {
-            id: `notif-${Date.now()}`,
-            title: 'Commande Créée (Wave/OM)',
-            message: `Votre commande ${order.reference} (${order.totalAmount.toLocaleString('fr-FR')} FCFA) a été enregistrée. Effectuez le transfert pour recevoir vos billets.`,
-            timestamp: 'À l’instant',
-            read: false,
-            type: 'ticket',
-          };
-          setNotifications((prev) => [newNotif, ...prev]);
-        }}
-        onPurchaseSuccess={handlePurchaseSuccess}
-        onNavigateToTickets={() => {
-          setSelectedEventForDetail(null);
-          setActiveTab('tickets');
-        }}
-        userName={user.name}
-        userEmail={user.email}
-        isEmailConfirmed={Boolean(user.isEmailConfirmed)}
-        isAuthenticated={isAuthenticated}
-        onRequireAuth={() => {
-          setSelectedEventForDetail(null);
-          setActiveTab('profile');
-        }}
-        currentUserId={user.id}
-        currentRole={effectiveRole}
-        onManageEvent={() => {
-          setSelectedEventForDetail(null);
-          handleTabChange('finances');
-        }}
-      />
+      {/* Event Details & VIP Booking Modal (Lazy-loaded pour optimiser l'INP) */}
+      {selectedEventForDetail !== null && (
+        <React.Suspense fallback={null}>
+          <EventDetailModal
+            event={selectedEventForDetail}
+            isOpen={true}
+            onClose={() => setSelectedEventForDetail(null)}
+            onOpenEventLanding={(path) => {
+              setSelectedEventForDetail(null);
+              navigateToPath(path);
+            }}
+            onOrderCreated={(order) => {
+              const newNotif: NotificationItem = {
+                id: `notif-${Date.now()}`,
+                title: 'Commande Créée (Wave/OM)',
+                message: `Votre commande ${order.reference} (${order.totalAmount.toLocaleString('fr-FR')} FCFA) a été enregistrée. Effectuez le transfert pour recevoir vos billets.`,
+                timestamp: 'À l’instant',
+                read: false,
+                type: 'ticket',
+              };
+              setNotifications((prev) => [newNotif, ...prev]);
+            }}
+            onPurchaseSuccess={handlePurchaseSuccess}
+            onNavigateToTickets={() => {
+              setSelectedEventForDetail(null);
+              setActiveTab('tickets');
+            }}
+            userName={user.name}
+            userEmail={user.email}
+            isEmailConfirmed={Boolean(user.isEmailConfirmed)}
+            isAuthenticated={isAuthenticated}
+            onRequireAuth={() => {
+              setSelectedEventForDetail(null);
+              setActiveTab('profile');
+            }}
+            currentUserId={user.id}
+            currentRole={effectiveRole}
+            onManageEvent={() => {
+              setSelectedEventForDetail(null);
+              handleTabChange('finances');
+            }}
+          />
+        </React.Suspense>
+      )}
 
-      {/* Digital Ticket Pass Modal */}
-      <TicketDetailModal
-        ticket={selectedTicketForPass}
-        isOpen={selectedTicketForPass !== null}
-        onClose={() => setSelectedTicketForPass(null)}
-        mode="client"
-      />
+      {/* Digital Ticket Pass Modal (Lazy-loaded pour optimiser l'INP) */}
+      {selectedTicketForPass !== null && (
+        <React.Suspense fallback={null}>
+          <TicketDetailModal
+            ticket={selectedTicketForPass}
+            isOpen={true}
+            onClose={() => setSelectedTicketForPass(null)}
+            mode="client"
+          />
+        </React.Suspense>
+      )}
 
-      {/* Bannière PWA d'installation (mobile exclusif) */}
-      <PWAInstallPrompt />
+      {/* Bannière PWA d'installation (mobile exclusif, lazy-loaded) */}
+      <React.Suspense fallback={null}>
+        <PWAInstallPrompt />
+      </React.Suspense>
     </div>
   );
 }
