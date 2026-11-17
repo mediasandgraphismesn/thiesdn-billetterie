@@ -73,6 +73,8 @@ export default defineConfig(() => {
             if (id.includes('@supabase/')) return 'vendor-supabase';
             if (id.includes('lucide-react')) return 'vendor-icons';
             if (id.includes('leaflet')) return 'vendor-maps';
+            if (id.includes('recharts') || id.includes('d3-')) return 'vendor-charts';
+            if (id.includes('@dnd-kit/')) return 'vendor-dnd';
             if (id.includes('html5-qrcode') || id.includes('jsqr') || id.includes('zxing-wasm')) {
               return 'vendor-scanner';
             }

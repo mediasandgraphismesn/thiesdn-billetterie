@@ -170,6 +170,9 @@ export interface SalesAgent {
   telephone: string;        // Contact Wave / OM
   email?: string;
   quartier?: string;
+  adresse?: string;
+  latitude?: number;
+  longitude?: number;
   allocatedCount: number;   // Nombre total de billets confiés
   soldCount: number;        // Nombre de billets déclarés vendus
   commissionPercent: number; // Commission (ex: 5% ou 10%)
@@ -405,4 +408,41 @@ export const CATEGORIES: { label: string; value: string; icon: string }[] = [
 ];
 
 export const SENEGAL_CITIES = ['All', 'Thiès', 'Mbour', 'Saly', 'Dakar'];
+
+export interface ConnectionLogRecord {
+  id: string;
+  userId?: string;
+  email: string;
+  ipAddress?: string;
+  userAgent?: string;
+  city?: string;
+  country?: string;
+  deviceFingerprint?: string;
+  action: string;
+  isSuspicious: boolean;
+  createdAt: string;
+}
+
+export type EventAnalyticsAction =
+  | 'click'
+  | 'share_whatsapp'
+  | 'share_facebook'
+  | 'share_twitter'
+  | 'share_copy_link';
+
+export type EventAnalyticsSource = 'site' | 'social';
+export type EventAnalyticsDevice = 'mobile' | 'desktop';
+
+export interface EventAnalyticsRecord {
+  id: string;
+  eventId: string;
+  action: EventAnalyticsAction;
+  source: EventAnalyticsSource;
+  device: EventAnalyticsDevice;
+  utmSource?: string | null;
+  utmMedium?: string | null;
+  utmCampaign?: string | null;
+  city?: string | null;
+  createdAt: string;
+}
 

@@ -2,7 +2,7 @@ import React from 'react';
 import { Calendar, MapPin, ShieldCheck, Eye, Radio } from 'lucide-react';
 import { EventItem } from '../types';
 import { CountdownTimer } from './CountdownTimer';
-import { getEventEndDatetime } from '../services/supabase';
+import { getEventEndDatetime, trackEventAnalytics } from '../services/supabase';
 import { getOptimizedImageUrl } from '../utils/imageOptimizer';
 import { getEventUrlPath } from '../utils/seo';
 import { SafeImage } from './SafeImage';
@@ -55,16 +55,30 @@ export const EventCard: React.FC<EventCardProps> = ({
 
   const handleLinkNavigation = (e: React.MouseEvent<HTMLAnchorElement>) => {
     e.stopPropagation();
+    trackEventAnalytics({
+      eventId: event.id,
+      action: 'click',
+      city: event.city,
+    });
     if (onNavigateEventUrl) {
       e.preventDefault();
       onNavigateEventUrl(eventPath, event);
     }
   };
 
+  const handleCardSelect = () => {
+    trackEventAnalytics({
+      eventId: event.id,
+      action: 'click',
+      city: event.city,
+    });
+    onSelect(event);
+  };
+
   if (variant === 'featured') {
     return (
       <div
-        onClick={() => onSelect(event)}
+        onClick={handleCardSelect}
         className="relative group cursor-pointer flex-shrink-0 w-80 sm:w-96 h-64 rounded-2xl overflow-hidden border border-white/10 shadow-xl transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl hover:shadow-[#8A2BE2]/20"
       >
         <SafeImage
@@ -140,7 +154,7 @@ export const EventCard: React.FC<EventCardProps> = ({
   if (variant === 'list') {
     return (
       <div
-        onClick={() => onSelect(event)}
+        onClick={handleCardSelect}
         className="glass-panel p-3.5 rounded-2xl flex items-center gap-3 sm:gap-4 cursor-pointer hover:border-[#8A2BE2]/50 hover:bg-[#252328] hover:scale-[1.01] transition-all duration-200 group min-w-0"
       >
         <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden flex-shrink-0 relative bg-gradient-to-br from-[#1c122c] via-[#121118] to-[#0A0A0A]">
@@ -253,7 +267,7 @@ export const EventCard: React.FC<EventCardProps> = ({
   // Grid variant (Mobile Vertical 16/9, Desktop élégant)
   return (
     <div
-      onClick={() => onSelect(event)}
+      onClick={handleCardSelect}
       className="glass-panel rounded-2xl overflow-hidden flex flex-col cursor-pointer hover:border-[#8A2BE2]/50 hover:scale-[1.01] transition-all duration-200 group shadow-lg min-w-0"
     >
       {/* Vignette Hero 16/9 */}

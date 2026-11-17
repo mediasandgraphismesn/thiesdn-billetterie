@@ -20,8 +20,13 @@ import {
   ScanStation,
   EventPreRegistration,
   LoginHistoryRecord,
+  ConnectionLogRecord,
   VigileSessionRecord,
   PosShiftHandoverRecord,
+  EventAnalyticsRecord,
+  EventAnalyticsAction,
+  EventAnalyticsSource,
+  EventAnalyticsDevice,
 } from '../types';
 import { INITIAL_TICKETS } from '../data/mockEvents';
 import { parseEventDates } from './calendar';
@@ -1605,6 +1610,9 @@ export const fetchSalesAgentsFromSupabase = async (
       telephone: String(d.telephone || ''),
       email: d.email ? String(d.email) : undefined,
       quartier: d.quartier ? String(d.quartier) : undefined,
+      adresse: d.adresse ? String(d.adresse) : undefined,
+      latitude: typeof d.latitude === 'number' ? d.latitude : d.latitude ? Number(d.latitude) : undefined,
+      longitude: typeof d.longitude === 'number' ? d.longitude : d.longitude ? Number(d.longitude) : undefined,
       allocatedCount: Number(d.allocated_count) || 0,
       soldCount: Number(d.sold_count) || 0,
       commissionPercent: Number(d.commission_percent) || 0,
@@ -7664,17 +7672,58 @@ export const getIpGeoLocation = async (ip: string): Promise<{ country: string; c
   return { country: 'Sénégal', city: 'Thiès' };
 };
 
+export const computeDeviceFingerprint = async (): Promise<string> => {
+  if (typeof navigator === 'undefined') return 'server-unknown';
+  const raw = [
+    navigator.userAgent || '',
+    navigator.language || '',
+    typeof screen !== 'undefined' ? `${screen.width}x${screen.height}x${screen.colorDepth}` : '0x0',
+    Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+    String(navigator.hardwareConcurrency || 0),
+  ].join('|');
+
+  try {
+    if (typeof crypto !== 'undefined' && crypto.subtle) {
+      const encoded = new TextEncoder().encode(raw);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', encoded);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 24);
+    }
+  } catch {}
+
+  let hash = 0;
+  for (let i = 0; i < raw.length; i += 1) {
+    hash = (hash << 5) - hash + raw.charCodeAt(i);
+    hash |= 0;
+  }
+  return `fp-${Math.abs(hash).toString(16)}`;
+};
+
+const isCountrySenegal = (country?: string | null): boolean => {
+  if (!country) return true;
+  const norm = country
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+  return norm.includes('senegal');
+};
+
 /**
- * Enregistrer une connexion utilisateur (Login History)
+ * Enregistrer une connexion utilisateur (Login History + Connection Logs)
  */
 export const recordLoginHistory = async (
   email: string,
   userId?: string,
   action: string = 'login'
 ): Promise<void> => {
-  const ip = await getClientPublicIp();
+  const [ip, fingerprint] = await Promise.all([
+    getClientPublicIp(),
+    computeDeviceFingerprint(),
+  ]);
   const geo = await getIpGeoLocation(ip);
   const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : 'Client Web';
+  const isSuspicious = !isCountrySenegal(geo.country) || !userAgent || userAgent === 'Client Web';
 
   const newLog: LoginHistoryRecord = {
     id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `log-${Date.now()}`,
@@ -7691,16 +7740,31 @@ export const recordLoginHistory = async (
   const client = getSupabaseClient();
   if (client) {
     try {
-      await client.from('login_history').insert([
-        {
-          user_id: isValidUUID(userId) ? userId : null,
-          email: newLog.email,
-          ip_address: newLog.ipAddress,
-          user_agent: newLog.userAgent,
-          country: newLog.country,
-          city: newLog.city,
-          action: newLog.action,
-        },
+      await Promise.all([
+        client.from('login_history').insert([
+          {
+            user_id: isValidUUID(userId) ? userId : null,
+            email: newLog.email,
+            ip_address: newLog.ipAddress,
+            user_agent: newLog.userAgent,
+            country: newLog.country,
+            city: newLog.city,
+            action: newLog.action,
+          },
+        ]),
+        client.from('connection_logs').insert([
+          {
+            user_id: isValidUUID(userId) ? userId : null,
+            email: newLog.email,
+            ip_address: newLog.ipAddress,
+            user_agent: newLog.userAgent,
+            city: newLog.city,
+            country: newLog.country,
+            device_fingerprint: fingerprint,
+            action: newLog.action,
+            is_suspicious: isSuspicious,
+          },
+        ]),
       ]);
     } catch (e) {
       console.warn('Fallback enregistrement log Supabase:', e);
@@ -7714,6 +7778,84 @@ export const recordLoginHistory = async (
     logs.unshift(newLog);
     localStorage.setItem(LOGIN_HISTORY_CACHE_KEY, JSON.stringify(logs.slice(0, 300)));
   } catch {}
+};
+
+/**
+ * Récupérer les journaux de connexion (connection_logs avec repli sur login_history)
+ */
+export const fetchConnectionLogs = async (
+  limit: number = 100
+): Promise<{ logs: ConnectionLogRecord[]; error: string | null }> => {
+  const client = getSupabaseClient();
+  if (!client) {
+    const fallback = await fetchLoginHistory(1, limit);
+    return {
+      logs: fallback.logs.map((l) => ({
+        id: l.id,
+        userId: l.userId,
+        email: l.email,
+        ipAddress: l.ipAddress,
+        userAgent: l.userAgent,
+        city: l.city,
+        country: l.country,
+        deviceFingerprint: undefined,
+        action: l.action,
+        isSuspicious: !isCountrySenegal(l.country),
+        createdAt: l.createdAt,
+      })),
+      error: null,
+    };
+  }
+
+  try {
+    const { data, error } = await client
+      .from('connection_logs')
+      .select('id, user_id, email, ip_address, user_agent, city, country, device_fingerprint, action, is_suspicious, created_at')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (!error && data && data.length > 0) {
+      const mapped: ConnectionLogRecord[] = (data as Array<Record<string, unknown>>).map((row) => ({
+        id: String(row.id || ''),
+        userId: row.user_id ? String(row.user_id) : undefined,
+        email: String(row.email || ''),
+        ipAddress: row.ip_address ? String(row.ip_address) : undefined,
+        userAgent: row.user_agent ? String(row.user_agent) : undefined,
+        city: row.city ? String(row.city) : undefined,
+        country: row.country ? String(row.country) : undefined,
+        deviceFingerprint: row.device_fingerprint ? String(row.device_fingerprint) : undefined,
+        action: row.action ? String(row.action) : 'login',
+        isSuspicious:
+          typeof row.is_suspicious === 'boolean'
+            ? row.is_suspicious
+            : !isCountrySenegal(row.country ? String(row.country) : undefined),
+        createdAt: String(row.created_at || new Date().toISOString()),
+      }));
+      return { logs: mapped, error: null };
+    }
+
+    // Repli sur login_history si connection_logs est vide ou pas encore migrée
+    const fallback = await fetchLoginHistory(1, limit);
+    return {
+      logs: fallback.logs.map((l) => ({
+        id: l.id,
+        userId: l.userId,
+        email: l.email,
+        ipAddress: l.ipAddress,
+        userAgent: l.userAgent,
+        city: l.city,
+        country: l.country,
+        deviceFingerprint: undefined,
+        action: l.action,
+        isSuspicious: !isCountrySenegal(l.country),
+        createdAt: l.createdAt,
+      })),
+      error: error ? error.message : null,
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Erreur lecture connection_logs';
+    return { logs: [], error: message };
+  }
 };
 
 /**
@@ -8461,6 +8603,195 @@ export const fetchPosShiftHandovers = async (options?: {
     return {
       handovers: filterLocal(getStoredPosShiftHandovers()),
       error: err instanceof Error ? err.message : 'Erreur chargement clôtures POS',
+    };
+  }
+};
+
+// ==============================================================================
+// ANALYTICS AUDIENCE & ATTRIBUTION UTM (event_analytics)
+// ==============================================================================
+
+export type ShareUtmChannel = 'whatsapp' | 'facebook' | 'twitter' | 'copy';
+
+export interface UtmParams {
+  utmSource: string | null;
+  utmMedium: string | null;
+  utmCampaign: string | null;
+}
+
+/**
+ * Génère une URL de partage d'événement enrichie des paramètres UTM d'attribution.
+ */
+export const buildEventShareUrl = (baseUrl: string, channel: ShareUtmChannel): string => {
+  try {
+    const url = new URL(baseUrl, 'https://billetterie.thiesdn.site');
+    if (channel === 'copy') {
+      url.searchParams.set('utm_source', 'direct');
+      url.searchParams.set('utm_medium', 'copy');
+    } else {
+      url.searchParams.set('utm_source', channel);
+      url.searchParams.set('utm_medium', 'social');
+      url.searchParams.set('utm_campaign', 'partage_event');
+    }
+    return url.toString();
+  } catch {
+    const sep = baseUrl.includes('?') ? '&' : '?';
+    if (channel === 'copy') {
+      return `${baseUrl}${sep}utm_source=direct&utm_medium=copy`;
+    }
+    return `${baseUrl}${sep}utm_source=${channel}&utm_medium=social&utm_campaign=partage_event`;
+  }
+};
+
+/**
+ * Extrait les paramètres UTM depuis l'URL courante du navigateur.
+ */
+export const extractUtmParamsFromUrl = (): UtmParams => {
+  if (typeof window === 'undefined') {
+    return { utmSource: null, utmMedium: null, utmCampaign: null };
+  }
+  const params = new URLSearchParams(window.location.search);
+  const utmSource = params.get('utm_source')?.trim().toLowerCase() || null;
+  const utmMedium = params.get('utm_medium')?.trim().toLowerCase() || null;
+  const utmCampaign = params.get('utm_campaign')?.trim().toLowerCase() || null;
+  return { utmSource, utmMedium, utmCampaign };
+};
+
+const detectDeviceType = (): EventAnalyticsDevice => {
+  if (typeof window === 'undefined') return 'desktop';
+  const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+  const isMobileUa = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+  return isMobileUa || window.innerWidth < 768 ? 'mobile' : 'desktop';
+};
+
+const resolveAnalyticsSource = (
+  explicitSource?: EventAnalyticsSource,
+  utmSource?: string | null,
+  utmMedium?: string | null
+): EventAnalyticsSource => {
+  if (explicitSource) return explicitSource;
+  const socialSources = new Set(['whatsapp', 'facebook', 'twitter', 'instagram', 'tiktok', 'linkedin']);
+  if (utmMedium === 'social' || (utmSource && socialSources.has(utmSource.toLowerCase()))) {
+    return 'social';
+  }
+  if (typeof document !== 'undefined' && document.referrer) {
+    const ref = document.referrer.toLowerCase();
+    if (
+      ref.includes('facebook.') ||
+      ref.includes('fb.') ||
+      ref.includes('wa.me') ||
+      ref.includes('whatsapp.') ||
+      ref.includes('t.co') ||
+      ref.includes('twitter.') ||
+      ref.includes('x.com') ||
+      ref.includes('instagram.') ||
+      ref.includes('tiktok.')
+    ) {
+      return 'social';
+    }
+  }
+  return 'site';
+};
+
+export interface TrackEventAnalyticsParams {
+  eventId: string;
+  action: EventAnalyticsAction;
+  city?: string | null;
+  source?: EventAnalyticsSource;
+  utmSource?: string | null;
+  utmMedium?: string | null;
+  utmCampaign?: string | null;
+}
+
+/**
+ * Enregistre de façon asynchrone et non bloquante une interaction publique
+ * (clic, partage social, copie de lien) dans la table `public.event_analytics`.
+ */
+export const trackEventAnalytics = async (
+  params: TrackEventAnalyticsParams
+): Promise<void> => {
+  if (!params.eventId || !isValidUUID(params.eventId)) return;
+  const client = getSupabaseClient();
+  if (!client) return;
+
+  const urlUtm = extractUtmParamsFromUrl();
+  const utmSource = params.utmSource ?? urlUtm.utmSource;
+  const utmMedium = params.utmMedium ?? urlUtm.utmMedium;
+  const utmCampaign = params.utmCampaign ?? urlUtm.utmCampaign;
+  const source = resolveAnalyticsSource(params.source, utmSource, utmMedium);
+  const device = detectDeviceType();
+
+  try {
+    await client.from('event_analytics').insert([
+      {
+        event_id: params.eventId,
+        action: params.action,
+        source,
+        device,
+        utm_source: utmSource,
+        utm_medium: utmMedium,
+        utm_campaign: utmCampaign,
+        city: params.city ? params.city.trim() : null,
+      },
+    ]);
+  } catch (err) {
+    console.warn('Tracking event_analytics ignoré:', err);
+  }
+};
+
+export const fetchEventAnalytics = async (options?: {
+  eventIds?: string[];
+  days?: number;
+}): Promise<{ records: EventAnalyticsRecord[]; error: string | null }> => {
+  const client = getSupabaseClient();
+  if (!client) {
+    return { records: [], error: null };
+  }
+
+  try {
+    const days = options?.days ?? 30;
+    const sinceIso = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+    let query = client
+      .from('event_analytics')
+      .select('id, event_id, action, source, device, utm_source, utm_medium, utm_campaign, city, created_at')
+      .gte('created_at', sinceIso)
+      .order('created_at', { ascending: false })
+      .limit(5000);
+
+    const validIds = (options?.eventIds || []).filter((id) => isValidUUID(id));
+    if (options?.eventIds && options.eventIds.length > 0) {
+      if (validIds.length === 0) {
+        return { records: [], error: null };
+      }
+      query = query.in('event_id', validIds);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      return { records: [], error: error.message };
+    }
+
+    const mapped: EventAnalyticsRecord[] = ((data as Array<Record<string, unknown>>) || []).map(
+      (row) => ({
+        id: String(row.id || ''),
+        eventId: String(row.event_id || ''),
+        action: (row.action as EventAnalyticsAction) || 'click',
+        source: (row.source as EventAnalyticsSource) || 'site',
+        device: (row.device as EventAnalyticsDevice) || 'desktop',
+        utmSource: row.utm_source ? String(row.utm_source) : null,
+        utmMedium: row.utm_medium ? String(row.utm_medium) : null,
+        utmCampaign: row.utm_campaign ? String(row.utm_campaign) : null,
+        city: row.city ? String(row.city) : null,
+        createdAt: String(row.created_at || new Date().toISOString()),
+      })
+    );
+
+    return { records: mapped, error: null };
+  } catch (err: unknown) {
+    return {
+      records: [],
+      error: err instanceof Error ? err.message : 'Erreur lecture event_analytics',
     };
   }
 };

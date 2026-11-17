@@ -44,10 +44,13 @@ import {
   getSupabaseClient,
   ensureGuestOrUserSession,
   signalOrderPayment,
+  buildEventShareUrl,
+  trackEventAnalytics,
 } from '../services/supabase';
 import { TurnstileGate, type TurnstileGateHandle } from './TurnstileGate';
 import { CountdownTimer } from './CountdownTimer';
 import { SpotifyVinylPlayer } from './SpotifyVinylPlayer';
+import { ShareUtmButtons } from './ShareUtmButtons';
 
 const TikTokIcon = ({ className = 'w-4 h-4' }: { className?: string }) => (
   <svg className={className} viewBox="0 0 24 24" fill="currentColor">
@@ -334,14 +337,27 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
   };
 
   const eventPreviewUrl = `https://billetterie.thiesdn.site/event/${event.id}`;
+  const whatsappShareUrlWithUtm = buildEventShareUrl(eventPreviewUrl, 'whatsapp');
   const whatsappShareText =
     `🎟️ *${event.title}* à Thiès !\n\n` +
     `📅 *Date :* ${event.date} à ${event.time}\n` +
     `📍 *Lieu :* ${event.venue}${event.quartier ? ` (${event.quartier})` : ''}, ${event.city}\n` +
     `💰 *Tarif :* À partir de ${event.price.toLocaleString('fr-FR')} FCFA\n\n` +
     `⚡ ${isSalesUpcoming ? 'Les ventes ouvrent très bientôt ! Rejoignez la liste prioritaire ici :' : 'Réservez votre pass officiel 100% sécurisé via Wave en 1 clic :'}\n` +
-    `👉 ${eventPreviewUrl}`;
+    `👉 ${whatsappShareUrlWithUtm}`;
   const whatsappShareEventUrl = `https://wa.me/?text=${encodeURIComponent(whatsappShareText)}`;
+
+  const trackedOpenEventIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isOpen || !event?.id) return;
+    if (trackedOpenEventIdRef.current === event.id) return;
+    trackedOpenEventIdRef.current = event.id;
+    trackEventAnalytics({
+      eventId: event.id,
+      action: 'click',
+      city: event.city,
+    });
+  }, [isOpen, event?.id, event?.city]);
 
   const generateWhatsAppConfirmationUrl = (order: OrderRecord) => {
     const promoLine = order.promoCodeApplied
@@ -653,6 +669,17 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                     href={whatsappShareEventUrl}
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={() =>
+                      trackEventAnalytics({
+                        eventId: event.id,
+                        action: 'share_whatsapp',
+                        city: event.city,
+                        source: 'social',
+                        utmSource: 'whatsapp',
+                        utmMedium: 'social',
+                        utmCampaign: 'partage_event',
+                      })
+                    }
                     className="w-9 h-9 rounded-full bg-emerald-600/80 hover:bg-emerald-500 backdrop-blur-md text-white flex items-center justify-center border border-emerald-400/30 transition-all hover:scale-105 shadow-lg"
                     title="Partager sur WhatsApp"
                   >
@@ -902,6 +929,20 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                     )}
                   </div>
                 )}
+
+                {/* Partage Social UTM */}
+                <div className="bg-[#10111A] p-3.5 rounded-2xl border border-white/5 space-y-2">
+                  <h4 className="font-heading font-bold text-[#DCB8FF] uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                    <Share2 className="w-3.5 h-3.5 text-[#E9C349]" />
+                    <span>Partager l&apos;événement</span>
+                  </h4>
+                  <ShareUtmButtons
+                    event={event}
+                    baseShareUrl={eventPreviewUrl}
+                    isSalesUpcoming={isSalesUpcoming}
+                    compact
+                  />
+                </div>
               </div>
             )}
 

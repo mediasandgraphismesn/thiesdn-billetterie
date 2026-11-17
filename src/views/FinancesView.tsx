@@ -83,6 +83,7 @@ import {
   clearTestPhysicalTickets,
   clearLocalTicketReserveCache,
   fetchPosShiftHandovers,
+  fetchEventAnalytics,
 } from '../services/supabase';
 import {
   PlatformPaymentSettings,
@@ -94,7 +95,9 @@ import {
   EventCoproducer,
   CoproducerRole,
   PosShiftHandoverRecord,
+  EventAnalyticsRecord,
 } from '../types';
+import { AudienceAnalyticsCard } from '../components/analytics/AudienceAnalyticsCard';
 import { generatePhysicalTicketsPdf } from '../services/pdfTicketGenerator';
 import { THIES_33_QUARTIERS } from '../data/thiesQuartiers';
 import { SalesAgentDashboardView } from './SalesAgentDashboardView';
@@ -174,6 +177,9 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
     isConnected ? [] : getStoredTicketAllocations()
   );
   const [previewCoproducer, setPreviewCoproducer] = useState<EventCoproducer | null>(null);
+  const [audienceAnalytics, setAudienceAnalytics] = useState<EventAnalyticsRecord[]>([]);
+  const [audienceError, setAudienceError] = useState<string | null>(null);
+  const [isLoadingAudience, setIsLoadingAudience] = useState<boolean>(false);
 
   // Formulaire d'ajout rapide co-producteur dans Cockpit
   const [showAddCoprodModal, setShowAddCoprodModal] = useState(false);
@@ -345,6 +351,25 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
       isMounted = false;
     };
   }, [selectedEventId, activeEvent?.id]);
+
+  useEffect(() => {
+    const ids = promoterEvents.map((e) => e.id).filter(Boolean);
+    if (ids.length === 0) {
+      setAudienceAnalytics([]);
+      return;
+    }
+    let mounted = true;
+    setIsLoadingAudience(true);
+    fetchEventAnalytics({ eventIds: ids, days: 30 }).then((res) => {
+      if (!mounted) return;
+      setAudienceAnalytics(res.records);
+      setAudienceError(res.error);
+      setIsLoadingAudience(false);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [promoterEvents]);
 
   const handleRefresh = async () => {
     const targetEventId = selectedEventId === 'all' ? (activeEvent?.id || undefined) : selectedEventId;
@@ -1983,6 +2008,15 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                 </div>
               )}
             </div>
+
+            {/* Analyse de l'Audience & Attribution UTM (Promoteur) */}
+            <AudienceAnalyticsCard
+              analytics={audienceAnalytics}
+              events={promoterEvents}
+              isLoading={isLoadingAudience}
+              errorMessage={audienceError}
+              scopeLabel="Mes Événements"
+            />
 
             {/* Ventilation par Catégorie de Billets (Liquid Glass & Jauges Épurées) */}
             <div className="p-6 sm:p-8 rounded-3xl bg-white/5 backdrop-blur-lg border border-white/10 space-y-6 shadow-xl">

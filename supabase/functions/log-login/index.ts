@@ -23,6 +23,7 @@ serve(async (req) => {
     const email = body.email || body.record?.email || 'visiteur@thiesdn.com';
     const userId = body.user_id || body.record?.id || null;
     const action = body.action || 'login';
+    const deviceFingerprint = typeof body.device_fingerprint === 'string' ? body.device_fingerprint : null;
 
     // Extraction IP et User-Agent
     const rawIp =
@@ -58,18 +59,40 @@ serve(async (req) => {
       }
     }
 
-    // Insertion dans public.login_history
-    const { data, error } = await supabase.from('login_history').insert([
-      {
-        user_id: userId,
-        email: email,
-        ip_address: rawIp || '127.0.0.1',
-        user_agent: userAgent,
-        country: country,
-        city: city,
-        action: action,
-      },
+    const normalizedCountry = country.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const isSuspicious = !normalizedCountry.includes('senegal') || !userAgent || userAgent === 'Inconnu';
+
+    // Insertion parallèle dans public.login_history et public.connection_logs
+    const [{ error }, { error: connLogErr }] = await Promise.all([
+      supabase.from('login_history').insert([
+        {
+          user_id: userId,
+          email: email,
+          ip_address: rawIp || '127.0.0.1',
+          user_agent: userAgent,
+          country: country,
+          city: city,
+          action: action,
+        },
+      ]),
+      supabase.from('connection_logs').insert([
+        {
+          user_id: userId,
+          email: email,
+          ip_address: rawIp || '127.0.0.1',
+          user_agent: userAgent,
+          city: city,
+          country: country,
+          device_fingerprint: deviceFingerprint,
+          action: action,
+          is_suspicious: isSuspicious,
+        },
+      ]),
     ]);
+
+    if (connLogErr) {
+      console.warn('Insertion connection_logs ignorée (migration en attente ?):', connLogErr.message);
+    }
 
     if (error) {
       console.error('Erreur insertion login_history:', error);

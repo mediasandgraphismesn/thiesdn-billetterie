@@ -5,6 +5,7 @@ import {
   fetchUserProfile,
   signOutWithSupabase,
   recordLoginHistory,
+  computeDeviceFingerprint,
 } from '../services/supabase';
 
 export type UserRole = 'user' | 'promoter' | 'admin' | 'sales_agent' | 'artist';
@@ -218,8 +219,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (event === 'SIGNED_IN') {
         if (session?.user) {
           // Appel direct de l'Edge Function log-login dans setTimeout(..., 0) pour découpler la session
-          setTimeout(() => {
+          setTimeout(async () => {
             const supabase = getSupabaseClient();
+            const deviceFingerprint = await computeDeviceFingerprint().catch(() => undefined);
             if (supabase) {
               supabase.functions
                 .invoke('log-login', {
@@ -227,6 +229,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     user_id: session.user.id,
                     email: session.user.email,
                     action: 'login',
+                    device_fingerprint: deviceFingerprint,
                   },
                 })
                 .catch((err) => {

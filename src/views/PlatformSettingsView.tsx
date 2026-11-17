@@ -12,6 +12,9 @@ import {
   RefreshCw,
   Copy,
   Check,
+  SlidersHorizontal,
+  Contrast,
+  RotateCcw,
 } from 'lucide-react';
 import {
   getStoredPaymentSettings,
@@ -19,6 +22,7 @@ import {
   saveSupabaseCredentials,
   isSupabaseConfigured,
 } from '../services/supabase';
+import { AdminDensity, useAdminPreferences } from '../hooks/useAdminPreferences';
 
 interface PlatformSettingsViewProps {
   onBackToDashboard: () => void;
@@ -37,6 +41,8 @@ export const PlatformSettingsView: React.FC<PlatformSettingsViewProps> = ({
   const [supabaseAnonKey, setSupabaseAnonKey] = useState(localStorage.getItem('VITE_SUPABASE_ANON_KEY') || '');
 
   const [saveToast, setSaveToast] = useState<string | null>(null);
+  const { density, setDensity, highContrast, setHighContrast, resetCardOrder } =
+    useAdminPreferences(true);
 
   const handleSavePaymentSettings = () => {
     savePaymentSettings({
@@ -239,6 +245,116 @@ export const PlatformSettingsView: React.FC<PlatformSettingsViewProps> = ({
           </section>
         </div>
       </div>
+
+      {/* Module 4 : Personnalisation UX Admin (Densité, Contraste WCAG AAA & Disposition) */}
+      <section className="glass-panel rounded-3xl p-6 border border-[#8A2BE2]/30 space-y-5">
+        <div className="border-b border-white/10 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <h2 className="text-base font-heading font-bold text-white flex items-center gap-2">
+            <SlidersHorizontal className="w-5 h-5 text-[#E9C349]" />
+            <span>Personnalisation UX &amp; Accessibilité Dashboard Admin</span>
+          </h2>
+          <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-[#8A2BE2]/20 text-[#DCB8FF] border border-[#8A2BE2]/40 self-start sm:self-auto">
+            Sauvegardé localement
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Sélecteur de Densité */}
+          <div className="p-4 rounded-2xl bg-[#141414] border border-white/10 space-y-3">
+            <div>
+              <h3 className="text-xs font-heading font-bold text-white uppercase tracking-wider">
+                Densité d&apos;affichage
+              </h3>
+              <p className="text-[11px] text-gray-300 mt-0.5">
+                Ajuste dynamiquement les marges internes des cartes du tableau de bord.
+              </p>
+            </div>
+            <div className="grid grid-cols-3 gap-1.5">
+              {(
+                [
+                  { id: 'compact', label: 'Compact' },
+                  { id: 'normal', label: 'Normal' },
+                  { id: 'spacious', label: 'Spacieux' },
+                ] as ReadonlyArray<{ id: AdminDensity; label: string }>
+              ).map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => {
+                    setDensity(option.id);
+                    setSaveToast(`Densité "${option.label}" appliquée !`);
+                    setTimeout(() => setSaveToast(null), 2500);
+                  }}
+                  className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                    density === option.id
+                      ? 'bg-[#8A2BE2] text-white border-[#DCB8FF]/50 shadow-md'
+                      : 'bg-black/40 text-gray-300 border-white/10 hover:text-white'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Toggle Contraste Élevé WCAG AAA */}
+          <div className="p-4 rounded-2xl bg-[#141414] border border-white/10 space-y-3">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h3 className="text-xs font-heading font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                  <Contrast className="w-4 h-4 text-[#E9C349]" />
+                  <span>Mode Contraste Élevé</span>
+                </h3>
+                <p className="text-[11px] text-gray-300 mt-0.5">
+                  Norme WCAG AAA : fond noir pur (#000000), textes blancs (#FFFFFF) et bordures épaisses.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const next = !highContrast;
+                setHighContrast(next);
+                setSaveToast(
+                  next ? 'Mode Contraste Élevé (WCAG AAA) activé !' : 'Thème Nocturnal standard rétabli.'
+                );
+                setTimeout(() => setSaveToast(null), 2500);
+              }}
+              className={`w-full py-2.5 px-4 rounded-xl text-xs font-heading font-extrabold uppercase tracking-wider border transition-all cursor-pointer ${
+                highContrast
+                  ? 'bg-white text-black border-white'
+                  : 'bg-black/40 text-[#E9C349] border-[#E9C349]/40 hover:bg-[#E9C349]/10'
+              }`}
+            >
+              {highContrast ? 'Contraste Élevé : ACTIVÉ (AAA)' : 'Activer Contraste Élevé'}
+            </button>
+          </div>
+
+          {/* Réinitialiser Drag & Drop */}
+          <div className="p-4 rounded-2xl bg-[#141414] border border-white/10 space-y-3 flex flex-col justify-between">
+            <div>
+              <h3 className="text-xs font-heading font-bold text-white uppercase tracking-wider">
+                Ordre des cartes (Drag &amp; Drop)
+              </h3>
+              <p className="text-[11px] text-gray-300 mt-0.5">
+                Rétablit l&apos;agencement par défaut des modules de l&apos;Admin Dashboard.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                resetCardOrder();
+                setSaveToast('Disposition par défaut restaurée !');
+                setTimeout(() => setSaveToast(null), 2500);
+              }}
+              className="w-full py-2.5 px-4 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-white text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-[#DCB8FF]" />
+              <span>Réinitialiser la disposition</span>
+            </button>
+          </div>
+        </div>
+      </section>
     </div>
   );
 };

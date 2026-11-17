@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import {
   ArrowLeft,
   Calendar,
@@ -12,11 +12,14 @@ import {
   Award,
   Sparkles,
   Phone,
+  Share2,
 } from 'lucide-react';
 import { EventItem } from '../types';
 import { getOptimizedImageUrl } from '../utils/imageOptimizer';
 import { SafeImage } from '../components/SafeImage';
 import { EventCard } from '../components/EventCard';
+import { ShareUtmButtons } from '../components/ShareUtmButtons';
+import { extractUtmParamsFromUrl, trackEventAnalytics } from '../services/supabase';
 import {
   CITY_GUIDES,
   SITE_URL,
@@ -118,6 +121,22 @@ export const EventLandingView: React.FC<EventLandingViewProps> = ({
       ],
     });
   }, [event, heroImageUrl]);
+
+  const trackedLandingEventIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!event?.id) return;
+    if (trackedLandingEventIdRef.current === event.id) return;
+    trackedLandingEventIdRef.current = event.id;
+    const utm = extractUtmParamsFromUrl();
+    trackEventAnalytics({
+      eventId: event.id,
+      action: 'click',
+      city: event.city,
+      utmSource: utm.utmSource,
+      utmMedium: utm.utmMedium,
+      utmCampaign: utm.utmCampaign,
+    });
+  }, [event?.id, event?.city]);
 
   if (isLoading && !event) {
     return (
@@ -272,6 +291,18 @@ export const EventLandingView: React.FC<EventLandingViewProps> = ({
               <Ticket className="w-4 h-4 text-[#241A00]" />
               <span>Acheter un billet maintenant</span>
             </button>
+          </div>
+
+          {/* Barre de Partage Social avec UTM */}
+          <div className="pt-4 border-t border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <span className="inline-flex items-center gap-1.5 text-xs font-heading font-bold text-[#DCB8FF] uppercase tracking-wider">
+              <Share2 className="w-4 h-4 text-[#E9C349]" />
+              <span>Partager cet événement</span>
+            </span>
+            <ShareUtmButtons
+              event={event}
+              baseShareUrl={`${SITE_URL}${getEventUrlPath(event)}`}
+            />
           </div>
         </div>
       </header>
