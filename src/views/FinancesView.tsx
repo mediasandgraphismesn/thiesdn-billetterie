@@ -50,6 +50,7 @@ import {
   KeyRound,
   AlertTriangle,
   Loader2,
+  Edit3,
 } from 'lucide-react';
 import { useToast } from '../contexts/ToastContext';
 import {
@@ -68,6 +69,7 @@ import {
   getStoredSalesAgents,
   fetchSalesAgentsFromSupabase,
   createSalesAgent,
+  updateSalesAgentDetails,
   buildFallbackPosEmail,
   provisionSalesAgentAuthAccount,
   resetSalesAgentPasswordAccount,
@@ -205,6 +207,15 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
   const [newAgentQuartier, setNewAgentQuartier] = useState('Escale Sud (Centre-Ville)');
   const [newAgentCommission, setNewAgentCommission] = useState(10);
   const [isSavingAgent, setIsSavingAgent] = useState(false);
+
+  // Modale / Bottom Sheet d'édition d'un point de vente existant
+  const [editingAgent, setEditingAgent] = useState<SalesAgent | null>(null);
+  const [editAgentMode, setEditAgentMode] = useState<'phone' | 'full'>('full');
+  const [editAgentPhone, setEditAgentPhone] = useState('');
+  const [editAgentShop, setEditAgentShop] = useState('');
+  const [editAgentManager, setEditAgentManager] = useState('');
+  const [editAgentQuartier, setEditAgentQuartier] = useState('');
+  const [isUpdatingAgent, setIsUpdatingAgent] = useState(false);
   const [provisioningAgentId, setProvisioningAgentId] = useState<string | null>(null);
   const [agentCredentialsById, setAgentCredentialsById] = useState<
     Record<string, { email: string; tempPassword: string }>
@@ -258,6 +269,47 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
 
   // Menu MoreVertical actif pour les points de vente (Règle 2 boutons max)
   const [activeAgentMenuId, setActiveAgentMenuId] = useState<string | null>(null);
+
+  const openEditAgentModal = (agent: SalesAgent, mode: 'phone' | 'full') => {
+    setActiveAgentMenuId(null);
+    setEditingAgent(agent);
+    setEditAgentMode(mode);
+    setEditAgentPhone(agent.telephone || '');
+    setEditAgentShop(agent.pointDeVente || '');
+    setEditAgentManager(agent.gerantName || '');
+    setEditAgentQuartier(agent.quartier || 'Escale Sud (Centre-Ville)');
+  };
+
+  const handleUpdateSalesAgentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingAgent) return;
+    setIsUpdatingAgent(true);
+    try {
+      const res = await updateSalesAgentDetails(editingAgent.id, {
+        telephone: editAgentPhone,
+        pointDeVente: editAgentShop,
+        gerantName: editAgentManager,
+        quartier: editAgentQuartier,
+      });
+
+      if (res.success && res.agent) {
+        setAgents((prev) =>
+          prev.map((a) => (a.id === editingAgent.id ? res.agent! : a))
+        );
+        showToast(res.message, 'success');
+        setEditingAgent(null);
+      } else {
+        showToast(res.message || 'Impossible de mettre à jour le guichet.', 'error');
+      }
+    } catch (err: unknown) {
+      showToast(
+        err instanceof Error ? err.message : 'Erreur réseau lors de la mise à jour.',
+        'error'
+      );
+    } finally {
+      setIsUpdatingAgent(false);
+    }
+  };
 
   // ====================================================================
   // CALCULS DU COCKPIT PROMOTEUR (Déclarés avant les hooks de chargement pour éviter tout TDZ)
@@ -1448,6 +1500,23 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
       >
         <button
           type="button"
+          onClick={() => openEditAgentModal(agent, 'phone')}
+          className="w-full text-left px-3 py-2 rounded-xl bg-[#8A2BE2]/15 hover:bg-[#8A2BE2]/25 border border-[#8A2BE2]/35 text-xs text-[#DCB8FF] font-bold flex items-center gap-2 transition-colors cursor-pointer"
+        >
+          <Edit3 className="w-4 h-4 text-[#E9C349] shrink-0" />
+          <span>Modifier le numéro de téléphone</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => openEditAgentModal(agent, 'full')}
+          className="w-full text-left px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-white font-bold flex items-center gap-2 transition-colors cursor-pointer"
+        >
+          <Store className="w-4 h-4 text-[#E9C349] shrink-0" />
+          <span>Modifier les informations du guichet</span>
+        </button>
+        <div className="border-t border-white/10 my-1" />
+        <button
+          type="button"
           disabled={isProvisioningThis}
           onClick={() => void handleSendAgentAccessWhatsApp(agent)}
           className="w-full text-left px-3 py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 text-xs text-emerald-300 font-bold flex items-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
@@ -1521,25 +1590,22 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
   // ====================================================================
   if (currentRole === 'promoter' || promoterTab !== 'compta') {
     return (
-      <div className="w-full max-w-6xl mx-auto space-y-8 pb-[calc(80px+env(safe-area-inset-bottom))] animate-in fade-in duration-300">
+      <div className="w-full max-w-6xl mx-auto space-y-4 pb-[calc(80px+env(safe-area-inset-bottom))] animate-in fade-in duration-300">
         {/* Header Bar Promoteur */}
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
-              <span className="bg-[#E9C349]/20 text-[#E9C349] text-xs font-extrabold uppercase px-3 py-1 rounded-full border border-[#E9C349]/30 flex items-center gap-1.5">
+              <span className="bg-[#E9C349]/20 text-[#E9C349] text-[11px] font-extrabold uppercase px-2.5 py-0.5 rounded-full border border-[#E9C349]/30 flex items-center gap-1.5">
                 <BarChart3 className="w-3.5 h-3.5" />
-                <span>Le Cockpit Organisateur</span>
+                <span>Cockpit Organisateur</span>
               </span>
-              <span className="bg-[#8A2BE2]/20 text-[#DCB8FF] text-xs font-bold px-2.5 py-0.5 rounded-full border border-[#8A2BE2]/30">
-                Mode Promoteur Actif
+              <span className="bg-[#8A2BE2]/20 text-[#DCB8FF] text-[11px] font-bold px-2.5 py-0.5 rounded-full border border-[#8A2BE2]/30">
+                Promoteur
               </span>
             </div>
-            <h1 className="font-heading text-2xl sm:text-3xl font-extrabold text-white tracking-tight mt-2">
-              Tableau de Bord & Cockpit des Ventes
+            <h1 className="font-heading text-xl sm:text-2xl font-extrabold text-white tracking-tight mt-1.5">
+              Tableau de Bord &amp; Cockpit des Ventes
             </h1>
-            <p className="text-sm text-[#E5E2E1] mt-1">
-              Statistiques temps réel, ventilation par catégorie, taux de scan et relance WhatsApp de vos clients.
-            </p>
           </div>
 
           <div className="flex items-center gap-2 self-start sm:self-auto">
@@ -1634,13 +1700,27 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
               </button>
 
               {showOptionsMenu && (
-                <div
-                  onClick={(e) => e.stopPropagation()}
-                  className="absolute right-0 top-full mt-2 w-72 sm:w-80 bg-[#171717] border border-white/15 rounded-2xl shadow-2xl z-[100] p-2 space-y-1 animate-in fade-in zoom-in-95 duration-150"
-                >
-                  <div className="px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-gray-300 border-b border-white/5">
-                    Modules Spécialisés
-                  </div>
+                <>
+                  <div
+                    onClick={() => setShowOptionsMenu(false)}
+                    className="md:hidden fixed inset-0 bg-black/70 backdrop-blur-xs z-[90]"
+                  />
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    className="fixed inset-x-0 bottom-0 w-full max-h-[80vh] rounded-t-2xl overflow-y-auto z-[100] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] bg-[#171717] border-t md:border border-white/15 shadow-2xl space-y-1.5 animate-in fade-in duration-150 md:inset-auto md:absolute md:right-0 md:top-full md:mt-2 md:w-80 md:max-h-none md:rounded-2xl md:p-2 md:space-y-1"
+                  >
+                    <div className="md:hidden w-10 h-1 rounded-full bg-white/25 mx-auto mb-2" />
+                    <div className="px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-gray-300 border-b border-white/5 flex items-center justify-between">
+                      <span>Modules Spécialisés</span>
+                      <button
+                        type="button"
+                        onClick={() => setShowOptionsMenu(false)}
+                        className="md:hidden p-1 rounded-lg bg-white/10 text-gray-200"
+                        aria-label="Fermer les options"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
 
                   <button
                     type="button"
@@ -1744,7 +1824,8 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                       <span>Purger les billets de test locaux</span>
                     </button>
                   </div>
-                </div>
+                  </div>
+                </>
               )}
             </div>
 
@@ -1785,136 +1866,124 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
 
         {/* SOUS-VUE 1 : MES STATISTIQUES (LE COCKPIT) */}
         {promoterTab === 'stats' && (
-          <div className="space-y-6">
+          <div className="space-y-4">
             {/* Bannière d'Action WhatsApp : "Contacter mes clients" */}
-            <div className="p-6 rounded-3xl bg-gradient-to-r from-emerald-950/40 via-[#1C1B1B] to-emerald-950/20 border border-emerald-500/30 shadow-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
-                    <MessageSquare className="w-4 h-4 fill-current" />
-                  </div>
-                  <h3 className="font-heading font-extrabold text-base sm:text-lg text-white">
-                    Canal Direct WhatsApp - Rappel des Festivaliers
-                  </h3>
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-950/40 via-[#1C1B1B] to-emerald-950/20 border border-emerald-500/30 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                  <MessageSquare className="w-4 h-4 fill-current" />
                 </div>
-                <p className="text-xs text-gray-300 max-w-xl leading-relaxed">
-                  Envoyez en un clic un message de rappel pré-rempli à vos festivaliers pour leur rappeler la date, le lieu et les inciter à préparer leur QR Code à l'entrée.
-                </p>
+                <h3 className="font-heading font-extrabold text-sm sm:text-base text-white">
+                  Rappel WhatsApp Festivaliers
+                </h3>
               </div>
 
               <a
                 href={generateBroadcastWhatsAppUrl()}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-heading font-extrabold text-xs uppercase tracking-wider transition-all shadow-lg shadow-emerald-600/30 hover:scale-[1.02] active:scale-[0.98] shrink-0"
+                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-heading font-extrabold text-xs uppercase tracking-wider transition-all shadow-lg shadow-emerald-600/30 shrink-0"
               >
                 <Send className="w-4 h-4" />
                 <span>Contacter mes clients (WhatsApp)</span>
               </a>
             </div>
 
-            {/* 4 Cartes KPI Temps Réel du Cockpit (Design Liquid Glass Épuré) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            {/* 4 Cartes KPI Temps Réel du Cockpit */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
               {/* 1. Billets Vendus Totaux */}
-              <div className="p-6 rounded-2xl bg-white/5 backdrop-blur-lg border border-white/10 space-y-3 relative overflow-hidden hover:border-[#8A2BE2]/40 transition-all shadow-xl group">
-                <div className="w-12 h-12 rounded-xl bg-[#8A2BE2]/20 text-[#DCB8FF] flex items-center justify-center group-hover:scale-105 transition-transform">
-                  <Ticket className="w-6 h-6" />
+              <div className="p-4 rounded-2xl bg-white/5 backdrop-blur-lg border border-white/10 space-y-2 relative overflow-hidden hover:border-[#8A2BE2]/40 transition-all shadow-xl group">
+                <div className="w-10 h-10 rounded-xl bg-[#8A2BE2]/20 text-[#DCB8FF] flex items-center justify-center">
+                  <Ticket className="w-5 h-5" />
                 </div>
-                <p className="text-xs uppercase tracking-wider text-gray-300 font-bold">Billets Vendus</p>
-                <h3 className="font-heading text-3xl font-black text-white">
+                <p className="text-[11px] uppercase tracking-wider text-gray-300 font-bold">Billets Vendus</p>
+                <h3 className="font-heading text-2xl sm:text-3xl font-black text-white">
                   {totalTicketsSold} <span className="text-xs text-[#DCB8FF] font-bold">places</span>
                 </h3>
-                <p className="text-xs text-[#E5E2E1]">
-                  {webTicketsSold} en ligne • {physicalTicketsSold} en boutique
+                <p className="text-[11px] text-[#E5E2E1]">
+                  {webTicketsSold} web • {physicalTicketsSold} guichet
                 </p>
               </div>
 
               {/* 2. Chiffre d'Affaires Brut */}
-              <div className="p-6 rounded-2xl bg-white/5 backdrop-blur-lg border border-white/10 space-y-3 relative overflow-hidden hover:border-[#E9C349]/40 transition-all shadow-xl group">
-                <div className="w-12 h-12 rounded-xl bg-[#E9C349]/20 text-[#E9C349] flex items-center justify-center group-hover:scale-105 transition-transform">
-                  <DollarSign className="w-6 h-6" />
+              <div className="p-4 rounded-2xl bg-white/5 backdrop-blur-lg border border-white/10 space-y-2 relative overflow-hidden hover:border-[#E9C349]/40 transition-all shadow-xl group">
+                <div className="w-10 h-10 rounded-xl bg-[#E9C349]/20 text-[#E9C349] flex items-center justify-center">
+                  <DollarSign className="w-5 h-5" />
                 </div>
-                <p className="text-xs uppercase tracking-wider text-gray-300 font-bold">CA Brut Consolidé</p>
-                <h3 className="font-heading text-3xl font-black text-[#E9C349]">
+                <p className="text-[11px] uppercase tracking-wider text-gray-300 font-bold">CA Brut</p>
+                <h3 className="font-heading text-2xl sm:text-3xl font-black text-[#E9C349]">
                   {totalGrossCA.toLocaleString('fr-FR')} <span className="text-xs text-white font-bold">FCFA</span>
                 </h3>
-                <p className="text-xs text-[#E5E2E1]">
-                  {webGrossCA > 0 ? `${webGrossCA.toLocaleString('fr-FR')} F Web` : '0 F Web'} • {physicalGrossCA > 0 ? `${physicalGrossCA.toLocaleString('fr-FR')} F Réseau` : '0 F Réseau'}
+                <p className="text-[11px] text-[#E5E2E1]">
+                  {webGrossCA.toLocaleString('fr-FR')} F web • {physicalGrossCA.toLocaleString('fr-FR')} F réseau
                 </p>
               </div>
 
               {/* 3. Reversement Net Promoteur (90%) */}
-              <div className="p-6 rounded-2xl bg-white/5 backdrop-blur-lg border border-white/10 space-y-3 relative overflow-hidden hover:border-[#E9C349]/40 transition-all shadow-xl group">
-                <div className="w-12 h-12 rounded-xl bg-[#E9C349]/20 text-[#E9C349] flex items-center justify-center group-hover:scale-105 transition-transform">
-                  <TrendingUp className="w-6 h-6" />
+              <div className="p-4 rounded-2xl bg-white/5 backdrop-blur-lg border border-white/10 space-y-2 relative overflow-hidden hover:border-[#E9C349]/40 transition-all shadow-xl group">
+                <div className="w-10 h-10 rounded-xl bg-[#E9C349]/20 text-[#E9C349] flex items-center justify-center">
+                  <TrendingUp className="w-5 h-5" />
                 </div>
-                <p className="text-xs uppercase tracking-wider text-gray-300 font-bold">Net Promoteur (90%)</p>
-                <h3 className="font-heading text-3xl font-black text-[#E9C349]">
+                <p className="text-[11px] uppercase tracking-wider text-gray-300 font-bold">Net Promoteur (90%)</p>
+                <h3 className="font-heading text-2xl sm:text-3xl font-black text-[#E9C349]">
                   {promoterNetShare.toLocaleString('fr-FR')} <span className="text-xs text-white font-bold">FCFA</span>
                 </h3>
-                <p className="text-xs text-[#E5E2E1]">Reversement garanti sous 24h</p>
+                <p className="text-[11px] text-[#E5E2E1]">Reversement 24h</p>
               </div>
 
               {/* 4. Billets Scannés à l'Entrée */}
-              <div className="p-6 rounded-2xl bg-white/5 backdrop-blur-lg border border-white/10 space-y-3 relative overflow-hidden hover:border-[#8A2BE2]/40 transition-all shadow-xl group">
-                <div className="w-12 h-12 rounded-xl bg-[#8A2BE2]/20 text-[#DCB8FF] flex items-center justify-center group-hover:scale-105 transition-transform">
-                  <QrCode className="w-6 h-6" />
+              <div className="p-4 rounded-2xl bg-white/5 backdrop-blur-lg border border-white/10 space-y-2 relative overflow-hidden hover:border-[#8A2BE2]/40 transition-all shadow-xl group">
+                <div className="w-10 h-10 rounded-xl bg-[#8A2BE2]/20 text-[#DCB8FF] flex items-center justify-center">
+                  <QrCode className="w-5 h-5" />
                 </div>
-                <p className="text-xs uppercase tracking-wider text-gray-300 font-bold">Billets Scannés</p>
-                <h3 className="font-heading text-3xl font-black text-white">
+                <p className="text-[11px] uppercase tracking-wider text-gray-300 font-bold">Billets Scannés</p>
+                <h3 className="font-heading text-2xl sm:text-3xl font-black text-white">
                   {scannedTicketsCount} <span className="text-xs text-gray-300 font-bold">/ {totalTicketsSold}</span>
                 </h3>
-                <p className="text-xs text-[#E5E2E1]">
+                <p className="text-[11px] text-[#E5E2E1]">
                   {totalTicketsSold > 0
-                    ? `${Math.round((scannedTicketsCount / totalTicketsSold) * 100)}% de taux de présence`
-                    : 'Contrôle laser le jour J'}
+                    ? `${Math.round((scannedTicketsCount / totalTicketsSold) * 100)}% présents`
+                    : 'Jour J'}
                 </p>
               </div>
             </div>
 
             {/* Alerte Promoteur : Ventes Manuelles par Vendeur & Écarts de Caisse POS */}
             <div
-              className={`p-5 sm:p-6 rounded-3xl border space-y-4 shadow-xl transition-all ${
+              className={`p-4 rounded-2xl border space-y-3 shadow-xl transition-all ${
                 totalManualSalesCount > 0 || blockedShiftHandovers.length > 0
                   ? 'bg-gradient-to-br from-amber-950/35 via-[#1C1B1B] to-rose-950/20 border-amber-500/40'
                   : 'bg-white/5 border-white/10'
               }`}
             >
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3.5">
-                <div className="flex items-start sm:items-center gap-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-3">
+                <div className="flex items-center gap-2.5">
                   <div
-                    className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
                       totalManualSalesCount > 0
                         ? 'bg-amber-500/20 border border-amber-500/40 text-amber-300'
                         : 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400'
                     }`}
                   >
                     {totalManualSalesCount > 0 ? (
-                      <AlertTriangle className="w-5 h-5" />
+                      <AlertTriangle className="w-4 h-4" />
                     ) : (
-                      <ShieldCheck className="w-5 h-5" />
+                      <ShieldCheck className="w-4 h-4" />
                     )}
                   </div>
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="font-heading font-extrabold text-base sm:text-lg text-white">
-                        Alerte Sécurité : Ventes Manuelles
-                      </h3>
-                      <span
-                        className={`px-2.5 py-0.5 rounded-full text-xs font-black border ${
-                          totalManualSalesCount > 0
-                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                            : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                        }`}
-                      >
-                        {totalManualSalesCount} billet(s) manuel(s)
-                      </span>
-                    </div>
-                    <p className="text-xs text-gray-300 mt-0.5">
-                      {totalManualSalesCount > 0
-                        ? 'Ces billets ont été activés sans scan caméra (déclaration manuelle ou saisie du code). Vérifiez les vendeurs concernés.'
-                        : 'Aucune vente manuelle détectée : 100 % des billets physiques vendus ont été scannés par caméra.'}
-                    </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="font-heading font-extrabold text-sm sm:text-base text-white">
+                      Ventes Manuelles
+                    </h3>
+                    <span
+                      className={`px-2.5 py-0.5 rounded-full text-xs font-black border ${
+                        totalManualSalesCount > 0
+                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                          : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                      }`}
+                    >
+                      {totalManualSalesCount} manuel(s)
+                    </span>
                   </div>
                 </div>
 
@@ -2016,23 +2085,24 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
               isLoading={isLoadingAudience}
               errorMessage={audienceError}
               scopeLabel="Mes Événements"
+              cardPaddingClass="p-4"
             />
 
             {/* Ventilation par Catégorie de Billets (Liquid Glass & Jauges Épurées) */}
-            <div className="p-6 sm:p-8 rounded-3xl bg-white/5 backdrop-blur-lg border border-white/10 space-y-6 shadow-xl">
-              <div className="flex items-center justify-between border-b border-white/10 pb-4">
-                <div className="flex items-center gap-2.5">
+            <div className="p-4 rounded-2xl bg-white/5 backdrop-blur-lg border border-white/10 space-y-4 shadow-xl">
+              <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                <div className="flex items-center gap-2">
                   <Layers className="w-5 h-5 text-[#E9C349]" />
-                  <h3 className="font-heading font-extrabold text-base sm:text-lg text-white">
-                    Ventes par Catégorie de Billet (Jauges en Direct)
+                  <h3 className="font-heading font-extrabold text-sm sm:text-base text-white">
+                    Ventes par Catégorie
                   </h3>
                 </div>
-                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-white/5 text-gray-300 border border-white/10">Temps Réel</span>
+                <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-white/5 text-gray-300 border border-white/10">En direct</span>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
                 {/* 1. Pass Prévente */}
-                <div className="p-6 rounded-2xl bg-white/5 border border-white/10 space-y-4 hover:border-[#8A2BE2]/40 transition-all">
+                <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-3 hover:border-[#8A2BE2]/40 transition-all">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-[#DCB8FF] uppercase tracking-wider">
                       Pass Prévente
@@ -2064,7 +2134,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                 </div>
 
                 {/* 2. Pass Jour J */}
-                <div className="p-6 rounded-2xl bg-white/5 border border-white/10 space-y-4 hover:border-[#8A2BE2]/40 transition-all">
+                <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-3 hover:border-[#8A2BE2]/40 transition-all">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-[#DCB8FF] uppercase tracking-wider">
                       Pass Jour J
@@ -2095,7 +2165,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                 </div>
 
                 {/* 3. Pass VIP Prestige */}
-                <div className="p-6 rounded-2xl bg-white/5 border border-white/10 space-y-4 hover:border-[#E9C349]/40 transition-all">
+                <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-3 hover:border-[#E9C349]/40 transition-all">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-[#E9C349] uppercase tracking-wider flex items-center gap-1.5">
                       <Crown className="w-4 h-4" />
@@ -2129,17 +2199,14 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
             </div>
 
             {/* Liste des Festivaliers / Commandes avec Relance WhatsApp Individuelle */}
-            <div className="glass-panel p-6 rounded-3xl space-y-4 border border-white/10">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
+            <div className="glass-panel p-4 rounded-2xl space-y-3 border border-white/10">
+              <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-2.5">
                 <div className="flex items-center gap-2">
                   <Users className="w-5 h-5 text-emerald-400" />
-                  <h3 className="font-heading font-extrabold text-base text-white">
-                    Liste des Participants & Contact Direct ({filteredOrders.length})
+                  <h3 className="font-heading font-extrabold text-sm sm:text-base text-white">
+                    Participants ({filteredOrders.length})
                   </h3>
                 </div>
-                <span className="text-xs text-gray-300">
-                  Cliquez sur l'icône WhatsApp pour envoyer un rappel personnalisé
-                </span>
               </div>
 
               {filteredOrders.length === 0 ? (
@@ -2284,49 +2351,35 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
 
         {/* SOUS-VUE 2 : MES VENTES & REVERSEMENTS (90%) */}
         {promoterTab === 'finances' && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="glass-panel p-5 rounded-2xl border border-[#E9C349]/30 bg-[#241A00]/30 space-y-2">
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+              <div className="glass-panel p-4 rounded-2xl border border-[#E9C349]/30 bg-[#241A00]/30 space-y-1.5">
                 <p className="text-xs uppercase tracking-wider text-gray-300 font-bold">Total Encaissé</p>
                 <h3 className="font-heading text-2xl font-black text-white">
                   {totalGrossCA.toLocaleString('fr-FR')} <span className="text-xs text-[#E9C349]">FCFA</span>
                 </h3>
-                <p className="text-[11px] text-gray-300">Paiements validés pour vos soirées</p>
               </div>
 
-              <div className="glass-panel p-5 rounded-2xl border border-emerald-500/30 bg-emerald-950/20 space-y-2">
+              <div className="glass-panel p-4 rounded-2xl border border-emerald-500/30 bg-emerald-950/20 space-y-1.5">
                 <p className="text-xs uppercase tracking-wider text-gray-300 font-bold">Votre Part Nette (90%)</p>
                 <h3 className="font-heading text-2xl font-black text-emerald-400">
                   {promoterNetShare.toLocaleString('fr-FR')} <span className="text-xs text-white">FCFA</span>
                 </h3>
-                <p className="text-[11px] text-gray-300">À virer directement sur votre Wave Business</p>
               </div>
 
-              <div className="glass-panel p-5 rounded-2xl border border-white/10 space-y-2">
+              <div className="glass-panel p-4 rounded-2xl border border-white/10 space-y-1.5">
                 <p className="text-xs uppercase tracking-wider text-gray-300 font-bold">Commission Thièsdn (10%)</p>
                 <h3 className="font-heading text-2xl font-black text-[#DCB8FF]">
                   {platformFeeShare.toLocaleString('fr-FR')} <span className="text-xs text-white">FCFA</span>
                 </h3>
-                <p className="text-[11px] text-gray-300">Frais de plateforme et hébergement</p>
               </div>
-            </div>
-
-            {/* Protocole de Reversement */}
-            <div className="p-5 rounded-2xl bg-[#1C1B1B] border border-white/10 space-y-2 text-xs text-gray-300">
-              <h4 className="font-heading font-bold text-sm text-white flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                <span>Règle de Clôture & Payout (Option 3 Réconciliée)</span>
-              </h4>
-              <p className="leading-relaxed">
-                Les fonds collectés via les liens Wave Business sont réconciliés quotidiennement. Votre part de 90% est débloquée et virée dès la validation des commandes ou au lendemain de votre événement sur votre compte Wave officiel.
-              </p>
             </div>
           </div>
         )}
 
         {/* SOUS-VUE 3 : RÉSEAU DE VENTE & BILLETS PHYSIQUES (PAPIER) */}
         {promoterTab === 'network' && (
-          <div className="space-y-8 animate-in fade-in duration-200">
+          <div className="space-y-4 animate-in fade-in duration-200">
             {/* Notification de succès de génération de lot */}
             {batchSuccessMessage && (
               <div className="p-4 rounded-2xl bg-emerald-950/80 border border-emerald-500/40 text-emerald-200 flex items-center justify-between shadow-lg">
@@ -2377,32 +2430,26 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
               </div>
             )}
 
-            {/* SECTION 1 : GÉNÉRATEUR DE LOTS DE BILLETS PHYSIQUES (A4 IMPRIMABLE) */}
-            <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-white/10 relative overflow-hidden bg-gradient-to-br from-[#1C1B1B] via-[#141414] to-[#1F1728]/40 space-y-6">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-5">
-                <div>
-                  <div className="flex items-center gap-2 text-[#E9C349] text-xs font-extrabold uppercase tracking-wider">
-                    <Printer className="w-4 h-4" />
-                    <span>Générateur de Planches A4 Imprimables</span>
-                  </div>
-                  <h3 className="font-heading text-xl sm:text-2xl font-black text-white mt-1">
-                    Générer un Lot de Billets Physiques avec QR Code
-                  </h3>
-                  <p className="text-xs text-[#E5E2E1] mt-1 max-w-2xl leading-relaxed">
-                    Créez des planches A4 de 4 billets avec souche détachable et QR Code unique certifié pour distribution dans les boutiques, kiosques et vendeurs de rue de Thiès.
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="bg-[#8A2BE2]/20 text-[#DCB8FF] text-xs font-extrabold px-3 py-1.5 rounded-xl border border-[#8A2BE2]/40 flex items-center gap-1.5">
-                    <Scissors className="w-3.5 h-3.5 text-[#E9C349]" />
-                    <span>Format 4 billets / page A4</span>
-                  </span>
-                </div>
+            {/* SECTION 1 : GÉNÉRATEUR DE LOTS DE BILLETS PHYSIQUES */}
+            <div className="glass-panel p-4 rounded-2xl border border-white/10 relative overflow-hidden bg-gradient-to-br from-[#1C1B1B] via-[#141414] to-[#1F1728]/40 space-y-3">
+              <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-2.5">
+                <h3 className="font-heading text-base sm:text-lg font-black text-white flex items-center gap-2">
+                  <Printer className="w-4 h-4 text-[#E9C349]" />
+                  <span>Générer un lot de billets</span>
+                </h3>
+                <span className="font-mono text-xs font-extrabold text-[#E9C349]">
+                  {(
+                    batchCount *
+                    (activeEvent?.tiers?.find((t) => t.id === batchTierId)?.price ||
+                      activeEvent?.tiers?.[0]?.price ||
+                      3500)
+                  ).toLocaleString('fr-FR')}{' '}
+                  F
+                </span>
               </div>
 
               {/* Paramétrage du Lot */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                 {/* 1. Destination des Billets (Stock Global vs Vendeur Spécifique) */}
                 <div className="space-y-2">
                   <label className="text-xs font-bold uppercase tracking-wider text-gray-300">
@@ -2510,108 +2557,80 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                   </button>
                 </div>
               </div>
-
-              {/* Bandeau d'astuce d'impression */}
-              <div className="p-4 rounded-2xl bg-[#0F0F12] border border-white/5 flex flex-col sm:flex-row sm:items-center justify-between text-xs text-gray-300 gap-3">
-                <div className="flex items-center gap-2.5">
-                  <Printer className="w-4 h-4 text-[#E9C349]" />
-                  <span>
-                    Conseil imprimerie : Papier couché 200g à 250g. Les billets comportent liseré or, code-barres unique et souche détachable.
-                  </span>
-                </div>
-                <div className="flex items-center gap-3 text-[11px] font-mono text-gray-300 shrink-0">
-                  <span>Valeur faciale du lot :</span>
-                  <span className="font-extrabold text-[#E9C349] text-sm">
-                    {(
-                      batchCount *
-                      (activeEvent?.tiers?.find((t) => t.id === batchTierId)?.price ||
-                        activeEvent?.tiers?.[0]?.price ||
-                        3500)
-                    ).toLocaleString('fr-FR')}{' '}
-                    FCFA
-                  </span>
-                </div>
-              </div>
             </div>
 
             {/* SECTION 2 : 4 CARTES KPI DU RÉSEAU DE VENTE PHYSIQUE (Liquid Glass) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
               {/* 1. Billets Imprimés en Réserve */}
-              <div className="p-6 rounded-2xl bg-white/5 backdrop-blur-lg border border-white/10 space-y-3 hover:border-[#8A2BE2]/40 transition-all shadow-xl group">
-                <div className="w-12 h-12 rounded-xl bg-[#8A2BE2]/20 text-[#DCB8FF] flex items-center justify-center group-hover:scale-105 transition-transform">
-                  <FileText className="w-6 h-6" />
+              <div className="p-4 rounded-2xl bg-white/5 backdrop-blur-lg border border-white/10 space-y-2 hover:border-[#8A2BE2]/40 transition-all shadow-xl group">
+                <div className="w-10 h-10 rounded-xl bg-[#8A2BE2]/20 text-[#DCB8FF] flex items-center justify-center">
+                  <FileText className="w-5 h-5" />
                 </div>
-                <p className="text-xs uppercase tracking-wider text-gray-300 font-bold">En Réserve Promoteur</p>
-                <h3 className="font-heading text-3xl font-black text-white">
+                <p className="text-[11px] uppercase tracking-wider text-gray-300 font-bold">En Réserve</p>
+                <h3 className="font-heading text-2xl sm:text-3xl font-black text-white">
                   {unassignedPhysicalTickets.length} <span className="text-xs text-[#DCB8FF] font-bold">billets</span>
                 </h3>
-                <p className="text-xs text-[#E5E2E1]">Imprimés, prêts à être alloués</p>
                 {unassignedPhysicalTickets.length > 0 && (
                   <button
                     type="button"
                     onClick={() => handleOpenAssignModal()}
-                    className="w-full mt-2 py-2 px-3 rounded-xl bg-[#8A2BE2]/20 hover:bg-[#8A2BE2]/30 text-[#DCB8FF] border border-[#8A2BE2]/40 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                    className="w-full mt-1 py-2 px-3 rounded-xl bg-[#8A2BE2]/20 hover:bg-[#8A2BE2]/30 text-[#DCB8FF] border border-[#8A2BE2]/40 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                   >
                     <Truck className="w-4 h-4" />
-                    <span>Distribuer le stock →</span>
+                    <span>Distribuer →</span>
                   </button>
                 )}
               </div>
 
               {/* 2. Billets Distribués au Réseau */}
-              <div className="p-6 rounded-2xl bg-white/5 backdrop-blur-lg border border-white/10 space-y-3 hover:border-[#E9C349]/40 transition-all shadow-xl group">
-                <div className="w-12 h-12 rounded-xl bg-[#E9C349]/20 text-[#E9C349] flex items-center justify-center group-hover:scale-105 transition-transform">
-                  <Store className="w-6 h-6" />
+              <div className="p-4 rounded-2xl bg-white/5 backdrop-blur-lg border border-white/10 space-y-2 hover:border-[#E9C349]/40 transition-all shadow-xl group">
+                <div className="w-10 h-10 rounded-xl bg-[#E9C349]/20 text-[#E9C349] flex items-center justify-center">
+                  <Store className="w-5 h-5" />
                 </div>
-                <p className="text-xs uppercase tracking-wider text-gray-300 font-bold">Distribués en Boutique</p>
-                <h3 className="font-heading text-3xl font-black text-[#E9C349]">
+                <p className="text-[11px] uppercase tracking-wider text-gray-300 font-bold">Distribués</p>
+                <h3 className="font-heading text-2xl sm:text-3xl font-black text-[#E9C349]">
                   {totalPhysicalDistributed} <span className="text-xs text-white font-bold">billets</span>
                 </h3>
-                <p className="text-xs text-[#E5E2E1]">Confier à {networkAgents.length} partenaires</p>
+                <p className="text-[11px] text-[#E5E2E1]">{networkAgents.length} partenaires</p>
               </div>
 
               {/* 3. Billets Physiques Vendus */}
-              <div className="p-6 rounded-2xl bg-white/5 backdrop-blur-lg border border-white/10 space-y-3 hover:border-[#8A2BE2]/40 transition-all shadow-xl group">
-                <div className="w-12 h-12 rounded-xl bg-[#8A2BE2]/20 text-[#DCB8FF] flex items-center justify-center group-hover:scale-105 transition-transform">
-                  <CheckCheck className="w-6 h-6" />
+              <div className="p-4 rounded-2xl bg-white/5 backdrop-blur-lg border border-white/10 space-y-2 hover:border-[#8A2BE2]/40 transition-all shadow-xl group">
+                <div className="w-10 h-10 rounded-xl bg-[#8A2BE2]/20 text-[#DCB8FF] flex items-center justify-center">
+                  <CheckCheck className="w-5 h-5" />
                 </div>
-                <p className="text-xs uppercase tracking-wider text-gray-300 font-bold">Vendus & Déclarés</p>
-                <h3 className="font-heading text-3xl font-black text-white">
+                <p className="text-[11px] uppercase tracking-wider text-gray-300 font-bold">Vendus</p>
+                <h3 className="font-heading text-2xl sm:text-3xl font-black text-white">
                   {totalPhysicalSold} <span className="text-xs text-[#DCB8FF] font-bold">billets</span>
                 </h3>
-                <p className="text-xs text-[#E5E2E1]">
-                  CA Réseau : {networkTotalGrossCollected.toLocaleString('fr-FR')} FCFA
+                <p className="text-[11px] text-[#E5E2E1]">
+                  {networkTotalGrossCollected.toLocaleString('fr-FR')} F
                 </p>
               </div>
 
               {/* 4. Cash Restant à Récupérer */}
-              <div className="p-6 rounded-2xl bg-white/5 backdrop-blur-lg border border-white/10 space-y-3 hover:border-[#E9C349]/40 transition-all shadow-xl group">
-                <div className="w-12 h-12 rounded-xl bg-[#E9C349]/20 text-[#E9C349] flex items-center justify-center group-hover:scale-105 transition-transform">
-                  <DollarSign className="w-6 h-6" />
+              <div className="p-4 rounded-2xl bg-white/5 backdrop-blur-lg border border-white/10 space-y-2 hover:border-[#E9C349]/40 transition-all shadow-xl group">
+                <div className="w-10 h-10 rounded-xl bg-[#E9C349]/20 text-[#E9C349] flex items-center justify-center">
+                  <DollarSign className="w-5 h-5" />
                 </div>
-                <p className="text-xs uppercase tracking-wider text-gray-300 font-bold">Cash Net à Récupérer</p>
-                <h3 className="font-heading text-3xl font-black text-[#E9C349]">
-                  {networkTotalAmountDue.toLocaleString('fr-FR')} <span className="text-xs text-white font-bold">FCFA</span>
+                <p className="text-[11px] uppercase tracking-wider text-gray-300 font-bold">Cash Net Dû</p>
+                <h3 className="font-heading text-2xl sm:text-3xl font-black text-[#E9C349]">
+                  {networkTotalAmountDue.toLocaleString('fr-FR')} <span className="text-xs text-white font-bold">F</span>
                 </h3>
-                <p className="text-xs text-[#E5E2E1]">
-                  Déjà versé : {networkTotalPaid.toLocaleString('fr-FR')} FCFA
+                <p className="text-[11px] text-[#E5E2E1]">
+                  Versé : {networkTotalPaid.toLocaleString('fr-FR')} F
                 </p>
               </div>
             </div>
 
             {/* SECTION 3 : TABLEAU DES COLLABORATEURS & POINTS DE VENTE */}
-            <div className="glass-panel p-6 rounded-3xl space-y-5 border border-white/10">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <Users className="w-5 h-5 text-[#E9C349]" />
-                    <h3 className="font-heading font-extrabold text-base sm:text-lg text-white">
-                      Points de Vente & Vendeurs Partenaires ({networkAgents.length})
-                    </h3>
-                  </div>
-                  <p className="text-xs text-[#E5E2E1] mt-0.5">
-                    Suivi des stocks confiés, commissions commerçants (10%) et encaissement des espèces.
-                  </p>
+            <div className="glass-panel p-4 rounded-2xl space-y-4 border border-white/10">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
+                <div className="flex items-center gap-2">
+                  <Users className="w-5 h-5 text-[#E9C349]" />
+                  <h3 className="font-heading font-extrabold text-base text-white">
+                    Points de Vente ({networkAgents.length})
+                  </h3>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
@@ -3136,6 +3155,133 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
               </div>
             )}
 
+            {/* MODALE / BOTTOM SHEET : MODIFIER UN POINT DE VENTE */}
+            {editingAgent && (
+              <div
+                onClick={() => !isUpdatingAgent && setEditingAgent(null)}
+                className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in"
+              >
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  className="glass-panel w-full sm:max-w-lg p-5 sm:p-6 rounded-t-2xl sm:rounded-3xl border-t sm:border border-white/20 shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto pb-[calc(1.25rem+env(safe-area-inset-bottom))]"
+                >
+                  <div className="sm:hidden w-10 h-1 rounded-full bg-white/25 mx-auto" />
+                  <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                    <div className="flex items-center gap-2">
+                      {editAgentMode === 'phone' ? (
+                        <Phone className="w-5 h-5 text-[#E9C349]" />
+                      ) : (
+                        <Store className="w-5 h-5 text-[#E9C349]" />
+                      )}
+                      <h3 className="font-heading font-extrabold text-base sm:text-lg text-white">
+                        {editAgentMode === 'phone'
+                          ? 'Modifier le numéro de téléphone'
+                          : 'Modifier les informations du guichet'}
+                      </h3>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={isUpdatingAgent}
+                      onClick={() => setEditingAgent(null)}
+                      className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white cursor-pointer"
+                      aria-label="Fermer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleUpdateSalesAgentSubmit} className="space-y-3.5">
+                    <div>
+                      <label className="text-xs font-bold uppercase tracking-wider text-gray-300">
+                        Téléphone Wave / OM *
+                      </label>
+                      <input
+                        type="tel"
+                        inputMode="tel"
+                        required
+                        autoFocus={editAgentMode === 'phone'}
+                        value={editAgentPhone}
+                        onChange={(e) => setEditAgentPhone(e.target.value)}
+                        placeholder="+221 77 123 45 67"
+                        className="input-glass w-full rounded-2xl px-4 py-3 text-sm text-white mt-1 outline-none focus:border-[#E9C349]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold uppercase tracking-wider text-gray-300">
+                        Nom du guichet / boutique *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        autoFocus={editAgentMode === 'full'}
+                        value={editAgentShop}
+                        onChange={(e) => setEditAgentShop(e.target.value)}
+                        placeholder="Ex: Boutique Chez Fatou"
+                        className="input-glass w-full rounded-2xl px-4 py-3 text-sm text-white mt-1 outline-none focus:border-[#E9C349]"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs font-bold uppercase tracking-wider text-gray-300">
+                          Nom du Gérant *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={editAgentManager}
+                          onChange={(e) => setEditAgentManager(e.target.value)}
+                          placeholder="Nom complet"
+                          className="input-glass w-full rounded-2xl px-4 py-3 text-sm text-white mt-1 outline-none focus:border-[#E9C349]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-bold uppercase tracking-wider text-gray-300">
+                          Quartier
+                        </label>
+                        <select
+                          value={editAgentQuartier}
+                          onChange={(e) => setEditAgentQuartier(e.target.value)}
+                          className="input-glass w-full rounded-2xl px-4 py-3 text-sm text-white mt-1 outline-none focus:border-[#E9C349]"
+                        >
+                          {editAgentQuartier &&
+                            !THIES_33_QUARTIERS.some((q) => q.name === editAgentQuartier) && (
+                              <option value={editAgentQuartier}>{editAgentQuartier}</option>
+                            )}
+                          {THIES_33_QUARTIERS.map((q) => (
+                            <option key={q.name} value={q.name}>
+                              {q.name} ({q.zone})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 flex gap-3">
+                      <button
+                        type="button"
+                        disabled={isUpdatingAgent}
+                        onClick={() => setEditingAgent(null)}
+                        className="flex-1 py-3 rounded-2xl bg-white/5 hover:bg-white/10 text-white font-bold text-xs uppercase cursor-pointer"
+                      >
+                        Annuler
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isUpdatingAgent}
+                        className="flex-1 py-3 rounded-2xl bg-gradient-to-r from-[#8A2BE2] to-[#E9C349] text-white font-heading font-extrabold text-xs uppercase tracking-wider shadow-lg disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        {isUpdatingAgent && <Loader2 className="w-4 h-4 animate-spin" />}
+                        <span>{isUpdatingAgent ? 'Enregistrement...' : 'Enregistrer'}</span>
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
             {/* MODALE : ATTRIBUER DES BILLETS PHYSIQUES */}
             <AssignPhysicalTicketsModal
               isOpen={showAssignModal}
@@ -3287,21 +3433,16 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
 
         {/* SOUS-VUE : BILLETS NON VENDUS, SUIVI DES PERTES & SÉCURITÉ */}
         {promoterTab === 'unsold' && (
-          <div className="space-y-8 animate-in fade-in duration-200">
+          <div className="space-y-4 animate-in fade-in duration-200">
             {/* Bannière de Sécurité & Prévention des Fraudes */}
-            <div className="p-6 rounded-3xl bg-gradient-to-r from-[#241A00]/80 via-[#1C1B1B] to-[#1F1728]/50 border border-amber-500/40 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center border border-amber-500/30">
-                    <AlertCircle className="w-4 h-4" />
-                  </div>
-                  <h3 className="font-heading font-extrabold text-base sm:text-lg text-white">
-                    Suivi des Billets Non Vendus & Prévention des Pertes
-                  </h3>
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-[#241A00]/80 via-[#1C1B1B] to-[#1F1728]/50 border border-amber-500/40 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center border border-amber-500/30 shrink-0">
+                  <AlertCircle className="w-4 h-4" />
                 </div>
-                <p className="text-xs text-gray-300 max-w-2xl leading-relaxed">
-                  Règle de validation par vente : Tout billet papier imprimé est <strong className="text-amber-400">inactif par défaut</strong> (<code className="text-[11px] bg-black/40 px-1.5 py-0.5 rounded text-amber-300 font-mono">printed_not_sold</code>). Le scanner à l'entrée refusera catégoriquement tout billet qui n'a pas été formellement activé par votre collaborateur lors de la vente.
-                </p>
+                <h3 className="font-heading font-extrabold text-base text-white">
+                  Billets Non Vendus
+                </h3>
               </div>
 
               {totalUnsoldTickets > 0 && (
@@ -3549,21 +3690,16 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
 
         {/* SOUS-VUE 4 : CO-PRODUCTION, DROITS ARTISTE & TRANSPARENCE */}
         {promoterTab === 'coprod' && (
-          <div className="space-y-8 animate-in fade-in duration-200">
+          <div className="space-y-4 animate-in fade-in duration-200">
             {/* Bannière de Transparence */}
-            <div className="p-6 rounded-3xl bg-gradient-to-r from-[#241A00]/60 via-[#1C1B1B] to-[#1F1728]/40 border border-[#E9C349]/30 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-[#E9C349]/20 text-[#E9C349] flex items-center justify-center">
-                    <Crown className="w-4 h-4" />
-                  </div>
-                  <h3 className="font-heading font-extrabold text-base sm:text-lg text-white">
-                    Transparence Contractuelle & Partage des Recettes Co-Production
-                  </h3>
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-[#241A00]/60 via-[#1C1B1B] to-[#1F1728]/40 border border-[#E9C349]/30 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-[#E9C349]/20 text-[#E9C349] flex items-center justify-center shrink-0">
+                  <Crown className="w-4 h-4" />
                 </div>
-                <p className="text-xs text-gray-300 max-w-2xl leading-relaxed">
-                  Thièsdn Billetterie garantit à vos artistes partenaires et à leur staff une visibilité totale sur les ventes réelles, les mouvements de scans aux portes et les quotas d’invitations, éliminant tout litige lors du décompte final.
-                </p>
+                <h3 className="font-heading font-extrabold text-base text-white">
+                  Co-Production &amp; Ayants-Droit
+                </h3>
               </div>
 
               <button

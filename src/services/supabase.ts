@@ -2001,6 +2001,114 @@ export const createSalesAgent = async (agentData: {
   return { success: true, agent: newAgent, credentials, provisioningError };
 };
 
+export interface UpdateSalesAgentPayload {
+  telephone: string;
+  pointDeVente: string;
+  gerantName: string;
+  quartier?: string;
+}
+
+/**
+ * Met à jour les informations d'un point de vente (table `sales_agents`).
+ */
+export const updateSalesAgentDetails = async (
+  agentId: string,
+  payload: UpdateSalesAgentPayload
+): Promise<{ success: boolean; agent?: SalesAgent; message: string }> => {
+  const cleanPhone = payload.telephone.trim();
+  const cleanShop = payload.pointDeVente.trim();
+  const cleanManager = payload.gerantName.trim();
+  const cleanQuartier = payload.quartier?.trim() || 'Thiès';
+
+  if (!cleanPhone || !cleanShop || !cleanManager) {
+    return {
+      success: false,
+      message: 'Le nom du guichet, le gérant et le téléphone sont obligatoires.',
+    };
+  }
+
+  const client = getSupabaseClient();
+  const stored = getStoredSalesAgents();
+  const existingLocal = stored.find((a) => a.id === agentId);
+
+  if (client && isValidUUID(agentId)) {
+    try {
+      const { data, error } = await client
+        .from('sales_agents')
+        .update({
+          telephone: cleanPhone,
+          point_de_vente: cleanShop,
+          gerant_name: cleanManager,
+          quartier: cleanQuartier,
+        })
+        .eq('id', agentId)
+        .select('*')
+        .single();
+
+      if (error) {
+        return { success: false, message: error.message };
+      }
+
+      const row = data as Record<string, unknown> | null;
+      const updatedAgent: SalesAgent = {
+        ...(existingLocal || {
+          id: agentId,
+          eventId: String(row?.event_id || ''),
+          eventTitle: String(row?.event_title || 'Événement'),
+          promoterId: String(row?.promoter_id || ''),
+          allocatedCount: Number(row?.allocated_count) || 0,
+          soldCount: Number(row?.sold_count) || 0,
+          commissionPercent: Number(row?.commission_percent) || 10,
+          cashCollected: Number(row?.cash_collected) || 0,
+          amountDue: Number(row?.amount_due) || 0,
+          amountPaidToPromoter: Number(row?.amount_paid_to_promoter) || 0,
+          status: (row?.status as SalesAgent['status']) || 'active',
+          createdAt: String(row?.created_at || new Date().toISOString()),
+        }),
+        pointDeVente: row?.point_de_vente ? String(row.point_de_vente) : cleanShop,
+        gerantName: row?.gerant_name ? String(row.gerant_name) : cleanManager,
+        telephone: row?.telephone ? String(row.telephone) : cleanPhone,
+        quartier: row?.quartier ? String(row.quartier) : cleanQuartier,
+      };
+
+      saveSalesAgents(
+        stored.some((a) => a.id === agentId)
+          ? stored.map((a) => (a.id === agentId ? updatedAgent : a))
+          : [updatedAgent, ...stored]
+      );
+
+      return {
+        success: true,
+        agent: updatedAgent,
+        message: 'Informations du guichet mises à jour !',
+      };
+    } catch (err: unknown) {
+      return {
+        success: false,
+        message: err instanceof Error ? err.message : 'Erreur réseau lors de la mise à jour.',
+      };
+    }
+  }
+
+  if (existingLocal) {
+    const updatedLocal: SalesAgent = {
+      ...existingLocal,
+      telephone: cleanPhone,
+      pointDeVente: cleanShop,
+      gerantName: cleanManager,
+      quartier: cleanQuartier,
+    };
+    saveSalesAgents(stored.map((a) => (a.id === agentId ? updatedLocal : a)));
+    return {
+      success: true,
+      agent: updatedLocal,
+      message: 'Informations du guichet mises à jour localement.',
+    };
+  }
+
+  return { success: false, message: 'Point de vente introuvable.' };
+};
+
 export const generatePhysicalTicketBatch = async (
   event: EventItem,
   tier: TicketTier,
